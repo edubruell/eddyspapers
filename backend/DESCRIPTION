@@ -1,0 +1,35 @@
+Package: eddyspapersbackend
+Type: Package
+Title: Semantic Economics Paper Search Engine Backend
+Version: 0.1.0
+Authors@R: person("Eduard", "Brüll", email = "your.email@example.com", role = c("aut", "cre"))
+Description: Backend utilities for a semantic economics paper search engine. 
+    Handles syncing RePEc archives, parsing RDF files, generating embeddings, 
+    and managing the DuckDB database. Includes a Plumber API for search queries.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.0.0
+Imports:
+    here,
+    fs,
+    dplyr,
+    tidyr,
+    purrr,
+    readr,
+    stringr,
+    glue,
+    jsonlite,
+    arrow,
+    duckdb,
+    tidyllm,
+    withr,
+    plumber,
+    DBI,
+    pool,
+    rprojroot,
+    tibble,
+    lubridate
+Suggests:
+    testthat (>= 3.0.0)
