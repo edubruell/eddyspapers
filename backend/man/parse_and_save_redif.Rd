@@ -4,11 +4,7 @@
 \alias{parse_and_save_redif}
 \title{Parse and save ReDIF files for a repository}
 \usage{
-parse_and_save_redif(
-  repo_files,
-  rds_folder = NULL,
-  script_path = "parse_redif_simple.pl"
-)
+parse_and_save_redif(repo_files, rds_folder = NULL, script_path = NULL)
 }
 \arguments{
 \item{repo_files}{Data frame with file paths for one repository}

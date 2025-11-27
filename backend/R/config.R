@@ -15,12 +15,11 @@
 #'
 #' @return A list with paths for data_root, repec_folder, rds_folder, pqt_folder, 
 #'   db_folder, and journals_csv
+#' @param data_root Root folder for the data
+#'  
 #' @export
-get_folder_config <- function() {
-  project_root <- here::here()
-  
-  data_root <- Sys.getenv("PAPER_SEARCH_DATA_ROOT", 
-                          unset = file.path(project_root, "data"))
+get_folder_config <- function(data_root = Sys.getenv("PAPER_SEARCH_DATA_ROOT", 
+                                                     unset = file.path(here::here(), "data"))) {
   
   list(
     data_root = data_root,

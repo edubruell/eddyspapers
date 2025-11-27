@@ -2,12 +2,14 @@
 % Please edit documentation in R/database.R
 \name{restore_db_from_parquet}
 \alias{restore_db_from_parquet}
-\title{Restore database from Parquet file}
+\title{Restore database from Parquet files}
 \usage{
-restore_db_from_parquet(pqt_file, db_path = NULL)
+restore_db_from_parquet(pqt_folder = NULL, date_stamp = NULL, db_path = NULL)
 }
 \arguments{
-\item{pqt_file}{Path to parquet file}
+\item{pqt_folder}{Path to folder containing parquet files}
+
+\item{date_stamp}{Date stamp of backup (YYYY-MM-DD). If NULL, uses most recent files.}
 
 \item{db_path}{Path to DuckDB database. Defaults to config$db_folder/articles.duckdb}
 }
@@ -15,5 +17,5 @@ restore_db_from_parquet(pqt_file, db_path = NULL)
 Path to database invisibly
 }
 \description{
-Recreates the database from a Parquet backup file, including indices.
+Recreates the database from Parquet backup files, including indices.
 }

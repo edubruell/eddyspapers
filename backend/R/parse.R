@@ -16,9 +16,17 @@ r_has_name <- function(.x, .name) {
 #' @return Parsed ReDIF data as nested list, or NULL on failure
 #' @export
 parse_redif_perl <- function(path,
-                             script_path = "parse_redif_simple.pl",
+                             script_path = NULL,
                              simplify = TRUE,
                              error_on_fail = FALSE) {
+  if (is.null(script_path)) {
+    script_path <- system.file("scripts", "parse_redif_simple.pl", 
+                               package = "eddyspapersbackend")
+    if (script_path == "") {
+      stop("Could not find parse_redif_simple.pl script in package")
+    }
+  }
+  
   stopifnot(file.exists(path), file.exists(script_path))
   
   lib <- path.expand("~/.perl5/lib/perl5")
@@ -268,7 +276,7 @@ get_parse_status <- function(redif_files, rds_folder = NULL) {
 #' @return Parsed data invisibly
 parse_and_save_redif <- function(repo_files, 
                                  rds_folder = NULL,
-                                 script_path = "parse_redif_simple.pl") {
+                                 script_path = NULL) {
   if (is.null(rds_folder)) {
     config <- get_folder_config()
     rds_folder <- config$rds_folder
@@ -304,7 +312,7 @@ parse_and_save_redif <- function(repo_files,
 #' @export
 parse_all_journals <- function(repec_folder = NULL,
                                rds_folder = NULL,
-                               script_path = "parse_redif_simple.pl",
+                               script_path = NULL,
                                skip_today = TRUE) {
   redif_files <- find_redif_files(repec_folder)
   parse_status <- get_parse_status(redif_files, rds_folder)

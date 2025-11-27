@@ -25,7 +25,6 @@ tryCatch({
   parse_all_journals(
     repec_folder = config$repec_folder,
     rds_folder = config$rds_folder,
-    script_path = "parse_redif_simple.pl",
     skip_today = TRUE
   )
   message("✓ Parsing completed successfully")

@@ -7,7 +7,7 @@
 parse_all_journals(
   repec_folder = NULL,
   rds_folder = NULL,
-  script_path = "parse_redif_simple.pl",
+  script_path = NULL,
   skip_today = TRUE
 )
 }

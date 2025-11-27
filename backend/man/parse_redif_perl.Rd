@@ -6,7 +6,7 @@
 \usage{
 parse_redif_perl(
   path,
-  script_path = "parse_redif_simple.pl",
+  script_path = NULL,
   simplify = TRUE,
   error_on_fail = FALSE
 )

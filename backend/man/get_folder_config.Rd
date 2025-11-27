@@ -4,7 +4,13 @@
 \alias{get_folder_config}
 \title{Get folder configuration}
 \usage{
-get_folder_config()
+get_folder_config(
+  data_root = Sys.getenv("PAPER_SEARCH_DATA_ROOT", unset = file.path(here::here(),
+    "data"))
+)
+}
+\arguments{
+\item{data_root}{Root folder for the data}
 }
 \value{
 A list with paths for data_root, repec_folder, rds_folder, pqt_folder,

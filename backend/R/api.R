@@ -141,7 +141,7 @@ semantic_search <- function(query,
   } else ""
   
   sql <- sprintf("
-    SELECT a.title, a.year, a.authors, a.journal, a.category, a.url,
+    SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url,
            a.bib_tex, a.abstract,
            array_cosine_distance(a.embeddings, ?::FLOAT[1024]) AS similarity
     FROM articles a
@@ -237,6 +237,299 @@ get_last_updated <- function(db_path = NULL) {
     stringr::str_extract("\\d{4}-\\d{2}-\\d{2}")
   db_age
 }
+
+#' Ensure saved searches table exists
+#'
+#' Creates the saved_searches table if it doesn't exist.
+#'
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return NULL invisibly
+#' @export
+ensure_saved_searches_table <- function(pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS saved_searches (
+      hash VARCHAR PRIMARY KEY,
+      query TEXT NOT NULL,
+      max_k INTEGER,
+      min_year INTEGER,
+      journal_filter TEXT,
+      journal_name TEXT,
+      title_keyword TEXT,
+      author_keyword TEXT,
+      results JSON NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  ")
+  
+  pool::poolReturn(con)
+  invisible(NULL)
+}
+
+#' Generate hash for search parameters
+#'
+#' Creates a consistent hash from search parameters using digest package.
+#'
+#' @param query Text query
+#' @param max_k Maximum results
+#' @param min_year Minimum year
+#' @param journal_filter Category filter
+#' @param journal_name Journal name filter
+#' @param title_keyword Title keyword filter
+#' @param author_keyword Author keyword filter
+#' @return 8-character hash string
+#' @export
+generate_search_hash <- function(query,
+                                 max_k = 100,
+                                 min_year = NULL,
+                                 journal_filter = NULL,
+                                 journal_name = NULL,
+                                 title_keyword = NULL,
+                                 author_keyword = NULL) {
+  
+  params <- list(
+    query = query,
+    max_k = max_k,
+    min_year = min_year,
+    journal_filter = journal_filter,
+    journal_name = journal_name,
+    title_keyword = title_keyword,
+    author_keyword = author_keyword
+  )
+  
+  hash_full <- digest::digest(params, algo = "xxhash64")
+  substr(hash_full, 1, 8)
+}
+
+#' Save search query and results
+#'
+#' Saves a search query with its parameters and results to the database using a hash identifier.
+#'
+#' @param query Text query
+#' @param results Search results data frame
+#' @param max_k Maximum results
+#' @param min_year Minimum year
+#' @param journal_filter Category filter
+#' @param journal_name Journal name filter
+#' @param title_keyword Title keyword filter
+#' @param author_keyword Author keyword filter
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Hash string for the saved search
+#' @export
+save_search <- function(query,
+                       results,
+                       max_k = 100,
+                       min_year = NULL,
+                       journal_filter = NULL,
+                       journal_name = NULL,
+                       title_keyword = NULL,
+                       author_keyword = NULL,
+                       pool = NULL) {
+  
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  ensure_saved_searches_table(pool)
+  
+  hash <- generate_search_hash(
+    query = query,
+    max_k = max_k,
+    min_year = min_year,
+    journal_filter = journal_filter,
+    journal_name = journal_name,
+    title_keyword = title_keyword,
+    author_keyword = author_keyword
+  )
+  
+  con <- pool::poolCheckout(pool)
+  
+  existing <- DBI::dbGetQuery(
+    con, 
+    "SELECT hash FROM saved_searches WHERE hash = ?",
+    params = list(hash)
+  )
+  
+  if (nrow(existing) == 0) {
+    results_json <- jsonlite::toJSON(results, auto_unbox = TRUE)
+    
+    DBI::dbExecute(con, "
+      INSERT INTO saved_searches 
+        (hash, query, max_k, min_year, journal_filter, journal_name, 
+         title_keyword, author_keyword, results)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ", params = list(
+      hash, query, max_k, min_year, journal_filter, journal_name,
+      title_keyword, author_keyword, as.character(results_json)
+    ))
+  }
+  
+  pool::poolReturn(con)
+  hash
+}
+
+
+#' Ensure search logs table exists
+#'
+#' Creates the search_logs table if it doesn't exist.
+#'
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return NULL invisibly
+#' @export
+ensure_search_logs_table <- function(pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS search_logs (
+      search_id INTEGER PRIMARY KEY,
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ip VARCHAR,
+      query_hash VARCHAR(8),
+      result_count INTEGER,
+      top3_handles VARCHAR[],
+      has_year_filter BOOLEAN,
+      has_journal_filter BOOLEAN,
+      has_journal_name_filter BOOLEAN,
+      has_title_keyword BOOLEAN,
+      has_author_keyword BOOLEAN,
+      response_time_ms INTEGER
+    )
+  ")
+  
+  DBI::dbExecute(con, "
+    CREATE SEQUENCE IF NOT EXISTS search_logs_seq START 1
+  ")
+  
+  pool::poolReturn(con)
+  invisible(NULL)
+}
+
+#' Log search query
+#'
+#' Logs search query with IP, filters, and top result handles.
+#'
+#' @param ip Client IP address
+#' @param query_hash Hash of the query
+#' @param result_count Number of results returned
+#' @param top3_handles Vector of top 3 RePEc handles
+#' @param filter_flags Named list of filter presence flags
+#' @param response_time_ms Response time in milliseconds
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Search log ID
+#' @export
+log_search <- function(ip,
+                      query_hash,
+                      result_count,
+                      top3_handles = NULL,
+                      filter_flags = NULL,
+                      response_time_ms = NULL,
+                      pool = NULL) {
+  
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  ensure_search_logs_table(pool)
+  
+  con <- pool::poolCheckout(pool)
+  
+  search_id <- DBI::dbGetQuery(con, "SELECT nextval('search_logs_seq') as id")$id
+  
+  has_year <- if (!is.null(filter_flags)) filter_flags$has_year else FALSE
+  has_journal_filter <- if (!is.null(filter_flags)) filter_flags$has_journal_filter else FALSE
+  has_journal_name <- if (!is.null(filter_flags)) filter_flags$has_journal_name else FALSE
+  has_title_keyword <- if (!is.null(filter_flags)) filter_flags$has_title_keyword else FALSE
+  has_author_keyword <- if (!is.null(filter_flags)) filter_flags$has_author_keyword else FALSE
+  
+  handles_list <- if (!is.null(top3_handles) && length(top3_handles) > 0) {
+    list(top3_handles[1:min(3, length(top3_handles))])
+  } else {
+    list(character(0))
+  }
+  
+  DBI::dbExecute(con, "
+    INSERT INTO search_logs 
+      (search_id, ip, query_hash, result_count, top3_handles,
+       has_year_filter, has_journal_filter, has_journal_name_filter,
+       has_title_keyword, has_author_keyword, response_time_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ", params = list(
+    search_id, ip, query_hash, result_count, handles_list,
+    has_year, has_journal_filter, has_journal_name,
+    has_title_keyword, has_author_keyword, response_time_ms
+  ))
+  
+  pool::poolReturn(con)
+  search_id
+}
+
+#' Get search log statistics
+#'
+#' Returns aggregated statistics from search logs.
+#'
+#' @param days Number of days to include (default 30)
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return List with various statistics
+#' @export
+get_search_stats <- function(days = 30, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  cutoff <- format(Sys.time() - days * 86400, "%Y-%m-%d %H:%M:%S")
+  
+  total_searches <- DBI::dbGetQuery(con, sprintf("
+    SELECT COUNT(*) as total
+    FROM search_logs
+    WHERE timestamp >= '%s'
+  ", cutoff))$total
+  
+  avg_results <- DBI::dbGetQuery(con, sprintf("
+    SELECT AVG(result_count) as avg_results
+    FROM search_logs
+    WHERE timestamp >= '%s'
+  ", cutoff))$avg_results
+  
+  avg_response <- DBI::dbGetQuery(con, sprintf("
+    SELECT AVG(response_time_ms) as avg_ms
+    FROM search_logs
+    WHERE timestamp >= '%s' AND response_time_ms IS NOT NULL
+  ", cutoff))$avg_ms
+  
+  filter_usage <- DBI::dbGetQuery(con, sprintf("
+    SELECT 
+      SUM(CASE WHEN has_year_filter THEN 1 ELSE 0 END) as year_filters,
+      SUM(CASE WHEN has_journal_filter THEN 1 ELSE 0 END) as journal_filters,
+      SUM(CASE WHEN has_journal_name_filter THEN 1 ELSE 0 END) as journal_name_filters,
+      SUM(CASE WHEN has_title_keyword THEN 1 ELSE 0 END) as title_keyword_filters,
+      SUM(CASE WHEN has_author_keyword THEN 1 ELSE 0 END) as author_keyword_filters
+    FROM search_logs
+    WHERE timestamp >= '%s'
+  ", cutoff))
+  
+  pool::poolReturn(con)
+  
+  list(
+    days = days,
+    total_searches = total_searches,
+    avg_results = avg_results,
+    avg_response_ms = avg_response,
+    filter_usage = filter_usage
+  )
+}
+
+
 
 #' Run the Plumber API server
 #'

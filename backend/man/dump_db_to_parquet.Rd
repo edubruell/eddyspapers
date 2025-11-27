@@ -2,7 +2,7 @@
 % Please edit documentation in R/database.R
 \name{dump_db_to_parquet}
 \alias{dump_db_to_parquet}
-\title{Dump database to Parquet file}
+\title{Dump database to Parquet files}
 \usage{
 dump_db_to_parquet(db_path = NULL, pqt_folder = NULL)
 }
@@ -12,8 +12,8 @@ dump_db_to_parquet(db_path = NULL, pqt_folder = NULL)
 \item{pqt_folder}{Path to parquet output folder. Defaults to config$pqt_folder}
 }
 \value{
-Path to parquet file invisibly
+Named list of parquet file paths invisibly
 }
 \description{
-Exports the articles table to a Parquet file for backup or transfer.
+Exports all tables (articles, saved_searches, search_logs) to Parquet files for backup or transfer.
 }

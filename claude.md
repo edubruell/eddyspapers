@@ -68,11 +68,11 @@ backend/
 │   ├── parse.R          ✓ Done
 │   ├── embed.R          ✓ Done
 │   ├── database.R       ✓ Done
-│   └── api.R            To create (from api.R)
+│   └── api.R            ✓ Done
 ├── inst/
 │   └── plumber/
-│       └── api.R        Plumber API definition
-└── man/                 Documentation (to generate)
+│       └── api.R        ✓ Done
+└── man/                 ✓ Done
 ```
 
 ### 2. Main Folder Scripts
@@ -81,22 +81,6 @@ The main project folder should have lightweight scripts that:
 - Load the backend package
 - Configure folder paths
 - Invoke package functions
-
-**Scripts to Create**:
-
-1. **`run_api.R`**: Start the Plumber API
-   - Load backend package
-   - Configure folders (via env var or defaults)
-   - Initialize database connection pool
-   - Start Plumber API
-
-2. **`update_repec.R`**: Cron job script for RePEc updates
-   - Load backend package
-   - Configure folders
-   - Sync RePEc archives
-   - Parse new/updated RDF files
-   - Generate embeddings for new papers
-   - Update database and indices
 
 ### 3. Frontend Structure (`/frontend`)
 
@@ -114,7 +98,6 @@ frontend/
 ## Technical Details
 
 ### Configuration
-- Environment variable: `PAPER_SEARCH_DATA_ROOT` (defaults to `./data`)
 - Folder structure:
   - `data/RePEc/`: Downloaded RePEc archives
   - `data/rds_archivep/`: Parsed RDF data (RDS files)
