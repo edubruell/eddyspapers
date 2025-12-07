@@ -1,5 +1,6 @@
 library(eddyspapersbackend)
 
+Sys.setenv("PAPER_SEARCH_DATA_ROOT" = "/Users/ebr/eddyspapers")
 config <- get_folder_config()
 
 message("Starting Semantic Paper Search API")

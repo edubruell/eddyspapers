@@ -1,4 +1,5 @@
-.pool <- NULL
+.pool_env <- new.env(parent = emptyenv())
+.pool_env$pool <- NULL
 
 #' Setup API database connection pool
 #'
@@ -24,9 +25,11 @@ setup_api_pool <- function(db_path = NULL, max_connections = 5) {
   DBI::dbExecute(con, "LOAD vss;")
   DBI::dbExecute(con, "SET hnsw_enable_experimental_persistence=true;")
   DBI::dbExecute(con, "SET max_expression_depth TO 2000;")
+  DBI::dbExecute(con, "INSTALL json;")
+  DBI::dbExecute(con, "LOAD json;")
   pool::poolReturn(con)
   
-  .pool <<- pool
+  .pool_env$pool <- pool
   
   invisible(pool)
 }
@@ -38,10 +41,11 @@ setup_api_pool <- function(db_path = NULL, max_connections = 5) {
 #' @return Pool object
 #' @export
 get_api_pool <- function() {
-  if (is.null(.pool)) {
+  pool <- .pool_env$pool
+  if (is.null(pool)) {
     stop("API pool not initialized. Call setup_api_pool() first.")
   }
-  .pool
+  pool
 }
 
 #' Close API connection pool
@@ -51,9 +55,9 @@ get_api_pool <- function() {
 #' @return NULL invisibly
 #' @export
 close_api_pool <- function() {
-  if (!is.null(.pool)) {
-    pool::poolClose(.pool)
-    .pool <<- NULL
+  if (!is.null(.pool_env$pool)) {
+    pool::poolClose(.pool_env$pool)
+    .pool_env$pool <- NULL
   }
   invisible(NULL)
 }
@@ -355,18 +359,29 @@ save_search <- function(query,
     params = list(hash)
   )
   
+  norm <- function(x) if (is.null(x)) NA else x
+  
   if (nrow(existing) == 0) {
     results_json <- jsonlite::toJSON(results, auto_unbox = TRUE)
     
     DBI::dbExecute(con, "
-      INSERT INTO saved_searches 
-        (hash, query, max_k, min_year, journal_filter, journal_name, 
-         title_keyword, author_keyword, results)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ", params = list(
-      hash, query, max_k, min_year, journal_filter, journal_name,
-      title_keyword, author_keyword, as.character(results_json)
-    ))
+  INSERT INTO saved_searches 
+    (hash, query, max_k, min_year, journal_filter, journal_name, 
+     title_keyword, author_keyword, results)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+",
+                   params = list(
+                     hash,
+                     query,
+                     max_k,
+                     norm(min_year),
+                     norm(journal_filter),
+                     norm(journal_name),
+                     norm(title_keyword),
+                     norm(author_keyword),
+                     as.character(results_json)
+                   ))
+    
   }
   
   pool::poolReturn(con)
@@ -527,6 +542,38 @@ get_search_stats <- function(days = 30, pool = NULL) {
     avg_response_ms = avg_response,
     filter_usage = filter_usage
   )
+}
+
+#' Get a saved search by hash
+#'
+#' Retrieves a saved search and its results.
+#'
+#' @param hash 8 character search hash
+#' @param pool Database pool
+#' @return List or NULL if not found
+#' @export
+get_saved_search <- function(hash, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  res <- DBI::dbGetQuery(con, "
+    SELECT 
+      hash, query, max_k, min_year, journal_filter, journal_name,
+      title_keyword, author_keyword, results, created_at
+    FROM saved_searches
+    WHERE hash = ?
+  ", params = list(hash))
+  
+  pool::poolReturn(con)
+  
+  if (nrow(res) == 0) return(NULL)
+  
+  # Parse JSON results column
+  res$results <- jsonlite::fromJSON(res$results)
+  res
 }
 
 
