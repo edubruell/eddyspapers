@@ -70,12 +70,12 @@ post_process_entry <- function(entry) {
     archive      <- handle_entries |> purrr::map_chr(2)
     journal_code <- handle_entries |> purrr::map_chr(3)
   } else {
-    warning("ENTRY INVALID SKIPPED")
+    warn("ENTRY INVALID SKIPPED")
     return(NULL)
   }
   
   if (!r_has_name(entry$author, "name")) {
-    warning("INVALID AUTHOR FIELD - SKIPPED")
+    warn("INVALID AUTHOR FIELD - SKIPPED")
     return(NULL)
   }
   
@@ -283,11 +283,11 @@ parse_and_save_redif <- function(repo_files,
   }
   
   repo <- unique(repo_files$repo_id)
-  cat("Parsing ReDIF for:", repo, "\n")
+  info("Parsing ReDIF for: ", repo)
   
   parsed_data <- repo_files$file |>
     purrr::map_dfr(~{
-      cat("-> File:", .x, "\n")
+      info("  -> File: ", .x)
       
       parsed_redif <- parse_redif_perl(.x, script_path = script_path)
       

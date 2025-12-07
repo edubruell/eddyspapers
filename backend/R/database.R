@@ -138,7 +138,7 @@ load_cleaned_collection <- function(rds_folder = NULL,
 process_embedding_batch <- function(batch, con, num_batches, 
                                    model = "mxbai-embed-large") {
   current_batch <- unique(batch$batch)
-  glue::glue("Processing batch {current_batch} of {num_batches}") |> cat("\n")
+  info("Processing batch ", current_batch, " of ", num_batches)
   
   emb_result <- batch$abstract |>
     tidyllm::ollama_embedding(.model = model)
@@ -188,8 +188,8 @@ create_indices <- function(con) {
     WHERE table_name = 'articles';
   ")
   
-  message("Created indices:")
-  print(indices)
+  info("Created indices:")
+  info(paste(capture.output(print(indices)), collapse = "\n"))
   
   invisible(indices)
 }
@@ -228,12 +228,12 @@ embed_and_populate_db <- function(db_path = NULL,
     dplyr::filter(!Handle %in% processed_handles)
   
   if (nrow(to_embed) == 0) {
-    message("No new articles to process.")
+    info("No new articles to process.")
     DBI::dbDisconnect(con)
     return(invisible(NULL))
   }
   
-  message("Processing ", nrow(to_embed), " new articles...")
+  info("Processing ", nrow(to_embed), " new articles...")
   
   batches <- to_embed |>
     dplyr::mutate(batch = ceiling(dplyr::row_number() / batch_size)) |>
@@ -252,7 +252,7 @@ embed_and_populate_db <- function(db_path = NULL,
 
 #' Dump database to Parquet files
 #'
-#' Exports all tables (articles, saved_searches, search_logs) to Parquet files for backup or transfer.
+#' Exports all tables (articles, saved_searches, search_logs) to Parquet files using DuckDB's COPY command.
 #'
 #' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
 #' @param pqt_folder Path to parquet output folder. Defaults to config$pqt_folder
@@ -273,40 +273,37 @@ dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
     dir.create(pqt_folder, recursive = TRUE, showWarnings = FALSE)
   }
   
-  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = TRUE)
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
   
   tables <- DBI::dbListTables(con)
-  date_stamp <- Sys.Date()
+  date_stamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
   pqt_files <- list()
   
+  export_tbl <- function(tbl) {
+    file_path <- file.path(pqt_folder, paste0(tbl, "_", date_stamp, ".parquet"))
+    sql <- sprintf("COPY %s TO '%s' (FORMAT PARQUET)", tbl, file_path)
+    DBI::dbExecute(con, sql)
+    info("Dumped ", tbl, " table to: ", file_path)
+    file_path
+  }
+  
   if ("articles" %in% tables) {
-    articles <- DBI::dbReadTable(con, "articles")
-    articles_file <- file.path(pqt_folder, paste0("articles_", date_stamp, ".parquet"))
-    arrow::write_parquet(articles, articles_file)
-    pqt_files$articles <- articles_file
-    message("Dumped articles table to: ", articles_file)
+    pqt_files$articles <- export_tbl("articles")
   }
   
   if ("saved_searches" %in% tables) {
-    saved_searches <- DBI::dbReadTable(con, "saved_searches")
-    saved_file <- file.path(pqt_folder, paste0("saved_searches_", date_stamp, ".parquet"))
-    arrow::write_parquet(saved_searches, saved_file)
-    pqt_files$saved_searches <- saved_file
-    message("Dumped saved_searches table to: ", saved_file)
+    pqt_files$saved_searches <- export_tbl("saved_searches")
   }
   
   if ("search_logs" %in% tables) {
-    search_logs <- DBI::dbReadTable(con, "search_logs")
-    logs_file <- file.path(pqt_folder, paste0("search_logs_", date_stamp, ".parquet"))
-    arrow::write_parquet(search_logs, logs_file)
-    pqt_files$search_logs <- logs_file
-    message("Dumped search_logs table to: ", logs_file)
+    pqt_files$search_logs <- export_tbl("search_logs")
   }
   
   DBI::dbDisconnect(con)
   
   invisible(pqt_files)
 }
+
 
 #' Restore database from Parquet files
 #'
@@ -338,7 +335,7 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
     all_files <- list.files(pqt_folder, pattern = "\\.parquet$", full.names = FALSE)
     dates <- stringr::str_extract(all_files, "\\d{4}-\\d{2}-\\d{2}")
     date_stamp <- max(dates[!is.na(dates)])
-    message("Using most recent backup: ", date_stamp)
+    info("Using most recent backup: ", date_stamp)
   }
   
   articles_file <- file.path(pqt_folder, paste0("articles_", date_stamp, ".parquet"))
@@ -357,9 +354,9 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
     
     DBI::dbWriteTable(con, "articles", articles)
     create_indices(con)
-    message("Restored articles table from: ", articles_file)
+    info("Restored articles table from: ", articles_file)
   } else {
-    warning("Articles file not found: ", articles_file)
+    warn("Articles file not found: ", articles_file)
   }
   
   if (file.exists(saved_file)) {
@@ -370,9 +367,9 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
     }
     
     DBI::dbWriteTable(con, "saved_searches", saved_searches)
-    message("Restored saved_searches table from: ", saved_file)
+    info("Restored saved_searches table from: ", saved_file)
   } else {
-    message("No saved_searches file found for this date")
+    info("No saved_searches file found for this date")
   }
   
   if (file.exists(logs_file)) {
@@ -389,9 +386,9 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
       DBI::dbExecute(con, sprintf("CREATE OR REPLACE SEQUENCE search_logs_seq START %d", max_id + 1))
     }
     
-    message("Restored search_logs table from: ", logs_file)
+    info("Restored search_logs table from: ", logs_file)
   } else {
-    message("No search_logs file found for this date")
+    info("No search_logs file found for this date")
   }
   
   DBI::dbDisconnect(con)

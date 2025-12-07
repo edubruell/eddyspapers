@@ -15,5 +15,5 @@ dump_db_to_parquet(db_path = NULL, pqt_folder = NULL)
 Named list of parquet file paths invisibly
 }
 \description{
-Exports all tables (articles, saved_searches, search_logs) to Parquet files for backup or transfer.
+Exports all tables (articles, saved_searches, search_logs) to Parquet files using DuckDB's COPY command.
 }

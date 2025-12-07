@@ -8,7 +8,7 @@ log_search(
   ip,
   query_hash,
   result_count,
-  top3_paper_ids = NULL,
+  top3_handles = NULL,
   filter_flags = NULL,
   response_time_ms = NULL,
   pool = NULL
@@ -21,7 +21,7 @@ log_search(
 
 \item{result_count}{Number of results returned}
 
-\item{top3_paper_ids}{Vector of top 3 paper IDs/URLs}
+\item{top3_handles}{Vector of top 3 RePEc handles}
 
 \item{filter_flags}{Named list of filter presence flags}
 
@@ -33,5 +33,5 @@ log_search(
 Search log ID
 }
 \description{
-Logs search query with domain, filters, and top results.
+Logs search query with IP, filters, and top result handles.
 }

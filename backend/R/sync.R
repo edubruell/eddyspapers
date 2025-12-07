@@ -67,7 +67,7 @@ sync_journals_from_csv <- function(journals_csv = NULL, dest_root = NULL) {
     dplyr::select(archive, journal, long_name)
   
   purrr::pwalk(journals, function(archive, journal, long_name) {
-    message("Syncing: ", long_name)
+    info("Syncing: ", long_name)
     sync_repec_folder(archive, journal, dest_root = dest_root)
   })
   
