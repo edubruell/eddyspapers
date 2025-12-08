@@ -100,7 +100,8 @@ function(req,
   )
   
   res$similarity_score <- round(1 - res$similarity, 5)
-  res <- res |> dplyr::arrange(dplyr::desc(similarity_score))
+  res <- res |> 
+    dplyr::arrange(dplyr::desc(similarity_score))
   
   hash <- save_search(
     query          = query,

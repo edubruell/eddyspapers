@@ -571,9 +571,22 @@ get_saved_search <- function(hash, pool = NULL) {
   
   if (nrow(res) == 0) return(NULL)
   
-  # Parse JSON results column
-  res$results <- jsonlite::fromJSON(res$results)
-  res
+  # parse JSON for the first (and only) row
+  results_df <- jsonlite::fromJSON(res$results[[1]])
+  
+  # build a clean list
+  list(
+    hash           = res$hash[[1]],
+    query          = res$query[[1]],
+    max_k          = res$max_k[[1]],
+    min_year       = res$min_year[[1]],
+    journal_filter = res$journal_filter[[1]],
+    journal_name   = res$journal_name[[1]],
+    title_keyword  = res$title_keyword[[1]],
+    author_keyword = res$author_keyword[[1]],
+    created_at     = res$created_at[[1]],
+    results        = results_df
+  )
 }
 
 
