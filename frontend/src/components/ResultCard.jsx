@@ -20,7 +20,7 @@ function categoryClasses(category) {
         return "border-l-teal-800 bg-stone-50";
     }
     if (category.includes("Working Paper")) {
-        return "border-red-200 bg-stone-50";
+        return "border-l-red-200 bg-stone-50";
     }
     return "border-l-stone-200 bg-stone-50";
 }

@@ -14,7 +14,7 @@ const CATEGORY_DEFS = [
         api: "Second in Field Journals (B)"
     },
     { id: "other", label: "Other Journals", api: "Other Journals" },
-    { id: "wp", label: "Working Paper Series", api: "Working Paper Series" }
+    { id: "wp", label: "Working Paper", api: "Working Paper Series" }
 ];
 
 export default function SearchApp() {
@@ -27,6 +27,9 @@ export default function SearchApp() {
         "topA",
         "secondB"
     ]);
+    const [journalName, setJournalName] = useState("");
+    const [titleKeyword, setTitleKeyword] = useState("");
+    const [authorKeyword, setAuthorKeyword] = useState("");
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
@@ -55,8 +58,12 @@ export default function SearchApp() {
                 query: query.trim(),
                 minYear: minYear || null,
                 journalFilter,
+                journalName: journalName || null,
+                titleKeyword: titleKeyword || null,
+                authorKeyword: authorKeyword || null,
                 maxK: 100
             });
+
 
             setResults(data);
             setLastSummary({
@@ -103,6 +110,12 @@ export default function SearchApp() {
                     setQuery={setQuery}
                     minYear={minYear}
                     setMinYear={setMinYear}
+                    journalName={journalName}
+                    setJournalName={setJournalName}
+                    titleKeyword={titleKeyword}
+                    setTitleKeyword={setTitleKeyword}
+                    authorKeyword={authorKeyword}
+                    setAuthorKeyword={setAuthorKeyword}
                     categories={CATEGORY_DEFS}
                     selectedCats={selectedCats}
                     onToggleCategory={toggleCategory}
@@ -110,6 +123,7 @@ export default function SearchApp() {
                     hasSearched={hasSearched}
                     loading={loading}
                 />
+
             </div>
 
             {/* RIGHT COLUMN – RESULTS */}

@@ -4,18 +4,24 @@ export async function searchPapers({
                                        query,
                                        minYear,
                                        journalFilter,
+                                       journalName,
+                                       titleKeyword,
+                                       authorKeyword,
                                        maxK = 100
                                    }) {
+
     const payload = {
         query,
         max_k: maxK,
         min_year: minYear ? Number(minYear) : null,
+
         journal_filter: journalFilter && journalFilter.length
             ? journalFilter.join(",")
             : null,
-        journal_name: null,
-        title_keyword: null,
-        author_keyword: null
+
+        journal_name: journalName || null,
+        title_keyword: titleKeyword || null,
+        author_keyword: authorKeyword || null
     };
 
     const res = await fetch(`${API_BASE}/search`, {
