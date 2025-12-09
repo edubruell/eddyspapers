@@ -12,15 +12,6 @@ This is a semantic economics paper search engine that:
 ## Current State
 
 ### Existing Structure
-- `/R` folder: Original scripts that need to be migrated
-  - `api.R`: Plumber API with search endpoints
-  - `sync_rsync_archive.R`: RePEc archive synchronization
-  - `parse_rdf_perl_backend.R`: RDF file parsing using Perl backend
-  - `embed_collection.R`: Embedding generation and database population
-  - `config.R`: Folder configuration
-  - `folder_utils.R`: Folder reference factory
-  - `database_dump.R`, `restore_db_from_pqt.R`: Database utilities
-
 - `/backend` folder: Started package refactor
   - `DESCRIPTION`: Package metadata (eddyspapersbackend)
   - `R/config.R`: Configuration functions
@@ -30,31 +21,25 @@ This is a semantic economics paper search engine that:
   - `R/database.R`: Embedding and database operations
   - `NAMESPACE`: Package exports
 
-### Key Features Already Implemented
-- **Folder Factory**: Configurable folder paths via environment variable `PAPER_SEARCH_DATA_ROOT`
-- **Config System**: Manages paths for data_root, repec, rds, pqt, db folders
-- **API Features**: Semantic search with addtional filters (year, journal, category, keywords). The standard query is a question, or a paper abstract.
-- **Database**: DuckDB with VSS extension for vector similarity search
-
-## Refactoring Goals
+## Deisgn Layout
 
 ### 1. Backend Package Structure (`/backend`)
 
 The backend package should contain:
 
 **Core Functions**:
-- Configuration and folder management (✓ partially done)
-- RePEc sync utilities (to migrate from `sync_rsync_archive.R`)
-- RDF parsing utilities (to migrate from `parse_rdf_perl_backend.R`)
-- Embedding generation (to migrate from `embed_collection.R`)
-- Database utilities (to migrate from `database_dump.R`, `restore_db_from_pqt.R`)
+- RePEc sync utilities 
+- RDF parsing utilities 
+- Embedding generation 
+- Database utilities
 
 **Plumber API**:
-- should be developed from `/R/api.R`: Plumber API with search endpoints
 - Search endpoint with semantic similarity
 - Stats endpoints (journals, categories, total count, last updated)
 - Database connection pooling
 - Filter capabilities (year, journal, category, title/author keywords)
+- Save endpoint (saves a search and its hash to the database)
+- Search retrieve end (get a search with its inputs and outputs from the save table)
 
 **Package Structure**:
 ```
@@ -62,17 +47,17 @@ backend/
 ├── DESCRIPTION
 ├── NAMESPACE
 ├── R/
-│   ├── config.R         ✓ Done
-│   ├── folders.R        ✓ Done
-│   ├── sync.R           ✓ Done
-│   ├── parse.R          ✓ Done
-│   ├── embed.R          ✓ Done
-│   ├── database.R       ✓ Done
-│   └── api.R            ✓ Done
+│   ├── config.R         
+│   ├── folders.R        
+│   ├── sync.R           
+│   ├── parse.R          
+│   ├── embed.R          
+│   ├── database.R       
+│   └── api.R            
 ├── inst/
 │   └── plumber/
-│       └── api.R        ✓ Done
-└── man/                 ✓ Done
+│       └── api.R        
+└── man/                 
 ```
 
 ### 2. Main Folder Scripts
@@ -136,7 +121,7 @@ frontend/
 - [x] Create `update_repec.R` for cron jobs
 - [x] Update `claude.md`
 
-### Phase 3: Future Frontend (Not in Scope Yet)
+### Phase 3: Future Frontend 
 - [ ] Set up Svelte project
 - [ ] Create search UI
 - [ ] Connect to backend API
@@ -155,21 +140,11 @@ All functions are documented and exported:
 - **API**: `setup_api_pool()`, `get_api_pool()`, `close_api_pool()`, `semantic_search()`, `get_journal_stats()`, `get_total_articles()`, `get_category_stats()`, `get_last_updated()`, `run_plumber_api()`
 
 ### Main Scripts
-- **`run_api.R`**: Production API server startup
-- **`update_repec.R`**: Complete update pipeline for cron jobs
-
-### Next Steps for Developer
-1. Review the refactored code
-2. Test the backend package installation: `devtools::load_all("backend")`
-3. Test the API: `Rscript run_api.R`
-4. Set up cron job for updates: `Rscript update_repec.R`
-5. Clean up old `/R` folder files (keep for reference during transition)
-6. Consider generating man pages: `devtools::document("backend")`
+- **`run_api.R`**: Production API server startup (tested/works)
+- **`update_repec.R`**: Complete update pipeline for cron jobs (tested/works)
 
 ## Notes
 
-- Document and export functions so they are useable from the package
-- Keep the package simple and extensible with other repec features
 - No code comments unless requested
 - Focus on clean, functional code (Preference for purrr over loops)
 - Use folder factory for all path operations

@@ -1,15 +1,31 @@
 #* @apiTitle Semantic Paper Search API
 #* @apiDescription Vector search with deep filtering
 
+#* @schema PaperResult
+#* @property Handle string
+#* @property title string
+#* @property year integer
+#* @property authors string
+#* @property journal string
+#* @property category string
+#* @property url string
+#* @property bib_tex string
+#* @property abstract string
+#* @property similarity number Cosine distance (lower is closer)
+#* @property similarity_score number Normalized similarity score
+NULL
+
 #* Search papers semantically with filters
 #* @post /search
-#* @param query Text query (embedded)
-#* @param max_k Max results
-#* @param min_year Minimum year
-#* @param journal_filter Category filter
-#* @param journal_name Comma-separated list of journal names or substrings
-#* @param title_keyword Keyword in title
-#* @param author_keyword Keyword in authors
+#* @serializer json
+#* @apiResponse 200 {array} PaperResult List of matching papers
+#* @param query:string Text query to embed
+#* @param max_k:number Maximum number of results
+#* @param min_year:number Minimum publication year
+#* @param journal_filter:string Category filter (comma separated)
+#* @param journal_name:string Journal name filter (comma separated substrings)
+#* @param title_keyword:string Keyword filter for titles
+#* @param author_keyword:string Keyword filter for authors
 function(req,
          query,
          max_k = 100,
@@ -69,15 +85,30 @@ function(req,
 }
 
 
+#* @schema SavedSearchResponse
+#* @property hash string Unique identifier for this saved search
+#* @property query string
+#* @property max_k integer
+#* @property min_year integer
+#* @property journal_filter string
+#* @property journal_name string
+#* @property title_keyword string
+#* @property author_keyword string
+#* @property created_at string Timestamp of storage
+#* @property results array[PaperResult]  search results
+NULL
+
 #* Search papers and save with hash
 #* @post /search/save
-#* @param query Text query (embedded)
-#* @param max_k Max results
-#* @param min_year Minimum year
-#* @param journal_filter Category filter
-#* @param journal_name Comma-separated list of journal names or substrings
-#* @param title_keyword Keyword in title
-#* @param author_keyword Keyword in authors
+#* @serializer json
+#* @apiResponse 200 {object} SavedSearchResponse Saved query and results
+#* @param query:string Text query
+#* @param max_k:number Maximum number of results
+#* @param min_year:number Minimum publication year
+#* @param journal_filter:string Comma separated category codes
+#* @param journal_name:string Comma separated journal names or substrings
+#* @param title_keyword:string Keyword filter for titles
+#* @param author_keyword:string Keyword filter for authors
 function(req,
          query,
          max_k = 100,
@@ -141,16 +172,52 @@ function(req,
   )
 }
 
+#* @schema SearchStats
+#* @property days integer Number of days included
+#* @property total_searches integer Total number of searches
+#* @property avg_results number Average number of results returned
+#* @property avg_response_ms number Average response time in milliseconds
+#* @property filter_usage object Breakdown of filter usage counts
+#* @property filter_usage.year_filters integer
+#* @property filter_usage.journal_filters integer
+#* @property filter_usage.journal_name_filters integer
+#* @property filter_usage.title_keyword_filters integer
+#* @property filter_usage.author_keyword_filters integer
+NULL
+
 #* Get search log statistics
 #* @get /stats/searches
-#* @param days Number of days to include (default 30)
+#* @serializer json
+#* @apiResponse 200 {object} SearchStats Aggregated search statistics
+#* @param days:number Number of days to include
 function(days = 30) {
   get_search_stats(days = as.integer(days))
 }
 
 
+#* @schema SavedSearch
+#* @property hash string
+#* @property query string
+#* @property max_k integer
+#* @property min_year integer
+#* @property journal_filter string
+#* @property journal_name string
+#* @property title_keyword string
+#* @property author_keyword string
+#* @property created_at string
+#* @property results array[PaperResult]
+NULL
+
+#* @schema NotFoundError
+#* @property error string Error message
+NULL
+
 #* Retrieve saved search by hash
 #* @get /search/<hash>
+#* @serializer json
+#* @apiResponse 200 {object} SavedSearch Retrieved search
+#* @apiResponse 404 {object} NotFoundError Search not found
+#* @param hash:string Search hash (8 characters)
 function(hash) {
   saved <- get_saved_search(hash)
   
@@ -166,26 +233,54 @@ function(hash) {
   saved
 }
 
+#* @schema JournalCount
+#* @property journal string Journal name
+#* @property n integer Number of articles in this journal
+NULL
+
 #* Get journal entry counts
 #* @get /stats/journals
+#* @serializer json
+#* @apiResponse 200 {array} JournalCount List of journals with article counts
 function() {
   get_journal_stats()
 }
 
+#* @schema TotalArticles
+#* @property total_articles integer Total number of articles
+NULL
+
 #* Get total article count
 #* @get /stats/total
+#* @serializer json
+#* @apiResponse 200 {object} TotalArticles Total article count
 function() {
   list(total_articles = get_total_articles())
 }
 
+#* @schema CategoryCount
+#* @property category string Category code
+#* @property n integer Number of articles in this category
+NULL
+
 #* Get category counts
 #* @get /stats/categories
+#* @serializer json
+#* @apiResponse 200 {array} CategoryCount List of categories with article counts
 function() {
   get_category_stats()
 }
 
+#* @schema LastUpdated
+#* @property last_updated string Date of last database update (YYYY-MM-DD)
+NULL
+
 #* Get last database update date
 #* @get /stats/last_updated
+#* @serializer json
+#* @apiResponse 200 {object} LastUpdated Last update date of the database
 function() {
   list(last_updated = get_last_updated())
 }
+
+
