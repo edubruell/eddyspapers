@@ -1,0 +1,10 @@
+---
+import AppLayout from "../layouts/AppLayout.astro";
+import SearchApp from "../components/SearchApp.jsx";
+---
+
+<AppLayout>
+	<div class="h-[calc(100vh-2rem)] grid grid-cols-1 md:grid-cols-[340px,1fr] gap-6">
+		<SearchApp client:load />
+	</div>
+</AppLayout>

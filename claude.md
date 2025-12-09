@@ -1,4 +1,4 @@
-# Semantic Economics Paper Search Engine - Refactoring Plan
+# Semantic Economics Paper Search Engine - Status and Plan
 
 ## Project Overview
 
@@ -9,7 +9,7 @@ This is a semantic economics paper search engine that:
 - Stores data in a DuckDB database with vector search (VSS extension)
 - Provides a Plumber REST API for search queries
 
-## Current State
+## Current State (as of 2025-12-09)
 
 ### Existing Structure
 - `/backend` folder: Started package refactor
@@ -21,7 +21,7 @@ This is a semantic economics paper search engine that:
   - `R/database.R`: Embedding and database operations
   - `NAMESPACE`: Package exports
 
-## Deisgn Layout
+## Design Layout
 
 ### 1. Backend Package Structure (`/backend`)
 
@@ -69,16 +69,23 @@ The main project folder should have lightweight scripts that:
 
 ### 3. Frontend Structure (`/frontend`)
 
-Separate folder for Svelte UI (to be developed later):
-```
-frontend/
-├── package.json
-├── svelte.config.js
-├── src/
-│   ├── routes/
-│   └── lib/
-└── static/
-```
+The frontend is a minimal prototype built with Astro and React components. It presents a two-phase UI:
+- Landing state: centered logo (smaller) and wider search box.
+- Results state: left sidebar with logo + search controls; right pane with results.
+
+Key components (React):
+- `SearchApp.jsx`: top-level state and layout; orchestrates search.
+- `SearchPanel.jsx`: query textarea, category pills, min-year, search button.
+- `CategoryPills.jsx`: selectable journal category chips.
+- `Results.jsx`: renders results only after a search was triggered.
+- `ResultCard.jsx`: individual paper card with copy-to-clipboard BibTeX and expand/collapse abstract.
+- `SearchBox.jsx`: autosizing textarea input.
+
+Astro layout:
+- `src/layouts/AppLayout.astro`: global page layout and styles.
+
+API client:
+- `src/lib/api.js`: posts to the R Plumber backend at `http://127.0.0.1:8000/search`.
 
 ## Technical Details
 
@@ -121,10 +128,16 @@ frontend/
 - [x] Create `update_repec.R` for cron jobs
 - [x] Update `claude.md`
 
-### Phase 3: Future Frontend 
-- [ ] Set up Svelte project
-- [ ] Create search UI
-- [ ] Connect to backend API
+### Phase 3: Frontend Progress
+- [x] Category pills wired to query filter
+- [x] Results pane shown only after first search
+- [x] Landing layout: smaller logo, wider box; transitions to sidebar when searching
+- [x] Logo displayed above search panel with matching width
+- [x] Search button right-aligned
+- [x] Result card actions right-aligned with icons (BibTeX copy, More/Less)
+- [ ] Persist/search history and shareable URLs
+- [ ] Saved searches
+- [ ] Visual polish and responsive refinements
 
 ## Refactoring Complete! 🎉
 
@@ -149,3 +162,9 @@ All functions are documented and exported:
 - Focus on clean, functional code (Preference for purrr over loops)
 - Use folder factory for all path operations
 - Ensure backward compatibility with existing data
+
+## Frontend Usage Notes
+
+- Development: `cd frontend && npm install && npm run dev` (Astro dev server)
+- API endpoint: by default the frontend points to `http://127.0.0.1:8000` in `frontend/src/lib/api.js` (`API_BASE`). Adjust if your backend runs elsewhere.
+- Assets: logo expected at `frontend/public/logo.webp`.
