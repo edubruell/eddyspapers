@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { searchPapers } from "../lib/api";
+import { useState, useEffect } from "react";
+import { searchPapers, getLastUpdated } from "../lib/api";
 import SearchPanel from "./SearchPanel.jsx";
 import Results from "./Results.jsx";
 
@@ -35,6 +35,13 @@ export default function SearchApp() {
     const [errorMsg, setErrorMsg] = useState("");
     const [lastSummary, setLastSummary] = useState(null);
     const [hasSearched, setHasSearched] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState(null);
+
+    useEffect(() => {
+        getLastUpdated()
+            .then(d => setLastUpdated(d.last_updated))
+            .catch(() => setLastUpdated(null));
+    }, []);
 
     function toggleCategory(id) {
         setSelectedCats(prev =>
@@ -95,15 +102,22 @@ export default function SearchApp() {
                         : "w-full max-w-[700px] flex flex-col items-center"
                 }
             >
-                <img
-                    src="/logo.webp"
-                    alt="Eddy's Papers Logo"
-                    className={
-                        hasSearched
-                            ? "w-full mb-1"
-                            : "w-[360px] max-w-full mx-auto mb-2"
-                    }
-                />
+                <a
+                    href="https://www.eduard-bruell.de/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <img
+                        src="/logo.webp"
+                        alt="Illustration of a meerkat holding a research paper"
+                        className={
+                            hasSearched
+                                ? "w-full mb-1"
+                                : "w-[360px] max-w-full mx-auto mb-2"
+                        }
+                    />
+                </a>
+
 
                 <SearchPanel
                     query={query}
@@ -123,6 +137,12 @@ export default function SearchApp() {
                     hasSearched={hasSearched}
                     loading={loading}
                 />
+
+                {lastUpdated && (
+                    <div className="mt-3 text-[11px] text-stone-500">
+                        Database last updated on {lastUpdated}
+                    </div>
+                )}
 
             </div>
 

@@ -38,3 +38,11 @@ export async function searchPapers({
     const data = await res.json();
     return Array.isArray(data) ? data : [];
 }
+
+export async function getLastUpdated() {
+    const res = await fetch(`${API_BASE}/stats/last_updated`);
+    if (!res.ok) {
+        throw new Error(`Failed to load last_updated`);
+    }
+    return res.json();   // returns { last_updated: "YYYY-MM-DD" }
+}
