@@ -1,6 +1,6 @@
-# Semantic Economics Paper Search Engine
+# Eddy's Papers 
 
-A full-stack semantic search application for economics papers from the [RePEc](https://repec.org) archives. Uses vector embeddings to enable natural language queries over academic publications.
+A **Semantic Paper Search Engine** for economics papers from the [RePEc](https://repec.org) archives. Uses vector embeddings of Abstracts to enable natural language queries over academic publications.
 
 ## Overview
 
@@ -147,11 +147,6 @@ Frontend will be available at `http://localhost:4321`
 source("run_api.R")
 ```
 
-### Scheduled Updates
-Add to crontab for daily updates:
-```bash
-0 2 * * * cd /path/to/project && Rscript update_repec.R
-```
 
 ### Development
 ```bash
@@ -169,8 +164,7 @@ cd frontend && npm run dev
 curl -X POST http://localhost:8000/search \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "monetary policy and inflation",
-    "categories": ["E"],
+    "query": "Reductions in Gouvernment Expenditures and Political Polarization",
     "min_year": 2020,
     "limit": 10
   }'
@@ -193,23 +187,12 @@ curl http://localhost:8000/stats/journals
 5. **Search**: Plumber API provides vector similarity search
 6. **Display**: Astro/React frontend queries API and renders results
 
-### Database Schema
-- **papers**: Metadata (title, author, year, journal, abstract, etc.)
-- **embeddings**: Vector embeddings for semantic search
-- **saved_searches**: Saved query results with hash keys
-
-## Development Notes
-
-- Backend uses functional programming style (purrr over loops)
-- Folder paths managed via factory pattern (`get_folder_refs()`)
-- API uses connection pooling for concurrent requests
-- Frontend uses React hooks for state management
-- No code comments unless explicitly requested
 
 ## License
 
-[Specify license]
+MIT License
 
 ## Contact
 
-[Specify contact information]
+Eduard Brüll
+eduard.bruell@zew.de

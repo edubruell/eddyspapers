@@ -94,7 +94,7 @@ export default function SearchApp() {
                     className={
                         hasSearched
                             ? "w-full mb-1"
-                            : "w-[360px] max-w-full mx-auto mb-6"
+                            : "w-[360px] max-w-full mx-auto mb-2"
                     }
                 />
 
