@@ -68,7 +68,7 @@ export default function SearchPanel({
             {/* SEARCH BUTTON */}
             <button
                 onClick={onSearch}
-                className="self-end px-4 py-2 bg-orange-400 text-white text-sm rounded-md hover:bg-orange-500"
+                className="self-end px-4 py-2 bg-sky-800 text-white text-sm rounded-md hover:bg-sky-500"
             >
                 Search
             </button>

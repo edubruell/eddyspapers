@@ -12,7 +12,7 @@ export default function CategoryPills({
                 const inactive =
                     "border-stone-300 bg-white text-stone-700 hover:border-stone-400";
                 const activeCls =
-                    "border-orange-500 bg-orange-200/70 text-orange-900";
+                    "border-sky-500 bg-sky-200/70 text-sky-900";
                 return (
                     <button
                         key={cat.id}

@@ -5,22 +5,22 @@ function categoryClasses(category) {
         return "border-l-stone-300 bg-stone-50";
     }
     if (category.includes("Top 5")) {
-        return "border-l-amber-400 bg-amber-50";
-    }
-    if (category.includes("Top Field")) {
-        return "border-l-amber-300 bg-amber-50";
-    }
-    if (category.includes("AEJ")) {
-        return "border-l-orange-300 bg-orange-50";
-    }
-    if (category.includes("Second in Field")) {
-        return "border-l-stone-300 bg-stone-50";
-    }
-    if (category.includes("Working Paper")) {
-        return "border-l-emerald-300 bg-emerald-50";
+        return "border-l-orange-500 bg-stone-50";
     }
     if (category.includes("General Interest")) {
-        return "border-l-sky-400 bg-sky-50";
+        return "border-l-amber-500 bg-stone-50";
+    }
+    if (category.includes("AEJ")) {
+        return "border-l-sky-400 bg-stone-50";
+    }
+    if (category.includes("Top Field")) {
+        return "border-l-emerald-400 bg-stone-50";
+    }
+    if (category.includes("Second in Field")) {
+        return "border-l-teal-800 bg-stone-50";
+    }
+    if (category.includes("Working Paper")) {
+        return "border-red-200 bg-stone-50";
     }
     return "border-l-stone-200 bg-stone-50";
 }
