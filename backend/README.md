@@ -29,6 +29,7 @@ Defaults to `./data` if not set.
 - `sync_repec_folder(archive, journal)` - Sync single archive/journal
 - `sync_journals_from_csv()` - Sync all journals from CSV
 - `sync_repec_cpd_conf()` - Sync the related works from RePEc
+- `sync_repec_iscited()` - Sync citation data (iscited.txt) from RePEc
 
 ### ReDIF Parsing
 - `parse_redif_perl(path)` - Parse single ReDIF file
@@ -40,9 +41,13 @@ Defaults to `./data` if not set.
 - `load_cleaned_collection()` - Load and clean all parsed papers
 - `embed_and_populate_db()` - Generate embeddings and populate database
 - `write_version_links_to_db()` - Get the version links table into the database
+- `init_citations_tables()` - Initialize citation tables (cit_all, cit_internal)
+- `parse_iscited_streaming()` - Stream parse iscited.txt into cit_all
+- `build_internal_citation_graph()` - Build filtered internal citation graph
+- `populate_citations()` - Main function to populate citation data
 - `create_indices()` - Create database indices
-- `dump_db_to_parquet()` - Backup database to Parquet
-- `restore_db_from_parquet()` - Restore from Parquet backup
+- `dump_db_to_parquet()` - Backup database to Parquet (includes citation tables)
+- `restore_db_from_parquet()` - Restore from Parquet backup (includes citation tables)
 
 ### API Functions
 - `setup_api_pool()` - Initialize connection pool
@@ -52,6 +57,10 @@ Defaults to `./data` if not set.
 - `get_category_stats()` - Category statistics
 - `get_total_articles()` - Total article count
 - `get_last_updated()` - Database last update date
+- `get_version_links()` - Get version links for a handle
+- `get_citing_papers()` - Get papers that cite a given handle
+- `get_cited_papers()` - Get papers cited by a given handle
+- `get_citation_counts()` - Get total and internal citation counts
 
 ## External Requirements
 
@@ -76,9 +85,46 @@ library(eddyspapersbackend)
 config <- get_folder_config()
 ensure_folders(config)
 
+# Sync and parse
 sync_journals_from_csv()
 parse_all_journals()
+
+# Embeddings and database
 embed_and_populate_db()
+
+# Version links
+write_version_links_to_db()
+
+# Citation data
+iscited_file <- sync_repec_iscited()
+populate_citations(iscited_file = iscited_file)
+
+# Backup
+dump_db_to_parquet()
 ```
 
 See `run_api.R` and `update_repec.R` in the project root for complete examples.
+
+## Citation System
+
+The backend implements a three-table citation architecture:
+
+1. **`cit_all`** - Full citation graph (~10M edges) from RePEc iscited.txt
+   - Includes all citations, even to papers outside our database
+   - Used for accurate total citation counts
+
+2. **`cit_internal`** - Internal citation graph (~1M edges)
+   - Only citations between papers in our database
+   - Used for queries with full paper metadata
+   - Enables network analysis within our corpus
+
+3. **`handle_stats`** - Precomputed statistics (future implementation)
+   - PageRank, H-index, citation velocity
+   - Computed during update pipeline for fast runtime queries
+
+### API Endpoints
+
+- `GET /citedby?handle=...&limit=50` - Papers citing a given handle
+- `GET /cites?handle=...&limit=50` - Papers cited by a given handle  
+- `GET /citationcounts?handle=...` - Total and internal citation counts
+- `GET /versions?handle=...` - Related paper versions
