@@ -85,7 +85,7 @@ Astro layout:
 - `src/layouts/AppLayout.astro`: global page layout and styles.
 
 API client:
-- `src/lib/api.js`: posts to the R Plumber backend at `http://127.0.0.1:8000/search`.
+- `src/lib/api.js`: posts to the R Plumber backend at `http://127.0.0.1:8000/search` and implements saved searchers, database update data retrieval and other API features. 
 
 ## Technical Details
 
@@ -135,24 +135,96 @@ API client:
 - [x] Logo displayed above search panel with matching width
 - [x] Search button right-aligned
 - [x] Result card actions right-aligned with icons (BibTeX copy, More/Less)
-- [ ] Persist/search history and shareable URLs
-- [ ] Saved searches
-- [ ] Visual polish and responsive refinements
+- [x] Persist/search history and shareable URLs
+- [x] Saved searches in the frontend
+- [x] Visual polish and responsive refinements
 
-## Refactoring Complete! 🎉
+### Phase 4: Citation Integration (IN PROGRESS)
 
-The backend package refactoring is complete. Here's what's ready:
+**Goal:** Integrate RePEc citation data (iscited.txt) into backend with three-table design for performance.
 
-### Backend Package (`backend/`)
-All functions are documented and exported:
-- **Config**: `get_folder_config()`, `ensure_folders()`
-- **Folders**: `get_folder_refs()`
-- **Sync**: `sync_repec_folder()`, `sync_journals_from_csv()`
-- **Parse**: `parse_redif_perl()`, `post_process_entry()`, `parse_all_journals()`
-- **Database**: `load_cleaned_collection()`, `embed_and_populate_db()`, `create_indices()`, `dump_db_to_parquet()`, `restore_db_from_parquet()`
-- **API**: `setup_api_pool()`, `get_api_pool()`, `close_api_pool()`, `semantic_search()`, `get_journal_stats()`, `get_total_articles()`, `get_category_stats()`, `get_last_updated()`, `run_plumber_api()`
+#### Citation Architecture
 
-### Main Scripts
+**Three-Table Design:**
+
+1. **`cit_all`** - Full citation graph (all edges from iscited.txt)
+   - Columns: `citing VARCHAR`, `cited VARCHAR`
+   - Indices: on both citing and cited
+   - Purpose: Complete citation counts, includes papers outside our DB
+   - Size: ~10M rows, ~150MB
+
+2. **`cit_internal`** - Internal citation graph (both ends in our articles DB)
+   - Columns: `citing VARCHAR`, `cited VARCHAR`
+   - Indices: on both citing and cited
+   - Purpose: Network analysis, metadata-rich queries
+   - Size: ~1M rows, ~20MB
+   - Derived from `cit_all` filtered to our corpus
+
+3. **`handle_stats`** - Precomputed citation statistics (FUTURE)
+   - Columns: `handle`, `total_citations`, `internal_citations`, `total_references`, 
+     `pagerank`, `h_index`, `top_citing_journals`, `citations_by_year`, etc.
+   - Purpose: Fast runtime queries, no joins needed
+   - Updated during sync pipeline, not at query time
+   - Enables advanced metrics: PageRank, H-index, citation velocity, co-citation clusters
+
+#### Implementation Status
+
+**Phase 4a: Citation Tables** ✅ DONE
+- [x] Sync function: `sync_repec_iscited()` in `sync.R`
+- [x] Streaming parser: `parse_iscited_streaming()` in `database.R`
+- [x] Graph builder: `build_internal_citation_graph()` in `database.R`
+- [x] Table init: `init_citations_tables()` in `database.R`
+- [x] Update dump/restore functions for `cit_all` and `cit_internal`
+- [x] API functions: `get_citing_papers()`, `get_cited_papers()`, `get_citation_counts()` in `api.R`
+- [x] Plumber endpoints: `/cites`, `/citedby`, `/citationcounts` in `inst/plumber/api.R`
+- [x] Update `update_repec.R` pipeline
+- [x] Add R.utils dependency to DESCRIPTION
+- [x] Update NAMESPACE with all exports
+
+**Phase 4b: Precomputed Stats** (Future)
+- [ ] Design `handle_stats` table schema
+- [ ] Implement graph algorithms (PageRank, H-index, betweenness)
+- [ ] Implement `compute_handle_stats()` batch processing
+- [ ] API function: `get_handle_stats()` in `api.R`
+- [ ] Plumber endpoint: `/handlestats` in `inst/plumber/api.R`
+- [ ] Include in dump/restore cycle
+
+**Phase 4c: Frontend Integration** (Future)
+- [ ] Result card "More" expansion for versions (backend `/versions` exists)
+- [ ] Result card "More" expansion shows citation counts
+- [ ] Display: "Cited by X papers (Y in database)"
+- [ ] List citing/cited papers with metadata
+- [ ] Show precomputed stats badges (PageRank percentile, H-index, etc.)
+
+#### Update Pipeline (with citations)
+
+```r
+# update_repec.R order:
+1. Sync journals (rsync)
+2. Parse RDF files
+3. Embed & populate articles table
+4. Write version links
+5. Sync iscited.txt            # NEW
+6. Parse & populate cit_all     # NEW
+7. Build cit_internal          # NEW
+8. Compute handle_stats        # FUTURE (Phase 4b)
+9. Dump to parquet
+```
+
+#### API Endpoints
+
+**Implemented:**
+- `GET /versions?handle=...` - Related paper versions
+
+**Phase 4a (In Progress):**
+- `GET /cites?handle=...&limit=50` - Papers cited by this handle
+- `GET /citedby?handle=...&limit=50` - Papers citing this handle
+
+**Phase 4b (Future):**
+- `GET /handlestats?handle=...` - Precomputed citation statistics
+
+
+### Main Scripts to work with the packaged backend
 - **`run_api.R`**: Production API server startup (tested/works)
 - **`update_repec.R`**: Complete update pipeline for cron jobs (tested/works)
 

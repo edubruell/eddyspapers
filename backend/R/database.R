@@ -250,9 +250,78 @@ embed_and_populate_db <- function(db_path = NULL,
   invisible(to_embed)
 }
 
+
+#' Write version links to database
+#'
+#' Processes version relationships from the rw object and writes them to the version_links table.
+#' Only includes links where both source and target papers exist in the database.
+#'
+#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
+#' @param rw_file Path to a RePEc Related Works file. Defaults to config$repec/cpd/conf/relatedworks.dat
+#' @return NULL invisibly
+#' @export
+write_version_links_to_db <- function(db_path = NULL,
+                                      rw_file = NULL){
+  if(is.null(rw_file)){
+    config  <- get_folder_config()
+    rw_file <- get_folder_refs(config)$repec("cpd","conf","relatedworks.dat")
+  }
+  if (is.null(db_path)) {
+    config <- get_folder_config()
+    db_path <- file.path(config$db_folder, "articles.duckdb")
+  }
+
+  rw <- parse_relatedworks_perl(rw_file) 
+  info("Related Works parsed succesfully")
+  
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
+  DBI::dbExecute(con, "LOAD vss;")
+  
+  init_articles_table(con)
+  processed_handles <- get_processed_handles(con)
+  
+  processed_handles_norm <- tolower(processed_handles)
+  
+  rw_filtered <- rw[processed_handles_norm %in% names(rw)]
+  
+  version_links <- purrr::imap_dfr(
+    rw_filtered,
+    function(relcats, src) {
+      purrr::imap_dfr(
+        relcats,
+        function(targets, relcat) {
+          tibble::tibble(
+            source = src,
+            target = names(targets),
+            type = relcat
+          )
+        }
+      )
+    }
+  )
+  
+  info("Version links created internally")
+  
+  names(processed_handles) <- processed_handles_norm
+  
+  version_links  |>
+    dplyr::filter(source %in% processed_handles_norm,
+                  target %in% processed_handles_norm) |>
+    dplyr::mutate(target = processed_handles[target],
+                  source = processed_handles[source]) |>
+    dplyr::copy_to(
+      con,
+      df = _,
+      name = "version_links",
+      temporary = FALSE,
+      overwrite = TRUE
+    )
+} 
+
+
 #' Dump database to Parquet files
 #'
-#' Exports all tables (articles, saved_searches, search_logs) to Parquet files using DuckDB's COPY command.
+#' Exports all tables (articles, saved_searches, search_logs,version_links) to Parquet files using DuckDB's COPY command.
 #'
 #' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
 #' @param pqt_folder Path to parquet output folder. Defaults to config$pqt_folder
@@ -287,17 +356,11 @@ dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
     file_path
   }
   
-  if ("articles" %in% tables) {
-    pqt_files$articles <- export_tbl("articles")
-  }
+  pqt_files <- tables |>
+    purrr::set_names() |>
+    purrr::keep(~.x %in% c("articles", "saved_searches", "search_logs", "version_links", "cit_all", "cit_internal")) |>
+    purrr::map(export_tbl)
   
-  if ("saved_searches" %in% tables) {
-    pqt_files$saved_searches <- export_tbl("saved_searches")
-  }
-  
-  if ("search_logs" %in% tables) {
-    pqt_files$search_logs <- export_tbl("search_logs")
-  }
   
   DBI::dbDisconnect(con)
   
@@ -341,6 +404,11 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   articles_file <- file.path(pqt_folder, paste0("articles_", date_stamp, ".parquet"))
   saved_file <- file.path(pqt_folder, paste0("saved_searches_", date_stamp, ".parquet"))
   logs_file <- file.path(pqt_folder, paste0("search_logs_", date_stamp, ".parquet"))
+  version_links_file <- file.path(pqt_folder, paste0("version_links_", date_stamp, ".parquet"))
+  cit_all_file <- file.path(pqt_folder, paste0("cit_all_", date_stamp, ".parquet"))
+  cit_internal_file <- file.path(pqt_folder, paste0("cit_internal_", date_stamp, ".parquet"))
+  
+  
   
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
   DBI::dbExecute(con, "LOAD vss;")
@@ -391,7 +459,253 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
     info("No search_logs file found for this date")
   }
   
+
+  if (file.exists(version_links_file)) {
+    version_links <- arrow::read_parquet(version_links_file)
+    
+    if ("version_links" %in% DBI::dbListTables(con)) {
+      DBI::dbExecute(con, "DROP TABLE version_links")
+    }
+    
+    DBI::dbWriteTable(con, "version_links", version_links)
+    info("Restored version_links table from: ", version_links_file)
+  } else {
+    info("No version_links file found for this date")
+  }
+  
+  if (file.exists(cit_all_file)) {
+    cit_all <- arrow::read_parquet(cit_all_file)
+    
+    if ("cit_all" %in% DBI::dbListTables(con)) {
+      DBI::dbExecute(con, "DROP TABLE cit_all")
+    }
+    
+    DBI::dbWriteTable(con, "cit_all", cit_all)
+    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_all_citing ON cit_all(citing)")
+    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_all_cited ON cit_all(cited)")
+    info("Restored cit_all table from: ", cit_all_file)
+  } else {
+    info("No cit_all file found for this date")
+  }
+  
+  if (file.exists(cit_internal_file)) {
+    cit_internal <- arrow::read_parquet(cit_internal_file)
+    
+    if ("cit_internal" %in% DBI::dbListTables(con)) {
+      DBI::dbExecute(con, "DROP TABLE cit_internal")
+    }
+    
+    DBI::dbWriteTable(con, "cit_internal", cit_internal)
+    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_internal_citing ON cit_internal(citing)")
+    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_internal_cited ON cit_internal(cited)")
+    info("Restored cit_internal table from: ", cit_internal_file)
+  } else {
+    info("No cit_internal file found for this date")
+  }
+  
   DBI::dbDisconnect(con)
   
   invisible(db_path)
+}
+
+
+
+#' Initialize citation tables in database
+#'
+#' Creates cit_all and cit_internal tables with indices if they don't exist.
+#'
+#' @param con DuckDB connection
+#' @return TRUE invisibly
+#' @export
+init_citations_tables <- function(con) {
+  
+  if (!"cit_all" %in% DBI::dbListTables(con)) {
+    DBI::dbExecute(con, "
+      CREATE TABLE cit_all (
+        citing VARCHAR,
+        cited VARCHAR
+      )
+    ")
+    info("Created cit_all table")
+  }
+  
+  if (!"cit_internal" %in% DBI::dbListTables(con)) {
+    DBI::dbExecute(con, "
+      CREATE TABLE cit_internal (
+        citing VARCHAR,
+        cited VARCHAR
+      )
+    ")
+    info("Created cit_internal table")
+  }
+  
+  invisible(TRUE)
+}
+
+
+#' Parse iscited file and populate cit_all table
+#'
+#' Streams the iscited.txt file, parses citation edges, and inserts them into cit_all.
+#' Format: cited_handle citing1#citing2,citing3
+#' All handles are normalized to lowercase for consistency.
+#'
+#' @param file Path to iscited.txt file
+#' @param con DuckDB connection
+#' @param chunk_size Number of lines to read per chunk
+#' @param commit_every Number of edges to buffer before committing to database
+#' @return Total number of edges inserted
+#' @export
+parse_iscited_streaming <- function(
+    file,
+    con,
+    chunk_size = 50000,
+    commit_every = 50000
+) {
+  info("Starting stream parse of: ", file)
+  
+  buffer <- list()
+  total_rows <- 0
+  inserted <- 0
+  
+  callback <- function(lines, pos) {
+    
+    df <- tibble::tibble(raw = lines) |>
+      tidyr::separate(raw, into = c("cited", "citing_string"), sep = "\\s+", extra = "merge") |>
+      dplyr::mutate(
+        cited = tolower(cited),
+        citing_string = tolower(citing_string)
+      ) |>
+      dplyr::filter(!is.na(cited), !is.na(citing_string))
+    
+    if (nrow(df) == 0) return(NULL)
+    
+    edges <- df |>
+      dplyr::mutate(citing = stringr::str_split(citing_string, "#|,")) |>
+      dplyr::select(cited, citing) |>
+      tidyr::unnest(citing) |>
+      dplyr::filter(citing != "", !is.na(citing))
+    
+    if (nrow(edges) == 0) return(NULL)
+    
+    buffer[[length(buffer) + 1]] <<- edges
+    total_rows <<- total_rows + nrow(edges)
+    
+    if (total_rows >= commit_every) {
+      combined <- dplyr::bind_rows(buffer)
+      DBI::dbAppendTable(con, "cit_all", combined)
+      inserted <<- inserted + nrow(combined)
+      buffer <<- list()
+      total_rows <<- 0
+      info("Inserted ", inserted, " edges...")
+    }
+    
+    NULL
+  }
+  
+  readr::read_lines_chunked(
+    file = file,
+    callback = readr::SideEffectChunkCallback$new(callback),
+    chunk_size = chunk_size
+  )
+  
+  if (length(buffer) > 0) {
+    combined <- dplyr::bind_rows(buffer)
+    DBI::dbAppendTable(con, "cit_all", combined)
+    inserted <- inserted + nrow(combined)
+  }
+  
+  info("Finished! Total edges inserted: ", inserted)
+  invisible(inserted)
+}
+
+
+#' Build internal citation graph from cit_all
+#'
+#' Creates cit_internal table by filtering cit_all to only include edges
+#' where both citing and cited handles exist in the articles table.
+#' Also creates indices on both columns for fast lookups.
+#'
+#' @param con DuckDB connection
+#' @return Number of internal edges created
+#' @export
+build_internal_citation_graph <- function(con) {
+  info("Building internal citation graph...")
+  
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS cit_internal")
+  
+  DBI::dbExecute(con, "
+    CREATE TABLE cit_internal AS
+    SELECT citing, cited
+    FROM cit_all
+    WHERE citing IN (SELECT LOWER(Handle) FROM articles)
+      AND cited IN (SELECT LOWER(Handle) FROM articles)
+  ")
+  
+  internal_count <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM cit_internal")$n
+  info("Created ", internal_count, " internal citation edges")
+  
+  DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_all_citing ON cit_all(citing)")
+  DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_all_cited ON cit_all(cited)")
+  DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_internal_citing ON cit_internal(citing)")
+  DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_internal_cited ON cit_internal(cited)")
+  
+  info("Created citation indices")
+  
+  invisible(internal_count)
+}
+
+
+#' Populate citation tables from iscited file
+#'
+#' Main orchestrator function for citation data population.
+#' Initializes tables, parses iscited file, and builds internal graph.
+#'
+#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
+#' @param iscited_file Path to iscited.txt file. Defaults to config$repec_folder/cit/conf/iscited.txt
+#' @param chunk_size Number of lines to read per chunk
+#' @param commit_every Number of edges to buffer before committing
+#' @return List with counts of total and internal edges
+#' @export
+populate_citations <- function(
+    db_path = NULL,
+    iscited_file = NULL,
+    chunk_size = 50000,
+    commit_every = 50000
+) {
+  if (is.null(db_path)) {
+    config <- get_folder_config()
+    db_path <- file.path(config$db_folder, "articles.duckdb")
+  }
+  
+  if (is.null(iscited_file)) {
+    config <- get_folder_config()
+    iscited_file <- file.path(config$repec_folder, "cit", "conf", "iscited.txt")
+  }
+  
+  if (!file.exists(iscited_file)) {
+    stop("iscited.txt not found at: ", iscited_file)
+  }
+  
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
+  
+  init_citations_tables(con)
+  
+  DBI::dbExecute(con, "DELETE FROM cit_all")
+  info("Cleared existing cit_all table")
+  
+  total_edges <- parse_iscited_streaming(
+    file = iscited_file,
+    con = con,
+    chunk_size = chunk_size,
+    commit_every = commit_every
+  )
+  
+  internal_edges <- build_internal_citation_graph(con)
+  
+  DBI::dbDisconnect(con)
+  
+  invisible(list(
+    total_edges = total_edges,
+    internal_edges = internal_edges
+  ))
 }

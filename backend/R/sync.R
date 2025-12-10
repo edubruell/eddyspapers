@@ -73,3 +73,73 @@ sync_journals_from_csv <- function(journals_csv = NULL, dest_root = NULL) {
   
   invisible(journals)
 }
+
+
+#' Sync RePEc CPD conf papers
+#'
+#' Downloads or updates related works data using rsync from rsync.repec.org.
+#'
+#' @param dest_root Root folder for RePEc data. Defaults to here::here("RePEc")
+#' @param rsync_bin Path to rsync binary
+#' @return Path to synced folder (invisibly)
+#' @export
+sync_repec_cpd_conf <- function(
+    dest_root = here::here("RePEc"),
+    rsync_bin = "/opt/homebrew/bin/rsync"
+) {
+  if (!file.exists(rsync_bin)) rsync_bin <- "rsync"
+  
+  src  <- "rsync.repec.org::RePEc-ReDIF/cpd/conf/"
+  dest <- file.path(dest_root, "cpd", "conf")
+  
+  dir.create(dest, recursive = TRUE, showWarnings = FALSE)
+  dest <- normalizePath(dest, winslash = "/", mustWork = FALSE)
+  
+  withr::with_dir(dest, {
+    args <- c("-av", "-s", "--delete", "--contimeout=20", src, "./")
+    status <- system2(rsync_bin, args)
+    if (status != 0) stop("rsync failed with status ", status)
+  })
+  
+  invisible(dest)
+}
+
+
+#' Sync RePEc citation data (iscited)
+#'
+#' Downloads or updates the iscited.txt.gz file containing citation data from RePEc.
+#' Automatically decompresses the file after download.
+#'
+#' @param dest_root Root folder for RePEc data. Defaults to here::here("RePEc")
+#' @param rsync_bin Path to rsync binary
+#' @return Path to decompressed iscited.txt file (invisibly)
+#' @export
+sync_repec_iscited <- function(
+    dest_root = here::here("RePEc"),
+    rsync_bin = "/opt/homebrew/bin/rsync"
+) {
+  if (!file.exists(rsync_bin)) rsync_bin <- "rsync"
+  
+  src_base <- "rsync.repec.org::RePEc-ReDIF/cit/conf/"
+  file_name <- "iscited.txt.gz"
+  
+  dest_dir <- file.path(dest_root, "cit", "conf")
+  dir.create(dest_dir, recursive = TRUE, showWarnings = FALSE)
+  dest_dir <- normalizePath(dest_dir, winslash = "/", mustWork = FALSE)
+  
+  src  <- file.path(src_base, file_name)
+  dest <- file.path(dest_dir, file_name)
+  
+  args <- c("-av", "-s", src, dest)
+  status <- system2(rsync_bin, args)
+  if (status != 0) stop("rsync failed with status ", status)
+  
+  info("Downloaded: ", dest)
+  
+  decompressed_path <- sub("\\.gz$", "", dest)
+  R.utils::gunzip(dest, destname = decompressed_path, overwrite = TRUE, remove = FALSE)
+  
+  info("Decompressed: ", decompressed_path)
+  
+  invisible(decompressed_path)
+}

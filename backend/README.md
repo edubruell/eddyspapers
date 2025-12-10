@@ -28,15 +28,18 @@ Defaults to `./data` if not set.
 ### RePEc Sync
 - `sync_repec_folder(archive, journal)` - Sync single archive/journal
 - `sync_journals_from_csv()` - Sync all journals from CSV
+- `sync_repec_cpd_conf()` - Sync the related works from RePEc
 
 ### ReDIF Parsing
 - `parse_redif_perl(path)` - Parse single ReDIF file
+- `parse_relatedworks_perl(path)` - Parse the `relatedworks.dat` file
 - `post_process_entry(entry)` - Clean parsed entry
 - `parse_all_journals()` - Parse all updated journals
 
 ### Database & Embeddings
 - `load_cleaned_collection()` - Load and clean all parsed papers
 - `embed_and_populate_db()` - Generate embeddings and populate database
+- `write_version_links_to_db()` - Get the version links table into the database
 - `create_indices()` - Create database indices
 - `dump_db_to_parquet()` - Backup database to Parquet
 - `restore_db_from_parquet()` - Restore from Parquet backup

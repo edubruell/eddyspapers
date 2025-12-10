@@ -165,9 +165,9 @@ post_process_entry <- function(entry) {
   
   entry_type <- if (is_series) "techreport" else "article"
   
-  first_author <- authors_list[[1]][1] |> 
-    stringr::str_split(" ") |> 
-    purrr::map_chr(last)
+  a_parts <- stringr::str_split(authors_list[[1]][1], " ")[[1]]
+  first_author <- a_parts[length(a_parts)]
+  
   bib_key <- paste0(tolower(first_author), year)
   
   bib_tex <- glue::glue("@{entry_type}{{{bib_key},
@@ -288,7 +288,7 @@ parse_and_save_redif <- function(repo_files,
   parsed_data <- repo_files$file |>
     purrr::map_dfr(~{
       info("  -> File: ", .x)
-      
+
       parsed_redif <- parse_redif_perl(.x, script_path = script_path)
       
       parsed_redif |>
@@ -341,3 +341,50 @@ parse_all_journals <- function(repec_folder = NULL,
   
   invisible(to_parse)
 }
+
+
+#' Parse related works file using Perl backend
+#'
+#' Parses a related works file using the Perl parsing script.
+#'
+#' @param path Path to related works file
+#' @param script_path Path to Perl parsing script
+#' @param error_on_fail If TRUE, stops on parse errors. If FALSE, returns NULL with warning
+#' @return Parsed related works data as nested list, or NULL on failure
+#' @export
+parse_relatedworks_perl <- function(path,
+                                    script_path = NULL,
+                                    error_on_fail = FALSE) {
+  if (is.null(script_path)) {
+    script_path <- system.file("scripts", "parse_related_works.pl", 
+                               package = "eddyspapersbackend")
+    if (script_path == "") {
+      stop("Could not find parse_related_works.pl script in package")
+    }
+  }
+  
+  stopifnot(file.exists(path), file.exists(script_path))
+  
+  result <- tryCatch({
+    output <- system2("perl", args = c(script_path, shQuote(path)),
+                      stdout = TRUE, stderr = TRUE)
+    
+    json_start <- which(stringr::str_detect(output, "^\\s*\\{"))
+    if (length(json_start) == 0)
+      stop("No JSON object found in parser output.")
+    
+    json_txt <- paste(output[json_start:length(output)], collapse = "\n")
+    
+    jsonlite::fromJSON(json_txt, simplifyVector = FALSE)
+    
+  }, error = function(e) {
+    if (error_on_fail) stop(e)
+    warning(sprintf("Failed to parse: %s\n%s", path, e$message))
+    NULL
+  })
+  
+  return(result)
+}
+
+
+

@@ -589,6 +589,158 @@ get_saved_search <- function(hash, pool = NULL) {
   )
 }
 
+#' Get version links for a source handle
+#'
+#' Returns version links filtered to a specific source handle with article metadata.
+#'
+#' @param source_handle RePEc handle to filter by (case-insensitive)
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Tibble with version links and article metadata
+#' @export
+get_version_links <- function(source_handle, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  res <- DBI::dbGetQuery(con, "
+    SELECT 
+      vl.source,
+      vl.target,
+      vl.type,
+      a.year,
+      a.title,
+      a.authors,
+      a.journal,
+      a.is_series,
+      a.url
+    FROM version_links vl
+    LEFT JOIN articles a ON LOWER(vl.target) = LOWER(a.Handle)
+    WHERE LOWER(vl.source) = LOWER(?)
+    ORDER BY a.year DESC NULLS LAST
+  ", params = list(source_handle))
+  
+  pool::poolReturn(con)
+  
+  res |> tibble::as_tibble()
+}
+
+
+#' Get papers that cite a given handle
+#'
+#' Returns papers that cite the specified handle, with full article metadata.
+#' Uses cit_internal table for fast lookups.
+#'
+#' @param handle RePEc handle to query (case-insensitive)
+#' @param limit Maximum number of results to return
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Tibble with citing papers and metadata
+#' @export
+get_citing_papers <- function(handle, limit = 50, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  res <- DBI::dbGetQuery(con, "
+    SELECT 
+      ci.citing AS handle,
+      a.title,
+      a.year,
+      a.authors,
+      a.journal,
+      a.category,
+      a.is_series,
+      a.url
+    FROM cit_internal ci
+    LEFT JOIN articles a ON LOWER(ci.citing) = LOWER(a.Handle)
+    WHERE LOWER(ci.cited) = LOWER(?)
+    ORDER BY a.year DESC NULLS LAST
+    LIMIT ?
+  ", params = list(handle, as.integer(limit)))
+  
+  pool::poolReturn(con)
+  
+  res |> tibble::as_tibble()
+}
+
+
+#' Get papers cited by a given handle
+#'
+#' Returns papers cited by the specified handle, with full article metadata.
+#' Uses cit_internal table for fast lookups.
+#'
+#' @param handle RePEc handle to query (case-insensitive)
+#' @param limit Maximum number of results to return
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Tibble with cited papers and metadata
+#' @export
+get_cited_papers <- function(handle, limit = 50, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  res <- DBI::dbGetQuery(con, "
+    SELECT 
+      ci.cited AS handle,
+      a.title,
+      a.year,
+      a.authors,
+      a.journal,
+      a.category,
+      a.is_series,
+      a.url
+    FROM cit_internal ci
+    LEFT JOIN articles a ON LOWER(ci.cited) = LOWER(a.Handle)
+    WHERE LOWER(ci.citing) = LOWER(?)
+    ORDER BY a.year DESC NULLS LAST
+    LIMIT ?
+  ", params = list(handle, as.integer(limit)))
+  
+  pool::poolReturn(con)
+  
+  res |> tibble::as_tibble()
+}
+
+
+#' Get citation counts for a handle
+#'
+#' Returns total and internal citation counts from cit_all and cit_internal tables.
+#'
+#' @param handle RePEc handle to query (case-insensitive)
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return List with total_citations and internal_citations counts
+#' @export
+get_citation_counts <- function(handle, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  total <- DBI::dbGetQuery(con, "
+    SELECT COUNT(*) as n
+    FROM cit_all
+    WHERE LOWER(cited) = LOWER(?)
+  ", params = list(handle))$n
+  
+  internal <- DBI::dbGetQuery(con, "
+    SELECT COUNT(*) as n
+    FROM cit_internal
+    WHERE LOWER(cited) = LOWER(?)
+  ", params = list(handle))$n
+  
+  pool::poolReturn(con)
+  
+  list(
+    total_citations = total,
+    internal_citations = internal
+  )
+}
 
 
 #' Run the Plumber API server

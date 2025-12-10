@@ -298,4 +298,80 @@ function() {
   list(last_updated = get_last_updated())
 }
 
+#* @schema VersionLink
+#* @property source string Original handle
+#* @property target string Linked version handle
+#* @property type string Link type (for example redif-paper, redif-series)
+#* @property year integer Publication year of the target version
+#* @property title string Title of the target version
+#* @property authors string Authors of the target version
+#* @property journal string Journal or series name
+#* @property is_series boolean Indicator for series entries
+#* @property url string URL to the linked version
+NULL
 
+#* Get version links for a given RePEc handle
+#* @get /versions
+#* @serializer json
+#* @apiResponse 200 {array} VersionLink List of version links
+#* @param handle:string RePEc handle to query
+function(handle) {
+  get_version_links(source_handle = handle)
+}
+
+
+#* @schema CitingPaper
+#* @property handle string RePEc handle of citing paper
+#* @property title string Title of citing paper
+#* @property year integer Publication year
+#* @property authors string Authors
+#* @property journal string Journal name
+#* @property category string Category code
+#* @property is_series boolean Series indicator
+#* @property url string URL to paper
+NULL
+
+#* Get papers that cite a given handle
+#* @get /citedby
+#* @serializer json
+#* @apiResponse 200 {array} CitingPaper List of papers citing this handle
+#* @param handle:string RePEc handle to query
+#* @param limit:number Maximum results (default 50)
+function(handle, limit = 50) {
+  get_citing_papers(handle = handle, limit = as.integer(limit))
+}
+
+#* @schema CitedPaper
+#* @property handle string RePEc handle of cited paper
+#* @property title string Title of cited paper
+#* @property year integer Publication year
+#* @property authors string Authors
+#* @property journal string Journal name
+#* @property category string Category code
+#* @property is_series boolean Series indicator
+#* @property url string URL to paper
+NULL
+
+#* Get papers cited by a given handle
+#* @get /cites
+#* @serializer json
+#* @apiResponse 200 {array} CitedPaper List of papers cited by this handle
+#* @param handle:string RePEc handle to query
+#* @param limit:number Maximum results (default 50)
+function(handle, limit = 50) {
+  get_cited_papers(handle = handle, limit = as.integer(limit))
+}
+
+#* @schema CitationCounts
+#* @property total_citations integer Total citations from all papers
+#* @property internal_citations integer Citations from papers in database
+NULL
+
+#* Get citation counts for a handle
+#* @get /citationcounts
+#* @serializer json
+#* @apiResponse 200 {object} CitationCounts Citation count statistics
+#* @param handle:string RePEc handle to query
+function(handle) {
+  get_citation_counts(handle = handle)
+}
