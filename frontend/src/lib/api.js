@@ -71,3 +71,39 @@ export async function loadSavedSearch(hash) {
 
     return res.json();       // returns { hash, query, ..., results }
 }
+
+export async function getVersions(handle) {
+    const url = `${API_BASE}/versions?handle=${encodeURIComponent(handle)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+        throw new Error(`Failed to load versions for ${handle}`);
+    }
+    return res.json();     // array of version objects
+}
+
+export async function getCitedBy(handle, limit = 50) {
+    const url = `${API_BASE}/citedby?handle=${encodeURIComponent(handle)}&limit=${limit}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+        throw new Error(`Failed to load citedby for ${handle}`);
+    }
+    return res.json();     // array of papers citing this handle
+}
+
+export async function getCites(handle, limit = 50) {
+    const url = `${API_BASE}/cites?handle=${encodeURIComponent(handle)}&limit=${limit}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+        throw new Error(`Failed to load cites for ${handle}`);
+    }
+    return res.json();     // array of papers this handle cites
+}
+
+export async function getCitationCounts(handle) {
+    const url = `${API_BASE}/citationcounts?handle=${encodeURIComponent(handle)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+        throw new Error(`Failed to load citation counts for ${handle}`);
+    }
+    return res.json();     // { total, internal }
+}
