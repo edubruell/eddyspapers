@@ -230,8 +230,17 @@ export default function SearchApp() {
                 {lastUpdated && (
                     <div className="mt-3 text-[11px] text-stone-500">
                         Database last updated on {lastUpdated}
+                        <a
+                            href="/faq"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 underline"
+                        >
+                            FAQ / Imprint
+                        </a>
                     </div>
                 )}
+
 
             </div>
 

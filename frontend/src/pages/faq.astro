@@ -1,0 +1,228 @@
+
+---
+layout: null
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>FAQ, Imprint and Data Protection</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 720px;
+            margin: 40px auto;
+            padding: 0 16px;
+            line-height: 1.6;
+            color: #1f2933;
+            background: #f9fafb;
+        }
+        h1, h2, h3 {
+            color: #111827;
+        }
+        details {
+            margin-bottom: 0.75rem;
+            background: #ffffff;
+            border-radius: 0.25rem;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e5e7eb;
+        }
+        summary {
+            cursor: pointer;
+            font-weight: 600;
+        }
+        small {
+            color: #6b7280;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+<h1>FAQ</h1>
+
+<details open>
+    <summary>What does this site do?</summary>
+    <p>
+        This is a semantic search engine built on RePEc data. It helps you find related academic
+        work by comparing text embeddings. It works best if you paste the abstract of your paper
+        or an abstract from your literature. The engine returns the closest matches found in the
+        RePEc archive.
+    </p>
+</details>
+
+<details>
+    <summary>What kind of text should I paste?</summary>
+    <p>
+        You do not need a full abstract. Any paragraph with clear ideas works. Examples:
+    </p>
+    <ul>
+        <li>Research questions</li>
+        <li>Paper introductions</li>
+        <li>Blog or research note intros</li>
+        <li>News-style leads summarising a topic</li>
+    </ul>
+    <p>
+        The model works on meaning rather than exact keywords. Complete sentences provide the best results.
+    </p>
+    <p>
+        More context improves accuracy. For example:
+        <br />
+        Instead of: “climate Germany”
+        Try: “What was the impact of climate policies in Germany in the 2000s”
+    </p>
+</details>
+
+<details>
+    <summary>Does the tool work in multiple languages?</summary>
+    <p>
+        Yes. The model handles English, German and several other languages. Search quality is stable across
+        languages, but language choice may imply a country or topic indirectly.
+        For example, a German input may retrieve German studies even without an explicit mention of Germany.
+    </p>
+</details>
+
+<details>
+    <summary>How often is the database updated?</summary>
+    <p>
+        The internal database is updated once per month. The main site shows the date of the last update.
+    </p>
+</details>
+
+<details>
+    <summary>Which journals and series are included?</summary>
+    <p>
+        The search engine does not index the full RePEc archive. It currently covers a curated
+        subset of roughly 250 major journals and working paper series. These were chosen based on
+        academic relevance, data quality and availability of abstracts suitable for embedding.
+    </p>
+    <p>
+        The list is not fixed. Additional journals or series can be added when users point out
+        gaps or when high quality metadata becomes available. If something important is missing,
+        feel free to write to
+        <a href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a>.
+    </p>
+</details>
+
+
+<details>
+    <summary>Does the site store anything when I search?</summary>
+    <p>
+        Saved searches are stored so you can revisit them.
+        For maintenance and performance monitoring the backend keeps lightweight statistical logs:
+    </p>
+    <ul>
+        <li>IP address</li>
+        <li>A hash of the query text (not the text itself)</li>
+        <li>Number of results returned</li>
+        <li>Top three RePEc handles</li>
+        <li>Filter flags used</li>
+        <li>Response time</li>
+    </ul>
+    <p>
+        These entries support debugging and quality improvements. They are not shared with third parties.
+    </p>
+</details>
+
+<details>
+    <summary>Who can I contact if something looks wrong?</summary>
+    <p>
+        Please send corrections, feedback or unexpected match examples to
+        <a href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a>.
+    </p>
+</details>
+
+
+<hr />
+
+<h2>Imprint</h2>
+
+<p><strong>Responsible according to § 5 TMG</strong></p>
+
+<p>
+    Dr. Eduard Brüll<br />
+    L7, 1<br />
+    68161 Mannheim<br />
+    Germany
+</p>
+
+<p>
+    Email: <a href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a><br />
+    Phone: +49 621 1235-146
+</p>
+
+<p>
+    This is a private project. The contact details above are provided for legal requirements.
+</p>
+
+<hr />
+
+<h2>Data protection (GDPR)</h2>
+
+<h3>1. Controller</h3>
+<p>
+    The controller in terms of the General Data Protection Regulation is:
+</p>
+<p>
+    Dr. Eduard Brüll<br />
+    L7, 1<br />
+    68161 Mannheim<br />
+    Germany<br />
+    Email: <a href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a>
+</p>
+
+<h3>2. Server log files</h3>
+<p>
+    The web server automatically stores technical logs when the site is accessed. This may include:
+</p>
+<ul>
+    <li>IP address (shortened or anonymised if configured)</li>
+    <li>Date and time of request</li>
+    <li>Accessed URL</li>
+    <li>Referrer and browser information</li>
+</ul>
+<p>
+    Processing is based on Art. 6(1)(f) GDPR for technical operation and security. Logs are kept for a
+    limited time and not used for profiling.
+</p>
+
+<h3>3. Search logs</h3>
+<p>
+    For debugging and monitoring, search requests generate internal entries containing the elements listed
+    above. The query text itself is never stored. Only a hash of the query and the top result handles are
+    kept. These logs are not shared with third parties.
+</p>
+
+<h3>4. Cookies and analytics</h3>
+<p>
+    The site uses only cookies required for essential functions such as saving searches. No analytics or
+    third-party tracking tools are used.
+</p>
+
+<h3>5. Contact by email</h3>
+<p>
+    If you send an email, your message and contact details are processed to handle your request. The legal
+    basis is Art. 6(1)(b) or Art. 6(1)(f) GDPR.
+</p>
+
+<h3>6. Your rights</h3>
+<ul>
+    <li>Right of access</li>
+    <li>Right to rectification</li>
+    <li>Right to erasure</li>
+    <li>Right to restriction of processing</li>
+    <li>Right to data portability</li>
+    <li>Right to object</li>
+</ul>
+
+<h3>7. Changes to this notice</h3>
+<p>
+    This page may be updated if technical features or legal requirements change. The version shown here
+    is the current version.
+</p>
+
+<hr />
+
+
+</body>
+</html>
