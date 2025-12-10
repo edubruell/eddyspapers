@@ -57,7 +57,7 @@ export default function HandleDetail({ handle }) {
             {/* Citation counts */}
             {counts && (
                 <div className="text-stone-700">
-                    Cited by {counts.total_citations} papers
+                    Cited by {counts.total_citations} papers ({counts.internal_citations} in database)
                 </div>
             )}
 

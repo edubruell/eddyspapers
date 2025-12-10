@@ -38,6 +38,7 @@ export default function SearchApp() {
     const [lastUpdated, setLastUpdated] = useState(null);
     const [restoring, setRestoring] = useState(false);
     const [savedHash, setSavedHash] = useState(null);
+    const [maxK, setMaxK] = useState(100);
 
 
     useEffect(() => {
@@ -134,7 +135,7 @@ export default function SearchApp() {
                 journalName: journalName || null,
                 titleKeyword: titleKeyword || null,
                 authorKeyword: authorKeyword || null,
-                maxK: 100
+                maxK: maxK
             });
 
 
@@ -154,7 +155,7 @@ export default function SearchApp() {
     async function handleSave() {
         const payload = {
             query,
-            max_k: 100,
+            max_k: maxK,
             min_year: minYear || null,
             journal_filter: selectedCats
                 .map(id => CATEGORY_DEFS.find(c => c.id === id).api)
@@ -225,6 +226,8 @@ export default function SearchApp() {
                     onSearch={handleSearch}
                     hasSearched={hasSearched}
                     loading={loading}
+                    maxK={maxK}
+                    setMaxK={setMaxK}
                 />
 
                 {lastUpdated && (

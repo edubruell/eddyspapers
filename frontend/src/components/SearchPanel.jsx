@@ -16,6 +16,8 @@ export default function SearchPanel({
                                         setTitleKeyword,
                                         authorKeyword,
                                         setAuthorKeyword,
+                                        maxK,
+                                        setMaxK,
                                         onSearch
                                     }) {
     const [showAdvanced, setShowAdvanced] = useState(false);
@@ -127,6 +129,21 @@ export default function SearchPanel({
                             value={authorKeyword}
                             onChange={(e) => setAuthorKeyword(e.target.value)}
                             className="w-full rounded-md border border-stone-300 bg-white px-2 py-1 text-sm"
+                        />
+                    </div>
+
+                    {/* maxK filter */}
+                    <div>
+                        <label className="text-xs font-semibold text-stone-600 mb-1 block">
+                            MAX RESULTS
+                        </label>
+                        <input
+                            type="number"
+                            min={1}
+                            max={500}
+                            value={maxK}
+                            onChange={(e) => setMaxK(Number(e.target.value))}
+                            className="w-32 rounded-md border border-stone-300 bg-white px-2 py-1 text-sm"
                         />
                     </div>
 
