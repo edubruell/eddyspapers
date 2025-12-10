@@ -1,5 +1,4 @@
 library(eddyspapersbackend)
-devtools::load_all("backend")
 
 
 Sys.setenv("PAPER_SEARCH_DATA_ROOT" = "/Users/ebr/eddyspapers")
@@ -42,19 +41,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[3/5] Creating Related Works Table in Database...")
-tryCatch({
-  write_version_links_to_db(
-        db_path = file.path(config$db_folder, "articles.duckdb"),
-        rw_file = get_folder_refs(config)$repec("cpd","conf","relatedworks.dat")
-        )
-  
-}, error = function(e) {
-  info("✗ Related Works Parsing failed: ", e$message)
-  stop(e)
-})
-  
-info("\n[4/5] Generating embeddings and updating database...")
+info("\n[3/6] Generating embeddings and updating database...")
 tryCatch({
   embed_and_populate_db(
     db_path = file.path(config$db_folder, "articles.duckdb"),
@@ -69,7 +56,38 @@ tryCatch({
   stop(e)
 })
 
-info("\n[5/5] Creating backup...")
+info("\n[4/6] Creating Related Works Table in Database...")
+tryCatch({
+  write_version_links_to_db(
+        db_path = file.path(config$db_folder, "articles.duckdb"),
+        rw_file = get_folder_refs(config)$repec("cpd","conf","relatedworks.dat")
+        )
+  info("✓ Related Works table created successfully")
+}, error = function(e) {
+  info("✗ Related Works Parsing failed: ", e$message)
+  stop(e)
+})
+
+info("\n[5/6] Syncing and processing citation data...")
+tryCatch({
+  info("  Syncing iscited.txt from RePEc...")
+  iscited_file <- sync_repec_iscited(dest_root = config$repec_folder)
+  
+  info("  Populating citation tables...")
+  cit_result <- populate_citations(
+    db_path = file.path(config$db_folder, "articles.duckdb"),
+    iscited_file = iscited_file
+  )
+  
+  info("✓ Citation processing completed")
+  info("  Total citation edges: ", cit_result$total_edges)
+  info("  Internal citation edges: ", cit_result$internal_edges)
+}, error = function(e) {
+  info("✗ Citation processing failed: ", e$message)
+  stop(e)
+})
+
+info("\n[6/6] Creating backup...")
 tryCatch({
   pqt_file <- dump_db_to_parquet(
     db_path = file.path(config$db_folder, "articles.duckdb"),
