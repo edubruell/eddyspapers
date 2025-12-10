@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { searchPapers, getLastUpdated } from "../lib/api";
+import { searchPapers, getLastUpdated, loadSavedSearch, saveSearch} from "../lib/api";
 import SearchPanel from "./SearchPanel.jsx";
 import Results from "./Results.jsx";
 
@@ -36,6 +36,72 @@ export default function SearchApp() {
     const [lastSummary, setLastSummary] = useState(null);
     const [hasSearched, setHasSearched] = useState(false);
     const [lastUpdated, setLastUpdated] = useState(null);
+    const [restoring, setRestoring] = useState(false);
+    const [savedHash, setSavedHash] = useState(null);
+
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const hash = params.get("search");
+
+        if (!hash) return;
+
+        // small helper to unwrap 1-element arrays coming from the API
+        const first = (v) => Array.isArray(v) ? v[0] : v;
+
+        async function restore() {
+            setRestoring(true);
+            try {
+                const saved = await loadSavedSearch(hash);
+
+                const restoredQuery        = first(saved.query) ?? "";
+                const restoredMinYearRaw   = first(saved.min_year);
+                const restoredJournalName  = first(saved.journal_name) ?? "";
+                const restoredTitleKeyword = first(saved.title_keyword) ?? "";
+                const restoredAuthorKeyword= first(saved.author_keyword) ?? "";
+                const jfRaw                = first(saved.journal_filter) ?? null;
+
+                // normalise minYear ("NA" -> empty)
+                const restoredMinYear =
+                    restoredMinYearRaw && restoredMinYearRaw !== "NA"
+                        ? String(restoredMinYearRaw)
+                        : "";
+
+                setQuery(restoredQuery);
+                setMinYear(restoredMinYear);
+                setJournalName(restoredJournalName);
+                setTitleKeyword(restoredTitleKeyword);
+                setAuthorKeyword(restoredAuthorKeyword);
+
+                if (jfRaw) {
+                    const activeLabels = jfRaw.split(",").map(s => s.trim());
+                    const ids = CATEGORY_DEFS
+                        .filter(c => activeLabels.includes(c.api))
+                        .map(c => c.id);
+                    setSelectedCats(ids);
+                }
+
+                const restoredResults = Array.isArray(saved.results) ? saved.results : [];
+                setResults(restoredResults);
+
+                setLastSummary({
+                    count: restoredResults.length,
+                    minYear: restoredMinYear || null,
+                    hasFilter: Boolean(jfRaw)
+                });
+
+                setHasSearched(true);
+            } catch (err) {
+                console.error("Failed to restore search", err);
+            } finally {
+                setRestoring(false);
+            }
+        }
+
+        restore();
+    }, []);
+
+
 
     useEffect(() => {
         getLastUpdated()
@@ -83,6 +149,29 @@ export default function SearchApp() {
             setErrorMsg("Search failed. Please try again.");
         } finally {
             setLoading(false);
+        }
+    }
+    async function handleSave() {
+        const payload = {
+            query,
+            max_k: 100,
+            min_year: minYear || null,
+            journal_filter: selectedCats
+                .map(id => CATEGORY_DEFS.find(c => c.id === id).api)
+                .join(","),
+            journal_name: journalName || null,
+            title_keyword: titleKeyword || null,
+            author_keyword: authorKeyword || null
+        };
+
+        try {
+            const saved = await saveSearch(payload);
+            setSavedHash(saved.hash);
+
+            const url = `${window.location.origin}${window.location.pathname}?search=${saved.hash}`;
+            navigator.clipboard.writeText(url).catch(() => {});
+        } catch (err) {
+            console.error(err);
         }
     }
 
@@ -153,7 +242,10 @@ export default function SearchApp() {
                 errorMsg={errorMsg}
                 lastSummary={lastSummary}
                 hasSearched={hasSearched}
+                onSave={handleSave}
+                savedHash={savedHash}
             />
+
         </div>
     );
 }

@@ -46,3 +46,28 @@ export async function getLastUpdated() {
     }
     return res.json();   // returns { last_updated: "YYYY-MM-DD" }
 }
+
+export async function saveSearch(payload) {
+    const res = await fetch(`${API_BASE}/search/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(`API error ${res.status}: ${msg}`);
+    }
+
+    return res.json();        // returns { hash, results }
+}
+
+export async function loadSavedSearch(hash) {
+    const res = await fetch(`${API_BASE}/search/${hash}`);
+
+    if (!res.ok) {
+        throw new Error(`Search not found`);
+    }
+
+    return res.json();       // returns { hash, query, ..., results }
+}

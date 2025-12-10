@@ -1,6 +1,14 @@
 import ResultCard from "./ResultCard.jsx";
 
-export default function Results({ results, loading, errorMsg, lastSummary, hasSearched }) {
+export default function Results({
+                                    results,
+                                    loading,
+                                    errorMsg,
+                                    lastSummary,
+                                    hasSearched,
+                                    onSave,
+                                    savedHash
+                                }) {
     if (!hasSearched) return null;
 
     return (
@@ -18,7 +26,26 @@ export default function Results({ results, loading, errorMsg, lastSummary, hasSe
                         </p>
                     )}
                 </div>
+
+                <button
+                    type="button"
+                    onClick={onSave}
+                    className="text-[11px] px-2 py-1 border border-stone-300 rounded
+                   text-stone-700 hover:bg-stone-100"
+                >
+                    Save Search
+                </button>
             </header>
+
+            {savedHash && (
+                <div className="text-[11px] text-stone-500 mt-1">
+                    Link copied. Anyone can reopen this search with:
+                    <span className="block text-stone-700 mt-1 break-all">
+            {`${window.location.origin}${window.location.pathname}?search=${savedHash}`}
+        </span>
+                </div>
+            )}
+
 
             {loading && (
                 <div className="flex items-center gap-2 text-sm text-stone-600">
