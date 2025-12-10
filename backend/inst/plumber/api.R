@@ -298,4 +298,23 @@ function() {
   list(last_updated = get_last_updated())
 }
 
+#* @schema VersionLink
+#* @property source string Original handle
+#* @property target string Linked version handle
+#* @property type string Link type (for example redif-paper, redif-series)
+#* @property year integer Publication year of the target version
+#* @property title string Title of the target version
+#* @property authors string Authors of the target version
+#* @property journal string Journal or series name
+#* @property is_series boolean Indicator for series entries
+#* @property url string URL to the linked version
+NULL
 
+#* Get version links for a given RePEc handle
+#* @get /versions
+#* @serializer json
+#* @apiResponse 200 {array} VersionLink List of version links
+#* @param handle:string RePEc handle to query
+function(handle) {
+  get_version_links(source_handle = handle)
+}

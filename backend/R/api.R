@@ -589,6 +589,43 @@ get_saved_search <- function(hash, pool = NULL) {
   )
 }
 
+#' Get version links for a source handle
+#'
+#' Returns version links filtered to a specific source handle with article metadata.
+#'
+#' @param source_handle RePEc handle to filter by (case-insensitive)
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Tibble with version links and article metadata
+#' @export
+get_version_links <- function(source_handle, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  res <- DBI::dbGetQuery(con, "
+    SELECT 
+      vl.source,
+      vl.target,
+      vl.type,
+      a.year,
+      a.title,
+      a.authors,
+      a.journal,
+      a.is_series,
+      a.url
+    FROM version_links vl
+    LEFT JOIN articles a ON LOWER(vl.target) = LOWER(a.Handle)
+    WHERE LOWER(vl.source) = LOWER(?)
+    ORDER BY a.year DESC NULLS LAST
+  ", params = list(source_handle))
+  
+  pool::poolReturn(con)
+  
+  res |> tibble::as_tibble()
+}
+
 
 
 #' Run the Plumber API server

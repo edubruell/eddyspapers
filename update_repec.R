@@ -42,7 +42,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[3/5] Creating Related Works Table...")
+info("\n[3/5] Creating Related Works Table in Database...")
 tryCatch({
   write_version_links_to_db(
         db_path = file.path(config$db_folder, "articles.duckdb"),
