@@ -250,9 +250,78 @@ embed_and_populate_db <- function(db_path = NULL,
   invisible(to_embed)
 }
 
+
+#' Write version links to database
+#'
+#' Processes version relationships from the rw object and writes them to the version_links table.
+#' Only includes links where both source and target papers exist in the database.
+#'
+#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
+#' @param rw_file Path to a RePEc Related Works file. Defaults to config$repec/cpd/conf/relatedworks.dat
+#' @return NULL invisibly
+#' @export
+write_version_links_to_db <- function(db_path = NULL,
+                                      rw_file = NULL){
+  if(is.null(rw_file)){
+    config  <- get_folder_config()
+    rw_file <- get_folder_refs(config)$repec("cpd","conf","relatedworks.dat")
+  }
+  if (is.null(db_path)) {
+    config <- get_folder_config()
+    db_path <- file.path(config$db_folder, "articles.duckdb")
+  }
+
+  rw <- parse_relatedworks_perl(rw_file) 
+  info("Related Works parsed succesfully")
+  
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
+  DBI::dbExecute(con, "LOAD vss;")
+  
+  init_articles_table(con)
+  processed_handles <- get_processed_handles(con)
+  
+  processed_handles_norm <- tolower(processed_handles)
+  
+  rw_filtered <- rw[processed_handles_norm %in% names(rw)]
+  
+  version_links <- purrr::imap_dfr(
+    rw_filtered,
+    function(relcats, src) {
+      purrr::imap_dfr(
+        relcats,
+        function(targets, relcat) {
+          tibble::tibble(
+            source = src,
+            target = names(targets),
+            type = relcat
+          )
+        }
+      )
+    }
+  )
+  
+  info("Version links created internally")
+  
+  names(processed_handles) <- processed_handles_norm
+  
+  version_links  |>
+    dplyr::filter(source %in% processed_handles_norm,
+                  target %in% processed_handles_norm) |>
+    dplyr::mutate(target = processed_handles[target],
+                  source = processed_handles[source]) |>
+    dplyr::copy_to(
+      con,
+      df = _,
+      name = "version_links",
+      temporary = FALSE,
+      overwrite = TRUE
+    )
+} 
+
+
 #' Dump database to Parquet files
 #'
-#' Exports all tables (articles, saved_searches, search_logs) to Parquet files using DuckDB's COPY command.
+#' Exports all tables (articles, saved_searches, search_logs,version_links) to Parquet files using DuckDB's COPY command.
 #'
 #' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
 #' @param pqt_folder Path to parquet output folder. Defaults to config$pqt_folder
@@ -287,17 +356,11 @@ dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
     file_path
   }
   
-  if ("articles" %in% tables) {
-    pqt_files$articles <- export_tbl("articles")
-  }
+  pqt_files <- tables |>
+    purrr::set_names() |>
+    purrr::keep(~.x %in% c("articles", "saved_searches", "search_logs", "version_links")) |>
+    purrr::map(export_tbl)
   
-  if ("saved_searches" %in% tables) {
-    pqt_files$saved_searches <- export_tbl("saved_searches")
-  }
-  
-  if ("search_logs" %in% tables) {
-    pqt_files$search_logs <- export_tbl("search_logs")
-  }
   
   DBI::dbDisconnect(con)
   
@@ -341,6 +404,9 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   articles_file <- file.path(pqt_folder, paste0("articles_", date_stamp, ".parquet"))
   saved_file <- file.path(pqt_folder, paste0("saved_searches_", date_stamp, ".parquet"))
   logs_file <- file.path(pqt_folder, paste0("search_logs_", date_stamp, ".parquet"))
+  version_links_file <- file.path(pqt_folder, paste0("version_links_", date_stamp, ".parquet"))
+  
+  
   
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
   DBI::dbExecute(con, "LOAD vss;")
@@ -389,6 +455,20 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
     info("Restored search_logs table from: ", logs_file)
   } else {
     info("No search_logs file found for this date")
+  }
+  
+
+  if (file.exists(version_links_file)) {
+    version_links <- arrow::read_parquet(version_links_file)
+    
+    if ("version_links" %in% DBI::dbListTables(con)) {
+      DBI::dbExecute(con, "DROP TABLE version_links")
+    }
+    
+    DBI::dbWriteTable(con, "version_links", version_links)
+    info("Restored version_links table from: ", version_links_file)
+  } else {
+    info("No version_links file found for this date")
   }
   
   DBI::dbDisconnect(con)

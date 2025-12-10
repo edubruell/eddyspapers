@@ -73,3 +73,33 @@ sync_journals_from_csv <- function(journals_csv = NULL, dest_root = NULL) {
   
   invisible(journals)
 }
+
+
+#' Sync RePEc CPD conf papers
+#'
+#' Downloads or updates related works data using rsync from rsync.repec.org.
+#'
+#' @param dest_root Root folder for RePEc data. Defaults to here::here("RePEc")
+#' @param rsync_bin Path to rsync binary
+#' @return Path to synced folder (invisibly)
+#' @export
+sync_repec_cpd_conf <- function(
+    dest_root = here::here("RePEc"),
+    rsync_bin = "/opt/homebrew/bin/rsync"
+) {
+  if (!file.exists(rsync_bin)) rsync_bin <- "rsync"
+  
+  src  <- "rsync.repec.org::RePEc-ReDIF/cpd/conf/"
+  dest <- file.path(dest_root, "cpd", "conf")
+  
+  dir.create(dest, recursive = TRUE, showWarnings = FALSE)
+  dest <- normalizePath(dest, winslash = "/", mustWork = FALSE)
+  
+  withr::with_dir(dest, {
+    args <- c("-av", "-s", "--delete", "--contimeout=20", src, "./")
+    status <- system2(rsync_bin, args)
+    if (status != 0) stop("rsync failed with status ", status)
+  })
+  
+  invisible(dest)
+}
