@@ -307,63 +307,6 @@ get_handle_stats <- function(con, handles) {
   
   result
 }
-#TODO: Implement a computating function for a handle_stats table 
-#      for all article handles in the DB to power a 
-#      simple pre-computed retrieval function in the API.
-#
-#   Most computations seem feasible in the duckdb
-#
-# Needed Handle-Stats:
-#  - Total Citations (total_citations) - Will be a Stats Badge in the frontend
-#  - Citations within the articles database (internal_citations) - Will be a part of the first badge
-#  - Total references (total_references) - Will be a Stats Badge in the frontend
-#  - Publication Year (pub_year) - Needed internally
-#  - Years since Publication (years_since_pub) - Needed internally
-# -  Citations per year (citations_per_year) - Will be a Stats Badge in the frontend
-#  - Percentile in overall Citation Distribution (citation_percentile) - Will be a Stats Badge in the frontend
-#     #-> Here we could add a simple second order Stat (cited by other top-citation rank papers - need to think what this could be)
-#  - Top citing Journal (top_citing_journal) - Extra Info for the later stats field
-#  - A list of citations by year to power a small frontend CitationSparkline
-# 
-# Schemm Idea: 
-# CREATE TABLE handle_stats (
-#   handle VARCHAR PRIMARY KEY,
-#   
-#   /* Core bibliographic fields */
-#     pub_year INTEGER,
-#   years_since_pub INTEGER,
-#   
-#   /* First order citation stats */
-#     total_citations INTEGER,
-#   internal_citations INTEGER,
-#   total_references INTEGER,
-#   citations_per_year DOUBLE,
-#   citation_percentile DOUBLE,
-#   
-#   /* Distributional details */
-#     citations_by_year JSON,
-#   
-#   /* Second order citation stats */
-#   /* Median Percentile Rank of Papers that cite this paper */
-#   median_citer_percentile DOUBLE,
-#   /* A percentile rank weighted citation count */
-#   weighted_citations DOUBLE,
-#   /* Share of citations coming from the Top5, the category column in articles can have the value "Top 5 Journals" */
-#   top5_citer_share DOUBLE,  
-#   
-#   /* Additional second-order network metrics (optional but cheap to compute) */
-#     max_citer_percentile DOUBLE,
-#     mean_citer_percentile DOUBLE,
-#   
-#   /* Top citing journal */
-#     top_citing_journal VARCHAR,
-#   
-#   /* Category-level citer breakdown */
-#     citer_category_counts JSON,
-#     citer_category_shares JSON
-# );
-# 
-
 
 
 #TODO: Add a bibliographic coupling table 
