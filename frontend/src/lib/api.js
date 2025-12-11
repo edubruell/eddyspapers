@@ -107,3 +107,70 @@ export async function getCitationCounts(handle) {
     }
     return res.json();     // { total, internal }
 }
+
+export async function getHandleStats(handle) {
+    const url = `${API_BASE}/handlestats?handle=${encodeURIComponent(handle)}`;
+    const res = await fetch(url);
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Failed to load handle stats for ${handle}: ${text}`);
+    }
+
+    const data = await res.json();
+
+    if (!data || !Array.isArray(data.handle) || data.handle.length === 0) {
+        return null;
+    }
+
+    const pick = (key) =>
+        key in data
+            ? (Array.isArray(data[key]) ? data[key][0] : data[key])
+            : null;
+
+    const stats = {
+        handle: pick("handle"),
+        pub_year: pick("pub_year"),
+        years_since_pub: pick("years_since_pub"),
+        total_citations: pick("total_citations"),
+        internal_citations: pick("internal_citations"),
+        total_references: pick("total_references"),
+        citations_per_year: pick("citations_per_year"),
+        citation_percentile: pick("citation_percentile"),
+        citations_by_year_raw: pick("citations_by_year"),
+        median_citer_percentile: pick("median_citer_percentile"),
+        weighted_citations: pick("weighted_citations"),
+        top5_citer_share: pick("top5_citer_share"),
+        max_citer_percentile: pick("max_citer_percentile"),
+        mean_citer_percentile: pick("mean_citer_percentile"),
+        top_citing_journal: pick("top_citing_journal"),
+        citer_category_counts_raw: pick("citer_category_counts"),
+        citer_category_shares_raw: pick("citer_category_shares")
+    };
+
+    if (stats.citations_by_year_raw) {
+        try {
+            stats.citations_by_year = JSON.parse(stats.citations_by_year_raw);
+        } catch {
+            stats.citations_by_year = null;
+        }
+    }
+
+    if (stats.citer_category_counts_raw) {
+        try {
+            stats.citer_category_counts = JSON.parse(stats.citer_category_counts_raw);
+        } catch {
+            stats.citer_category_counts = null;
+        }
+    }
+
+    if (stats.citer_category_shares_raw) {
+        try {
+            stats.citer_category_shares = JSON.parse(stats.citer_category_shares_raw);
+        } catch {
+            stats.citer_category_shares = null;
+        }
+    }
+
+    return stats;
+}
