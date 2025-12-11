@@ -375,3 +375,39 @@ NULL
 function(handle) {
   get_citation_counts(handle = handle)
 }
+
+
+#* @schema HandleStats
+#* @property handle string RePEc handle
+#* @property pub_year integer Publication year
+#* @property years_since_pub integer Years since publication
+#* @property total_citations integer Total citations
+#* @property internal_citations integer Internal citations
+#* @property total_references integer Total references
+#* @property citations_per_year number Citations per year
+#* @property citation_percentile number Percentile rank in citation distribution
+#* @property citations_by_year object Citations grouped by year
+#* @property median_citer_percentile number Median percentile of citing papers
+#* @property weighted_citations number Percentile-weighted citation count
+#* @property top5_citer_share number Share of citations from Top 5 journals
+#* @property max_citer_percentile number Maximum percentile of citing papers
+#* @property mean_citer_percentile number Mean percentile of citing papers
+#* @property top_citing_journal string Most frequent citing journal
+#* @property citer_category_counts object Citation counts by category
+#* @property citer_category_shares object Citation shares by category
+NULL
+
+#* Get precomputed handle statistics
+#* @get /handlestats
+#* @serializer json
+#* @apiResponse 200 {object} HandleStats Complete handle statistics
+#* @apiResponse 404 {string} Handle not found in statistics table
+#* @param handle:string RePEc handle to query
+function(handle) {
+  result <- get_handle_stats_api(handle = handle)
+  if (is.null(result)) {
+    list(error = "Handle not found in statistics table")
+  } else {
+    result
+  }
+}

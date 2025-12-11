@@ -68,7 +68,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[5/6] Syncing and processing citation data...")
+info("\n[5/7] Syncing and processing citation data...")
 tryCatch({
   info("  Syncing iscited.txt from RePEc...")
   iscited_file <- sync_repec_iscited(dest_root = config$repec_folder)
@@ -87,7 +87,25 @@ tryCatch({
   stop(e)
 })
 
-info("\n[6/6] Creating backup...")
+info("\n[6/7] Computing handle statistics...")
+tryCatch({
+  con <- DBI::dbConnect(
+    duckdb::duckdb(),
+    dbdir = file.path(config$db_folder, "articles.duckdb")
+  )
+  
+  stats_count <- compute_handle_stats(con)
+  
+  DBI::dbDisconnect(con)
+  
+  info("✓ Handle statistics computed successfully")
+  info("  Handles processed: ", stats_count)
+}, error = function(e) {
+  info("✗ Handle statistics computation failed: ", e$message)
+  stop(e)
+})
+
+info("\n[7/7] Creating backup...")
 tryCatch({
   pqt_file <- dump_db_to_parquet(
     db_path = file.path(config$db_folder, "articles.duckdb"),

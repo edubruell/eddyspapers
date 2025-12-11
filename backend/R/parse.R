@@ -387,4 +387,79 @@ parse_relatedworks_perl <- function(path,
 }
 
 
+#' Parse iscited file and populate cit_all table
+#'
+#' Streams the iscited.txt file, parses citation edges, and inserts them into cit_all.
+#' Format: cited_handle citing1#citing2,citing3
+#' All handles are normalized to lowercase for consistency.
+#'
+#' @param file Path to iscited.txt file
+#' @param con DuckDB connection
+#' @param chunk_size Number of lines to read per chunk
+#' @param commit_every Number of edges to buffer before committing to database
+#' @return Total number of edges inserted
+#' @export
+parse_iscited_streaming <- function(
+    file,
+    con,
+    chunk_size = 50000,
+    commit_every = 50000
+) {
+  info("Starting stream parse of: ", file)
+  
+  buffer <- list()
+  total_rows <- 0
+  inserted <- 0
+  
+  callback <- function(lines, pos) {
+    
+    df <- tibble::tibble(raw = lines) |>
+      tidyr::separate(raw, into = c("cited", "citing_string"), sep = "\\s+", extra = "merge") |>
+      dplyr::mutate(
+        cited = tolower(cited),
+        citing_string = tolower(citing_string)
+      ) |>
+      dplyr::filter(!is.na(cited), !is.na(citing_string))
+    
+    if (nrow(df) == 0) return(NULL)
+    
+    edges <- df |>
+      dplyr::mutate(citing = stringr::str_split(citing_string, "#|,")) |>
+      dplyr::select(cited, citing) |>
+      tidyr::unnest(citing) |>
+      dplyr::filter(citing != "", !is.na(citing))
+    
+    if (nrow(edges) == 0) return(NULL)
+    
+    buffer[[length(buffer) + 1]] <<- edges
+    total_rows <<- total_rows + nrow(edges)
+    
+    if (total_rows >= commit_every) {
+      combined <- dplyr::bind_rows(buffer)
+      DBI::dbAppendTable(con, "cit_all", combined)
+      inserted <<- inserted + nrow(combined)
+      buffer <<- list()
+      total_rows <<- 0
+      info("Inserted ", inserted, " edges...")
+    }
+    
+    NULL
+  }
+  
+  readr::read_lines_chunked(
+    file = file,
+    callback = readr::SideEffectChunkCallback$new(callback),
+    chunk_size = chunk_size
+  )
+  
+  if (length(buffer) > 0) {
+    combined <- dplyr::bind_rows(buffer)
+    DBI::dbAppendTable(con, "cit_all", combined)
+    inserted <- inserted + nrow(combined)
+  }
+  
+  info("Finished! Total edges inserted: ", inserted)
+  invisible(inserted)
+}
+
 
