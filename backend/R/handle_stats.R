@@ -128,119 +128,141 @@ compute_handle_stats <- function(con) {
   
   info("  Step 5/7: Computing citations by year...")
   DBI::dbExecute(con, "
-    CREATE TEMP VIEW citations_by_year_view AS
+  CREATE TEMP VIEW citations_by_year_view AS
+  WITH agg AS (
     SELECT 
-      ci.cited as handle,
-      json_object(
-        'years', json_group_array(year ORDER BY year),
-        'counts', json_group_array(cite_count ORDER BY year)
-      ) as citations_by_year
-    FROM (
-      SELECT 
-        ci.cited,
-        a.year,
-        COUNT(*) as cite_count
-      FROM cit_internal ci
-      JOIN articles a ON LOWER(a.Handle) = ci.citing
-      WHERE a.year IS NOT NULL
-      GROUP BY ci.cited, a.year
-    ) ci
-    GROUP BY ci.cited
-  ")
+      ci.cited,
+      a.year,
+      COUNT(*) as cite_count
+    FROM cit_internal ci
+    JOIN articles a ON LOWER(a.Handle) = ci.citing
+    WHERE a.year IS NOT NULL
+    GROUP BY ci.cited, a.year
+  )
+  SELECT
+    cited as handle,
+    json_object(
+      'years', json(list_sort(list(year))),
+      'counts', json(list_sort(list(cite_count)))
+    ) as citations_by_year
+  FROM agg
+  GROUP BY cited
+")
   
   info("  Step 6/7: Computing second-order metrics...")
   
   DBI::dbExecute(con, "
-    CREATE TEMP VIEW citer_category_agg AS
+  CREATE TEMP VIEW citer_category_agg AS
+  SELECT 
+    ci.cited,
+    citer.category,
+    COUNT(*) as category_count
+  FROM cit_internal ci
+  JOIN base_articles citer ON ci.citing = citer.handle
+  WHERE citer.category IS NOT NULL
+  GROUP BY ci.cited, citer.category
+")
+  
+  DBI::dbExecute(con, "
+  CREATE TEMP VIEW citer_category_totals AS
+  SELECT 
+    cited,
+    SUM(category_count) as total_citers
+  FROM citer_category_agg
+  GROUP BY cited
+")
+  
+  DBI::dbExecute(con, "
+  CREATE TEMP VIEW citer_category_json AS
+  SELECT
+    ca.cited,
+
+    /* Array of {key, value} objects for raw counts */
+    array_to_json(
+      array_agg(
+        struct_pack(
+          key := ca.category,
+          value := ca.category_count
+        )
+      )
+    ) as citer_category_counts,
+
+    /* Array of {key, value} objects for shares */
+    array_to_json(
+      array_agg(
+        struct_pack(
+          key := ca.category,
+          value := ca.category_count * 1.0 / ct.total_citers
+        )
+      )
+    ) as citer_category_shares
+
+  FROM citer_category_agg ca
+  JOIN citer_category_totals ct ON ca.cited = ct.cited
+  GROUP BY ca.cited
+")
+  
+  DBI::dbExecute(con, "
+  CREATE TEMP VIEW second_order_stats AS
+  SELECT 
+    cited.handle,
+    COALESCE(so.median_citer_percentile, 0.0) as median_citer_percentile,
+    COALESCE(so.mean_citer_percentile, 0.0) as mean_citer_percentile,
+    COALESCE(so.max_citer_percentile, 0.0) as max_citer_percentile,
+    COALESCE(so.weighted_citations, 0.0) as weighted_citations,
+    COALESCE(so.top5_share, 0.0) as top5_citer_share,
+    so.top_citing_journal,
+    ccj.citer_category_counts,
+    ccj.citer_category_shares
+  FROM base_articles cited
+
+  LEFT JOIN (
     SELECT 
       ci.cited,
-      citer.category,
-      COUNT(*) as category_count
+      MEDIAN(citer_stats.citation_percentile) as median_citer_percentile,
+      AVG(citer_stats.citation_percentile) as mean_citer_percentile,
+      MAX(citer_stats.citation_percentile) as max_citer_percentile,
+      SUM(citer_stats.citation_percentile) as weighted_citations,
+
+      SUM(CASE WHEN citer.category = 'Top 5 Journals' THEN 1 ELSE 0 END)
+        * 1.0 / NULLIF(COUNT(*), 0) as top5_share,
+
+      MODE(citer.journal) as top_citing_journal
+
     FROM cit_internal ci
     JOIN base_articles citer ON ci.citing = citer.handle
-    WHERE citer.category IS NOT NULL
-    GROUP BY ci.cited, citer.category
-  ")
+    JOIN first_order_stats citer_stats ON citer.handle = citer_stats.handle
+    GROUP BY ci.cited
+  ) so ON cited.handle = so.cited
+
+  LEFT JOIN citer_category_json ccj ON cited.handle = ccj.cited
+")
   
-  DBI::dbExecute(con, "
-    CREATE TEMP VIEW citer_category_totals AS
-    SELECT 
-      cited,
-      SUM(category_count) as total_citers
-    FROM citer_category_agg
-    GROUP BY cited
-  ")
-  
-  DBI::dbExecute(con, "
-    CREATE TEMP VIEW citer_category_json AS
-    SELECT
-      ca.cited,
-      json_object_agg(ca.category, ca.category_count) as citer_category_counts,
-      json_object_agg(
-        ca.category, 
-        ca.category_count * 1.0 / ct.total_citers
-      ) as citer_category_shares
-    FROM citer_category_agg ca
-    JOIN citer_category_totals ct ON ca.cited = ct.cited
-    GROUP BY ca.cited
-  ")
-  
-  DBI::dbExecute(con, "
-    CREATE TEMP VIEW second_order_stats AS
-    SELECT 
-      cited.handle,
-      COALESCE(so.median_citer_percentile, 0.0) as median_citer_percentile,
-      COALESCE(so.mean_citer_percentile, 0.0) as mean_citer_percentile,
-      COALESCE(so.max_citer_percentile, 0.0) as max_citer_percentile,
-      COALESCE(so.weighted_citations, 0.0) as weighted_citations,
-      COALESCE(so.top5_share, 0.0) as top5_citer_share,
-      so.top_citing_journal,
-      ccj.citer_category_counts,
-      ccj.citer_category_shares
-    FROM base_articles cited
-    LEFT JOIN (
+    info("  Step 7/7: Populating handle_stats table...")
+    DBI::dbExecute(con, "
+      INSERT INTO handle_stats
       SELECT 
-        ci.cited,
-        MEDIAN(citer_stats.citation_percentile) as median_citer_percentile,
-        AVG(citer_stats.citation_percentile) as mean_citer_percentile,
-        MAX(citer_stats.citation_percentile) as max_citer_percentile,
-        SUM(citer_stats.citation_percentile) as weighted_citations,
-        SUM(CASE WHEN citer.category = 'Top 5 Journals' THEN 1 ELSE 0 END) * 1.0 / 
-          NULLIF(COUNT(*), 0) as top5_share,
-        MODE(citer.journal) as top_citing_journal
-      FROM cit_internal ci
-      JOIN base_articles citer ON ci.citing = citer.handle
-      JOIN first_order_stats citer_stats ON citer.handle = citer_stats.handle
-      GROUP BY ci.cited
-    ) so ON cited.handle = so.cited
-    LEFT JOIN citer_category_json ccj ON cited.handle = ccj.cited
-  ")
-  
-  info("  Step 7/7: Populating handle_stats table...")
-  DBI::dbExecute(con, "
-    INSERT INTO handle_stats
-    SELECT 
-      fos.handle,
-      fos.pub_year,
-      fos.years_since_pub,
-      fos.total_citations,
-      fos.internal_citations,
-      fos.total_references,
-      fos.citations_per_year,
-      fos.citation_percentile,
-      COALESCE(cby.citations_by_year, '{}') as citations_by_year,
-      sos.median_citer_percentile,
-      sos.weighted_citations,
-      sos.top5_citer_share,
-      sos.max_citer_percentile,
-      sos.mean_citer_percentile,
-      sos.top_citing_journal,
-      COALESCE(sos.citer_category_counts, '{}') as citer_category_counts,
-      COALESCE(sos.citer_category_shares, '{}') as citer_category_shares
-    FROM first_order_stats fos
-    LEFT JOIN citations_by_year_view cby ON fos.handle = cby.handle
-    JOIN second_order_stats sos ON fos.handle = sos.handle
-  ")
+        fos.handle,
+        fos.pub_year,
+        fos.years_since_pub,
+        fos.total_citations,
+        fos.internal_citations,
+        fos.total_references,
+        fos.citations_per_year,
+        fos.citation_percentile,
+        COALESCE(cby.citations_by_year, '{}') as citations_by_year,
+        sos.median_citer_percentile,
+        sos.weighted_citations,
+        sos.top5_citer_share,
+        sos.max_citer_percentile,
+        sos.mean_citer_percentile,
+        sos.top_citing_journal,
+        COALESCE(sos.citer_category_counts, '{}') as citer_category_counts,
+        COALESCE(sos.citer_category_shares, '{}') as citer_category_shares
+      FROM first_order_stats fos
+      LEFT JOIN citations_by_year_view cby ON fos.handle = cby.handle
+      JOIN second_order_stats sos ON fos.handle = sos.handle
+    ")
   
   info("  Cleaning up temporary views...")
   DBI::dbExecute(con, "DROP VIEW IF EXISTS base_articles")
