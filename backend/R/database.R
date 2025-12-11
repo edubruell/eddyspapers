@@ -582,6 +582,17 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   
   # Articles gets indices
   if (load_tbl("articles")) {
+    # Make sure embeddings is a fixed-size FLOAT[1024] array
+    DBI::dbExecute(
+      con,
+      "
+    ALTER TABLE articles
+    ALTER COLUMN embeddings
+    TYPE FLOAT[1024]
+    USING CAST(embeddings AS FLOAT[1024])
+    "
+    )
+    
     create_indices(con)
   } else {
     warn("Articles table missing in backup; database incomplete.")
