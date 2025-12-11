@@ -20,9 +20,8 @@ export default function Results({
                     </h2>
                     {lastSummary && (
                         <p className="text-xs text-stone-500">
-                            Showing {lastSummary.count} papers
-                            {lastSummary.minYear ? ` from ${lastSummary.minYear} onward` : ""}
-                            {lastSummary.hasFilter ? " with journal filters" : " across all journals"}.
+                            Showing {lastSummary.count} results
+                            {lastSummary.minYear ? ` from ${lastSummary.minYear} onward` : ""}.
                         </p>
                     )}
                 </div>
@@ -33,7 +32,7 @@ export default function Results({
                     className="text-[11px] px-2 py-1 border border-stone-300 rounded
                    text-stone-700 hover:bg-stone-100"
                 >
-                    Save Search
+                    Share Search
                 </button>
             </header>
 
