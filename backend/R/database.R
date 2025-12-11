@@ -319,196 +319,6 @@ write_version_links_to_db <- function(db_path = NULL,
 } 
 
 
-#' Dump database to Parquet files
-#'
-#' Exports all tables (articles, saved_searches, search_logs,version_links) to Parquet files using DuckDB's COPY command.
-#'
-#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
-#' @param pqt_folder Path to parquet output folder. Defaults to config$pqt_folder
-#' @return Named list of parquet file paths invisibly
-#' @export
-dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
-  if (is.null(db_path)) {
-    config <- get_folder_config()
-    db_path <- file.path(config$db_folder, "articles.duckdb")
-  }
-  
-  if (is.null(pqt_folder)) {
-    config <- get_folder_config()
-    pqt_folder <- config$pqt_folder
-  }
-  
-  if (!dir.exists(pqt_folder)) {
-    dir.create(pqt_folder, recursive = TRUE, showWarnings = FALSE)
-  }
-  
-  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
-  
-  tables <- DBI::dbListTables(con)
-  date_stamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  pqt_files <- list()
-  
-  export_tbl <- function(tbl) {
-    file_path <- file.path(pqt_folder, paste0(tbl, "_", date_stamp, ".parquet"))
-    sql <- sprintf("COPY %s TO '%s' (FORMAT PARQUET)", tbl, file_path)
-    DBI::dbExecute(con, sql)
-    info("Dumped ", tbl, " table to: ", file_path)
-    file_path
-  }
-  
-  pqt_files <- tables |>
-    purrr::set_names() |>
-    purrr::keep(~.x %in% c("articles", "saved_searches", "search_logs", "version_links", "cit_all", "cit_internal")) |>
-    purrr::map(export_tbl)
-  
-  
-  DBI::dbDisconnect(con)
-  
-  invisible(pqt_files)
-}
-
-
-#' Restore database from Parquet files
-#'
-#' Recreates the database from Parquet backup files, including indices.
-#'
-#' @param pqt_folder Path to folder containing parquet files
-#' @param date_stamp Date stamp of backup (YYYY-MM-DD). If NULL, uses most recent files.
-#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
-#' @return Path to database invisibly
-#' @export
-restore_db_from_parquet <- function(pqt_folder = NULL, 
-                                    date_stamp = NULL, 
-                                    db_path = NULL) {
-  if (is.null(db_path)) {
-    config <- get_folder_config()
-    db_path <- file.path(config$db_folder, "articles.duckdb")
-  }
-  
-  if (is.null(pqt_folder)) {
-    config <- get_folder_config()
-    pqt_folder <- config$pqt_folder
-  }
-  
-  if (!dir.exists(pqt_folder)) {
-    stop("Parquet folder not found: ", pqt_folder)
-  }
-  
-  if (is.null(date_stamp)) {
-    all_files <- list.files(pqt_folder, pattern = "\\.parquet$", full.names = FALSE)
-    dates <- stringr::str_extract(all_files, "\\d{4}-\\d{2}-\\d{2}")
-    date_stamp <- max(dates[!is.na(dates)])
-    info("Using most recent backup: ", date_stamp)
-  }
-  
-  articles_file <- file.path(pqt_folder, paste0("articles_", date_stamp, ".parquet"))
-  saved_file <- file.path(pqt_folder, paste0("saved_searches_", date_stamp, ".parquet"))
-  logs_file <- file.path(pqt_folder, paste0("search_logs_", date_stamp, ".parquet"))
-  version_links_file <- file.path(pqt_folder, paste0("version_links_", date_stamp, ".parquet"))
-  cit_all_file <- file.path(pqt_folder, paste0("cit_all_", date_stamp, ".parquet"))
-  cit_internal_file <- file.path(pqt_folder, paste0("cit_internal_", date_stamp, ".parquet"))
-  
-  
-  
-  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
-  DBI::dbExecute(con, "LOAD vss;")
-  
-  if (file.exists(articles_file)) {
-    articles <- arrow::read_parquet(articles_file)
-    
-    if ("articles" %in% DBI::dbListTables(con)) {
-      DBI::dbExecute(con, "DROP TABLE articles")
-    }
-    
-    DBI::dbWriteTable(con, "articles", articles)
-    create_indices(con)
-    info("Restored articles table from: ", articles_file)
-  } else {
-    warn("Articles file not found: ", articles_file)
-  }
-  
-  if (file.exists(saved_file)) {
-    saved_searches <- arrow::read_parquet(saved_file)
-    
-    if ("saved_searches" %in% DBI::dbListTables(con)) {
-      DBI::dbExecute(con, "DROP TABLE saved_searches")
-    }
-    
-    DBI::dbWriteTable(con, "saved_searches", saved_searches)
-    info("Restored saved_searches table from: ", saved_file)
-  } else {
-    info("No saved_searches file found for this date")
-  }
-  
-  if (file.exists(logs_file)) {
-    search_logs <- arrow::read_parquet(logs_file)
-    
-    if ("search_logs" %in% DBI::dbListTables(con)) {
-      DBI::dbExecute(con, "DROP TABLE search_logs")
-    }
-    
-    DBI::dbWriteTable(con, "search_logs", search_logs)
-    
-    max_id <- DBI::dbGetQuery(con, "SELECT MAX(search_id) as max_id FROM search_logs")$max_id
-    if (!is.na(max_id)) {
-      DBI::dbExecute(con, sprintf("CREATE OR REPLACE SEQUENCE search_logs_seq START %d", max_id + 1))
-    }
-    
-    info("Restored search_logs table from: ", logs_file)
-  } else {
-    info("No search_logs file found for this date")
-  }
-  
-
-  if (file.exists(version_links_file)) {
-    version_links <- arrow::read_parquet(version_links_file)
-    
-    if ("version_links" %in% DBI::dbListTables(con)) {
-      DBI::dbExecute(con, "DROP TABLE version_links")
-    }
-    
-    DBI::dbWriteTable(con, "version_links", version_links)
-    info("Restored version_links table from: ", version_links_file)
-  } else {
-    info("No version_links file found for this date")
-  }
-  
-  if (file.exists(cit_all_file)) {
-    cit_all <- arrow::read_parquet(cit_all_file)
-    
-    if ("cit_all" %in% DBI::dbListTables(con)) {
-      DBI::dbExecute(con, "DROP TABLE cit_all")
-    }
-    
-    DBI::dbWriteTable(con, "cit_all", cit_all)
-    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_all_citing ON cit_all(citing)")
-    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_all_cited ON cit_all(cited)")
-    info("Restored cit_all table from: ", cit_all_file)
-  } else {
-    info("No cit_all file found for this date")
-  }
-  
-  if (file.exists(cit_internal_file)) {
-    cit_internal <- arrow::read_parquet(cit_internal_file)
-    
-    if ("cit_internal" %in% DBI::dbListTables(con)) {
-      DBI::dbExecute(con, "DROP TABLE cit_internal")
-    }
-    
-    DBI::dbWriteTable(con, "cit_internal", cit_internal)
-    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_internal_citing ON cit_internal(citing)")
-    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_cit_internal_cited ON cit_internal(cited)")
-    info("Restored cit_internal table from: ", cit_internal_file)
-  } else {
-    info("No cit_internal file found for this date")
-  }
-  
-  DBI::dbDisconnect(con)
-  
-  invisible(db_path)
-}
-
-
 
 #' Initialize citation tables in database
 #'
@@ -540,82 +350,6 @@ init_citations_tables <- function(con) {
   }
   
   invisible(TRUE)
-}
-
-
-#' Parse iscited file and populate cit_all table
-#'
-#' Streams the iscited.txt file, parses citation edges, and inserts them into cit_all.
-#' Format: cited_handle citing1#citing2,citing3
-#' All handles are normalized to lowercase for consistency.
-#'
-#' @param file Path to iscited.txt file
-#' @param con DuckDB connection
-#' @param chunk_size Number of lines to read per chunk
-#' @param commit_every Number of edges to buffer before committing to database
-#' @return Total number of edges inserted
-#' @export
-parse_iscited_streaming <- function(
-    file,
-    con,
-    chunk_size = 50000,
-    commit_every = 50000
-) {
-  info("Starting stream parse of: ", file)
-  
-  buffer <- list()
-  total_rows <- 0
-  inserted <- 0
-  
-  callback <- function(lines, pos) {
-    
-    df <- tibble::tibble(raw = lines) |>
-      tidyr::separate(raw, into = c("cited", "citing_string"), sep = "\\s+", extra = "merge") |>
-      dplyr::mutate(
-        cited = tolower(cited),
-        citing_string = tolower(citing_string)
-      ) |>
-      dplyr::filter(!is.na(cited), !is.na(citing_string))
-    
-    if (nrow(df) == 0) return(NULL)
-    
-    edges <- df |>
-      dplyr::mutate(citing = stringr::str_split(citing_string, "#|,")) |>
-      dplyr::select(cited, citing) |>
-      tidyr::unnest(citing) |>
-      dplyr::filter(citing != "", !is.na(citing))
-    
-    if (nrow(edges) == 0) return(NULL)
-    
-    buffer[[length(buffer) + 1]] <<- edges
-    total_rows <<- total_rows + nrow(edges)
-    
-    if (total_rows >= commit_every) {
-      combined <- dplyr::bind_rows(buffer)
-      DBI::dbAppendTable(con, "cit_all", combined)
-      inserted <<- inserted + nrow(combined)
-      buffer <<- list()
-      total_rows <<- 0
-      info("Inserted ", inserted, " edges...")
-    }
-    
-    NULL
-  }
-  
-  readr::read_lines_chunked(
-    file = file,
-    callback = readr::SideEffectChunkCallback$new(callback),
-    chunk_size = chunk_size
-  )
-  
-  if (length(buffer) > 0) {
-    combined <- dplyr::bind_rows(buffer)
-    DBI::dbAppendTable(con, "cit_all", combined)
-    inserted <- inserted + nrow(combined)
-  }
-  
-  info("Finished! Total edges inserted: ", inserted)
-  invisible(inserted)
 }
 
 
@@ -709,3 +443,178 @@ populate_citations <- function(
     internal_edges = internal_edges
   ))
 }
+
+
+#' Dump database to Parquet files
+#'
+#' Exports all tables (articles, saved_searches, search_logs,version_links) to Parquet files using DuckDB's COPY command.
+#'
+#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
+#' @param pqt_folder Path to parquet output folder. Defaults to config$pqt_folder
+#' @return Named list of parquet file paths invisibly
+#' @export
+dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
+  if (is.null(db_path)) {
+    config <- get_folder_config()
+    db_path <- file.path(config$db_folder, "articles.duckdb")
+  }
+  
+  if (is.null(pqt_folder)) {
+    config <- get_folder_config()
+    pqt_folder <- config$pqt_folder
+  }
+  
+  if (!dir.exists(pqt_folder)) {
+    dir.create(pqt_folder, recursive = TRUE, showWarnings = FALSE)
+  }
+  
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = FALSE)
+  
+  tables <- DBI::dbListTables(con)
+  date_stamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  pqt_files <- list()
+  
+  export_tbl <- function(tbl) {
+    file_path <- file.path(pqt_folder, paste0(tbl, "_", date_stamp, ".parquet"))
+    sql <- sprintf("COPY %s TO '%s' (FORMAT PARQUET)", tbl, file_path)
+    DBI::dbExecute(con, sql)
+    info("Dumped ", tbl, " table to: ", file_path)
+    file_path
+  }
+  
+  pqt_files <- tables |>
+    purrr::set_names() |>
+    purrr::keep(~.x %in% c("articles", "saved_searches", "search_logs", "version_links", "cit_all", "cit_internal", "handle_stats")) |>
+    purrr::map(export_tbl)
+  
+  
+  DBI::dbDisconnect(con)
+  
+  invisible(pqt_files)
+}
+
+
+#' Restore database from Parquet files
+#'
+#' Recreates the database from Parquet backup files, including indices.
+#'
+#' @param pqt_folder Path to folder containing parquet files
+#' @param date_stamp Backup suffix. If NULL, picks the most recent found in articles_*.parquet
+#' @param db_path Path to DuckDB database
+#' @return Path to database invisibly
+#' @export
+restore_db_from_parquet <- function(pqt_folder = NULL,
+                                    date_stamp = NULL,
+                                    db_path = NULL) {
+  
+  if (is.null(db_path)) {
+    config <- get_folder_config()
+    db_path <- file.path(config$db_folder, "articles.duckdb")
+  }
+  
+  if (is.null(pqt_folder)) {
+    config <- get_folder_config()
+    pqt_folder <- config$pqt_folder
+  }
+  
+  if (!dir.exists(pqt_folder)) {
+    stop("Parquet folder not found: ", pqt_folder)
+  }
+  
+  # Pick most recent backup stamp from articles_*.parquet
+  if (is.null(date_stamp)) {
+    article_files <- list.files(
+      pqt_folder,
+      pattern = "^articles_.*\\.parquet$",
+      full.names = FALSE
+    )
+    
+    if (!length(article_files)) {
+      stop("No articles_*.parquet backups found in: ", pqt_folder)
+    }
+    
+    stamps <- sub("^articles_(.*)\\.parquet$", "\\1", article_files)
+    date_stamp <- max(stamps)
+    info("Using backup stamp: ", date_stamp)
+  }
+  
+  # All tables we might restore
+  tables <- c(
+    "articles",
+    "saved_searches",
+    "search_logs",
+    "version_links",
+    "cit_all",
+    "cit_internal",
+    "handle_stats"
+  )
+  
+  pqt_paths <- file.path(pqt_folder, paste0(tables, "_", date_stamp, ".parquet"))
+  names(pqt_paths) <- tables
+  
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  DBI::dbExecute(con, "LOAD vss;")
+  
+  # Helper to restore a table via DuckDB's read_parquet
+  load_tbl <- function(tbl) {
+    file <- pqt_paths[[tbl]]
+    if (!file.exists(file)) {
+      info("No ", tbl, " file found for stamp ", date_stamp)
+      return(FALSE)
+    }
+    
+    file_norm <- normalizePath(file, winslash = "/", mustWork = TRUE)
+    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", tbl))
+    
+    DBI::dbExecute(
+      con,
+      sprintf("
+        CREATE TABLE %s AS
+        SELECT * FROM read_parquet('%s')
+      ", tbl, file_norm)
+    )
+    
+    info("Restored ", tbl)
+    TRUE
+  }
+  
+  # Articles gets indices
+  if (load_tbl("articles")) {
+    create_indices(con)
+  } else {
+    warn("Articles table missing in backup; database incomplete.")
+  }
+  
+  load_tbl("saved_searches")
+  load_tbl("search_logs")
+  load_tbl("version_links")
+  
+  has_cit_all      <- load_tbl("cit_all")
+  has_cit_internal <- load_tbl("cit_internal")
+  
+  if (has_cit_all) {
+    DBI::dbExecute(con, "
+      CREATE INDEX IF NOT EXISTS idx_cit_all_citing ON cit_all(citing);
+    ")
+    DBI::dbExecute(con, "
+      CREATE INDEX IF NOT EXISTS idx_cit_all_cited  ON cit_all(cited);
+    ")
+  }
+  
+  if (has_cit_internal) {
+    DBI::dbExecute(con, "
+      CREATE INDEX IF NOT EXISTS idx_cit_internal_citing ON cit_internal(citing);
+    ")
+    DBI::dbExecute(con, "
+      CREATE INDEX IF NOT EXISTS idx_cit_internal_cited  ON cit_internal(cited);
+    ")
+  }
+  
+  load_tbl("handle_stats")
+  
+  invisible(db_path)
+}
+
+

@@ -9,9 +9,9 @@ restore_db_from_parquet(pqt_folder = NULL, date_stamp = NULL, db_path = NULL)
 \arguments{
 \item{pqt_folder}{Path to folder containing parquet files}
 
-\item{date_stamp}{Date stamp of backup (YYYY-MM-DD). If NULL, uses most recent files.}
+\item{date_stamp}{Backup suffix. If NULL, picks the most recent found in articles_*.parquet}
 
-\item{db_path}{Path to DuckDB database. Defaults to config$db_folder/articles.duckdb}
+\item{db_path}{Path to DuckDB database}
 }
 \value{
 Path to database invisibly

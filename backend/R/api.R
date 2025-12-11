@@ -743,6 +743,37 @@ get_citation_counts <- function(handle, pool = NULL) {
 }
 
 
+#' Get precomputed handle statistics
+#'
+#' Returns comprehensive citation statistics from the handle_stats table.
+#'
+#' @param handle RePEc handle to query (case-insensitive)
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return List with handle statistics, or NULL if handle not found
+#' @export
+get_handle_stats_api <- function(handle, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  
+  result <- DBI::dbGetQuery(con, "
+    SELECT *
+    FROM handle_stats
+    WHERE LOWER(handle) = LOWER(?)
+  ", params = list(handle))
+  
+  pool::poolReturn(con)
+  
+  if (nrow(result) == 0) {
+    return(NULL)
+  }
+  
+  as.list(result[1, ])
+}
+
+
 #' Run the Plumber API server
 #'
 #' Starts the Plumber API server with initialized connection pool.

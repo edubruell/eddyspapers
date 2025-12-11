@@ -118,8 +118,11 @@ The backend implements a three-table citation architecture:
    - Used for queries with full paper metadata
    - Enables network analysis within our corpus
 
-3. **`handle_stats`** - Precomputed statistics (future implementation)
-   - PageRank, H-index, citation velocity
+3. **`handle_stats`** - Precomputed citation statistics
+   - First-order: total citations, internal citations, references, citations per year, percentiles
+   - Second-order: median/mean/max citer percentile, weighted citations, Top 5 share
+   - Time-series: citations by year for sparklines
+   - Category breakdown: citer counts and shares by journal category
    - Computed during update pipeline for fast runtime queries
 
 ### API Endpoints
@@ -127,4 +130,5 @@ The backend implements a three-table citation architecture:
 - `GET /citedby?handle=...&limit=50` - Papers citing a given handle
 - `GET /cites?handle=...&limit=50` - Papers cited by a given handle  
 - `GET /citationcounts?handle=...` - Total and internal citation counts
+- `GET /handlestats?handle=...` - Comprehensive precomputed citation statistics
 - `GET /versions?handle=...` - Related paper versions

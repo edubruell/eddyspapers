@@ -9,7 +9,7 @@ This is a semantic economics paper search engine that:
 - Stores data in a DuckDB database with vector search (VSS extension)
 - Provides a Plumber REST API for search queries
 
-## Current State (as of 2025-12-09)
+## Current State (as of 2025-12-11)
 
 ### Existing Structure
 - `/backend` folder: Started package refactor
@@ -128,7 +128,7 @@ API client:
 - [x] Create `update_repec.R` for cron jobs
 - [x] Update `claude.md`
 
-### Phase 3: Frontend Progress
+### Phase 3: Frontend Progress ✅ DONE
 - [x] Category pills wired to query filter
 - [x] Results pane shown only after first search
 - [x] Landing layout: smaller logo, wider box; transitions to sidebar when searching
@@ -151,21 +151,24 @@ API client:
    - Columns: `citing VARCHAR`, `cited VARCHAR`
    - Indices: on both citing and cited
    - Purpose: Complete citation counts, includes papers outside our DB
-   - Size: ~10M rows, ~150MB
+   - Size: ~34M rows
 
 2. **`cit_internal`** - Internal citation graph (both ends in our articles DB)
    - Columns: `citing VARCHAR`, `cited VARCHAR`
    - Indices: on both citing and cited
    - Purpose: Network analysis, metadata-rich queries
-   - Size: ~1M rows, ~20MB
-   - Derived from `cit_all` filtered to our corpus
+   - Derived from `cit_all` filtered to our corpus (If we ever scale to all of RePEc anything we do for `cit_internal` has to scale to `cit_all`)
 
-3. **`handle_stats`** - Precomputed citation statistics (FUTURE)
-   - Columns: `handle`, `total_citations`, `internal_citations`, `total_references`, 
-     `pagerank`, `h_index`, `top_citing_journals`, `citations_by_year`, etc.
+3. **`handle_stats`** - Precomputed citation statistics
    - Purpose: Fast runtime queries, no joins needed
    - Updated during sync pipeline, not at query time
-   - Enables advanced metrics: PageRank, H-index, citation velocity, co-citation clusters
+   - Includes first-order metrics (citations, references, percentiles)
+   - Includes second-order metrics (citer quality, Top 5 share, weighted citations)
+   - Includes time-series data (citations by year) and category breakdowns
+
+4. **`bib_coupling`** - Precomputed table for bibliographic coupling (Future)
+   - Purpose: Show the top 5 or 10 papers with the most similar references
+
 
 #### Implementation Status
 
@@ -181,20 +184,22 @@ API client:
 - [x] Add R.utils dependency to DESCRIPTION
 - [x] Update NAMESPACE with all exports
 
-**Phase 4b: Precomputed Stats** (Future)
-- [ ] Design `handle_stats` table schema
-- [ ] Implement graph algorithms (PageRank, H-index, betweenness)
-- [ ] Implement `compute_handle_stats()` batch processing
-- [ ] API function: `get_handle_stats()` in `api.R`
-- [ ] Plumber endpoint: `/handlestats` in `inst/plumber/api.R`
-- [ ] Include in dump/restore cycle
+**Phase 4b: Precomputed Stats** ✅ DONE
+- [x] Table schema: defined in `handle_stats.R`
+- [x] Computation function: `compute_handle_stats()` in `handle_stats.R`
+- [x] Table init: `init_handle_stats_table()` in `handle_stats.R`
+- [x] API function: `get_handle_stats_api()` in `api.R`
+- [x] Plumber endpoint: `/handlestats` in `inst/plumber/api.R`
+- [x] Include in dump/restore cycle
+- [x] Update `update_repec.R` pipeline
+- [x] Update NAMESPACE with all exports
 
 **Phase 4c: Frontend Integration** (Future)
-- [ ] Result card "More" expansion for versions (backend `/versions` exists)
-- [ ] Result card "More" expansion shows citation counts
-- [ ] Display: "Cited by X papers (Y in database)"
-- [ ] List citing/cited papers with metadata
-- [ ] Show precomputed stats badges (PageRank percentile, H-index, etc.)
+- [x] Result card "More" expansion for versions (done via the new `HandleDetail.jsx` component)
+- [x] Result card "More" expansion shows citation counts
+- [x] Display: "Cited by X papers (Y in database)"
+- [x] List citing/cited papers with metadata
+- [ ] Show precomputed stats badges 
 
 #### Update Pipeline (with citations)
 
@@ -204,10 +209,10 @@ API client:
 2. Parse RDF files
 3. Embed & populate articles table
 4. Write version links
-5. Sync iscited.txt            # NEW
-6. Parse & populate cit_all     # NEW
-7. Build cit_internal          # NEW
-8. Compute handle_stats        # FUTURE (Phase 4b)
+5. Sync iscited.txt
+6. Parse & populate cit_all
+7. Build cit_internal
+8. Compute handle_stats         # ✅ IMPLEMENTED
 9. Dump to parquet
 ```
 
@@ -216,12 +221,11 @@ API client:
 **Implemented:**
 - `GET /versions?handle=...` - Related paper versions
 
-**Phase 4a (In Progress):**
+**Citation Endpoints:**
 - `GET /cites?handle=...&limit=50` - Papers cited by this handle
 - `GET /citedby?handle=...&limit=50` - Papers citing this handle
-
-**Phase 4b (Future):**
-- `GET /handlestats?handle=...` - Precomputed citation statistics
+- `GET /citationcounts?handle=...` - Total and internal citation counts
+- `GET /handlestats?handle=...` - Comprehensive precomputed citation statistics
 
 
 ### Main Scripts to work with the packaged backend
@@ -233,6 +237,8 @@ API client:
 - No code comments unless requested
 - Focus on clean, functional code (Preference for purrr over loops)
 - Use folder factory for all path operations
+- Work within the database when possible but avoid SQL-Spagehtti 
+- Seperate Tables when possible
 - Ensure backward compatibility with existing data
 
 ## Frontend Usage Notes
