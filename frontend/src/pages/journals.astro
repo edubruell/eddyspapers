@@ -1,0 +1,60 @@
+---
+import { getJournalStats } from "../lib/api";
+
+const journals = await getJournalStats();
+const sorted = journals
+    .filter(j => j.journal);          // remove missing name entries
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Journal Coverage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: system-ui;
+            max-width: 720px;
+            margin: 40px auto;
+            padding: 0 16px;
+            background: #F1ECE5;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        th, td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            text-align: left;
+            background: #f3f4f6;
+        }
+    </style>
+</head>
+
+<body>
+<h1>Journal and Series Coverage</h1>
+<p>This page lists all journals and working paper series included in the semantic search database together with the number of indexed papers.</p>
+
+<table>
+    <thead>
+    <tr>
+        <th>Journal or Series</th>
+        <th>Items</th>
+    </tr>
+    </thead>
+    <tbody>
+    {sorted.map(j => (
+            <tr>
+                <td>{j.journal}</td>
+                <td>{j.n}</td>
+            </tr>
+    ))}
+    </tbody>
+</table>
+</body>
+</html>

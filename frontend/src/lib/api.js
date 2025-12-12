@@ -174,3 +174,11 @@ export async function getHandleStats(handle) {
 
     return stats;
 }
+
+export async function getJournalStats() {
+    const res = await fetch(`${API_BASE}/stats/journals`);
+    if (!res.ok) {
+        throw new Error("Failed to load journal statistics");
+    }
+    return res.json();   // [{ journal, n }, ...]
+}
