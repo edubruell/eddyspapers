@@ -118,7 +118,7 @@ export default function SearchApp() {
 
     async function handleSearch() {
         if (!query.trim()) return;
-
+        setSavedHash(null);        // clear the copied link message
         setHasSearched(true);
         setLoading(true);
         setErrorMsg("");
