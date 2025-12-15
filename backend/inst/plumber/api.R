@@ -2,7 +2,10 @@
 function(req, res) {
   res$setHeader("Access-Control-Allow-Origin", "*")
   res$setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-  res$setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+  res$setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, X-API-Key"
+  )
   
   if (req$REQUEST_METHOD == "OPTIONS") {
     res$status <- 200
@@ -12,6 +15,24 @@ function(req, res) {
   plumber::forward()
 }
 
+#* @filter auth
+function(req, res) {
+  key <- Sys.getenv("EDDYPAPERS_API_KEY", unset = NA)
+  
+  if (is.na(key)) {
+    res$status <- 500
+    return(list(error = "API key not configured"))
+  }
+  
+  provided <- req$HTTP_X_API_KEY
+  
+  if (is.null(provided) || !identical(provided, key)) {
+    res$status <- 401
+    return(list(error = "Unauthorized"))
+  }
+  
+  plumber::forward()
+}
 
 #* @apiTitle Semantic Paper Search API
 #* @apiDescription Vector search with deep filtering
