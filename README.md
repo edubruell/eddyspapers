@@ -1,5 +1,6 @@
 # Eddy's Papers 
-
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Screenshot of Eddy's Papers semantic search interface](screenshot.webp)
 A **Semantic Paper Search Engine** for economics papers from the [RePEc](https://repec.org) archives. Uses vector embeddings of Abstracts to enable natural language queries over academic publications.
 
 ## Overview

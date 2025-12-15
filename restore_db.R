@@ -7,3 +7,4 @@ ensure_folders(config)
 create_log_file(config)
 
 restore_db_from_parquet()
+
