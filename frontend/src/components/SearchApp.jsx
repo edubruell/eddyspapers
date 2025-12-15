@@ -181,7 +181,7 @@ export default function SearchApp() {
             className={
                 hasSearched
                     ? "flex flex-col md:flex-row h-full gap-3"
-                    : "flex items-center justify-center h-full px-4"
+                    : "flex justify-center pt-6 px-4"
             }
         >
             {/* LEFT COLUMN */}
@@ -209,44 +209,32 @@ export default function SearchApp() {
                 </a>
 
 
-                <SearchPanel
-                    query={query}
-                    setQuery={setQuery}
-                    minYear={minYear}
-                    setMinYear={setMinYear}
-                    journalName={journalName}
-                    setJournalName={setJournalName}
-                    titleKeyword={titleKeyword}
-                    setTitleKeyword={setTitleKeyword}
-                    authorKeyword={authorKeyword}
-                    setAuthorKeyword={setAuthorKeyword}
-                    categories={CATEGORY_DEFS}
-                    selectedCats={selectedCats}
-                    onToggleCategory={toggleCategory}
-                    onSearch={handleSearch}
-                    hasSearched={hasSearched}
-                    loading={loading}
-                    maxK={maxK}
-                    setMaxK={setMaxK}
-                />
 
-                {lastUpdated && (
-                    <div className="mt-3 text-[11px] text-stone-500">
-                        Database last updated on {lastUpdated}
-                        <a
-                            href="/faq"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-2 underline"
-                        >
-                            FAQ / Imprint
-                        </a>
-                    </div>
-                )}
+                    <SearchPanel
+                        query={query}
+                        setQuery={setQuery}
+                        minYear={minYear}
+                        setMinYear={setMinYear}
+                        journalName={journalName}
+                        setJournalName={setJournalName}
+                        titleKeyword={titleKeyword}
+                        setTitleKeyword={setTitleKeyword}
+                        authorKeyword={authorKeyword}
+                        setAuthorKeyword={setAuthorKeyword}
+                        categories={CATEGORY_DEFS}
+                        selectedCats={selectedCats}
+                        onToggleCategory={toggleCategory}
+                        onSearch={handleSearch}
+                        hasSearched={hasSearched}
+                        loading={loading}
+                        maxK={maxK}
+                        setMaxK={setMaxK}
+                        lastUpdated={lastUpdated}
+                    />
+
 
 
             </div>
-
             {/* RIGHT COLUMN – RESULTS */}
             <Results
                 results={results}
