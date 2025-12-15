@@ -483,6 +483,8 @@ log_search <- function(ip,
     has_title_keyword, has_author_keyword, response_time_ms
   ))
   
+  DBI::dbExecute(con, "CHECKPOINT;")
+  
   pool::poolReturn(con)
   search_id
 }
