@@ -17,6 +17,14 @@ function(req, res) {
 
 #* @filter auth
 function(req, res) {
+  path <- req$PATH_INFO
+  
+  # Allow Swagger UI and OpenAPI spec
+  if (path == "/__docs__/" || path == "/openapi.json") {
+    plumber::forward()
+    return()
+  }
+  
   key <- Sys.getenv("EDDYPAPERS_API_KEY", unset = NA)
   
   if (is.na(key)) {
