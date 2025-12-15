@@ -69,8 +69,8 @@ The main project folder should have lightweight scripts that:
 
 ### 3. Frontend Structure (`/frontend`)
 
-The frontend is a minimal prototype built with Astro and React components. It presents a two-phase UI:
-- Landing state: centered logo (smaller) and wider search box.
+The frontend is built with Astro and React components. On desktop, it has a two-phase UI:
+- Landing state: centered logo and wider search box.
 - Results state: left sidebar with logo + search controls; right pane with results.
 
 Key components (React):
@@ -80,6 +80,8 @@ Key components (React):
 - `Results.jsx`: renders results only after a search was triggered.
 - `ResultCard.jsx`: individual paper card with copy-to-clipboard BibTeX and expand/collapse abstract.
 - `SearchBox.jsx`: autosizing textarea input.
+- `HandleDeatil.jsx`: Detailed expanded view info for `ResultCard`
+- `StatsBadges.jsx`: Statistics Badges and a citation time histogram shown in `HandleDeatil`
 
 Astro layout:
 - `src/layouts/AppLayout.astro`: global page layout and styles.
@@ -111,33 +113,9 @@ API client:
 
 ## Implementation Plan
 
-### Phase 1: Complete Backend Package ✅ DONE
-- [x] Set up package structure
-- [x] Migrate config and folder utilities
-- [x] Migrate sync functions
-- [x] Migrate parse functions
-- [x] Migrate embedding functions
-- [x] Migrate database utilities
-- [x] Create Plumber API wrapper
-- [x] Document all functions with roxygen2
-- [x] Update NAMESPACE with all exports
-- [x] Add missing dependencies to DESCRIPTION
 
-### Phase 2: Create Main Scripts ✅ DONE
-- [x] Create `run_api.R` for production API
-- [x] Create `update_repec.R` for cron jobs
-- [x] Update `claude.md`
 
-### Phase 3: Frontend Progress ✅ DONE
-- [x] Category pills wired to query filter
-- [x] Results pane shown only after first search
-- [x] Landing layout: smaller logo, wider box; transitions to sidebar when searching
-- [x] Logo displayed above search panel with matching width
-- [x] Search button right-aligned
-- [x] Result card actions right-aligned with icons (BibTeX copy, More/Less)
-- [x] Persist/search history and shareable URLs
-- [x] Saved searches in the frontend
-- [x] Visual polish and responsive refinements
+
 
 ### Phase 4: Citation Integration (IN PROGRESS)
 
@@ -169,38 +147,6 @@ API client:
 4. **`bib_coupling`** - Precomputed table for bibliographic coupling (Future)
    - Purpose: Show the top 5 or 10 papers with the most similar references
 
-
-#### Implementation Status
-
-**Phase 4a: Citation Tables** ✅ DONE
-- [x] Sync function: `sync_repec_iscited()` in `sync.R`
-- [x] Streaming parser: `parse_iscited_streaming()` in `database.R`
-- [x] Graph builder: `build_internal_citation_graph()` in `database.R`
-- [x] Table init: `init_citations_tables()` in `database.R`
-- [x] Update dump/restore functions for `cit_all` and `cit_internal`
-- [x] API functions: `get_citing_papers()`, `get_cited_papers()`, `get_citation_counts()` in `api.R`
-- [x] Plumber endpoints: `/cites`, `/citedby`, `/citationcounts` in `inst/plumber/api.R`
-- [x] Update `update_repec.R` pipeline
-- [x] Add R.utils dependency to DESCRIPTION
-- [x] Update NAMESPACE with all exports
-
-**Phase 4b: Precomputed Stats** ✅ DONE
-- [x] Table schema: defined in `handle_stats.R`
-- [x] Computation function: `compute_handle_stats()` in `handle_stats.R`
-- [x] Table init: `init_handle_stats_table()` in `handle_stats.R`
-- [x] API function: `get_handle_stats_api()` in `api.R`
-- [x] Plumber endpoint: `/handlestats` in `inst/plumber/api.R`
-- [x] Include in dump/restore cycle
-- [x] Update `update_repec.R` pipeline
-- [x] Update NAMESPACE with all exports
-
-**Phase 4c: Frontend Integration** (Future)
-- [x] Result card "More" expansion for versions (done via the new `HandleDetail.jsx` component)
-- [x] Result card "More" expansion shows citation counts
-- [x] Display: "Cited by X papers (Y in database)"
-- [x] List citing/cited papers with metadata
-- [ ] Show precomputed stats badges 
-
 #### Update Pipeline (with citations)
 
 ```r
@@ -212,20 +158,43 @@ API client:
 5. Sync iscited.txt
 6. Parse & populate cit_all
 7. Build cit_internal
-8. Compute handle_stats         # ✅ IMPLEMENTED
+8. Compute handle_stats         
 9. Dump to parquet
 ```
 
 #### API Endpoints
 
-**Implemented:**
-- `GET /versions?handle=...` - Related paper versions
+## API Endpoints
 
-**Citation Endpoints:**
-- `GET /cites?handle=...&limit=50` - Papers cited by this handle
-- `GET /citedby?handle=...&limit=50` - Papers citing this handle
-- `GET /citationcounts?handle=...` - Total and internal citation counts
-- `GET /handlestats?handle=...` - Comprehensive precomputed citation statistics
+- POST `/search`  
+  Semantic search with vector similarity and filters (year, journal, title, author).
+
+- POST `/search/save`  
+  Save a search request and its results; returns deterministic hash.
+
+- GET `/search/{hash}`  
+  Load a previously saved search by hash.
+
+- GET `/versions?handle=...`  
+  Retrieve all known versions of a paper.
+
+- GET `/cites?handle=...&limit=50`  
+  Papers referenced by a given handle (internal citations only).
+
+- GET `/citedby?handle=...&limit=50`  
+  Papers citing a given handle (internal citations only).
+
+- GET `/citationcounts?handle=...`  
+  Total vs internal citation counts (precomputed).
+
+- GET `/handlestats?handle=...`  
+  Full precomputed citation and impact statistics for a handle.
+  
+- GET `/stats/journals`  
+  Article counts by journal or category.
+  
+- GET `/stats/last_updated`  
+  Date of last successful RePEc update.
 
 
 ### Main Scripts to work with the packaged backend
@@ -237,12 +206,11 @@ API client:
 - No code comments unless requested
 - Focus on clean, functional code (Preference for purrr over loops)
 - Use folder factory for all path operations
-- Work within the database when possible but avoid SQL-Spagehtti 
-- Seperate Tables when possible
+- Work within the database when possible but avoid SQL-Spaghetti 
+- Separate Tables when possible
 - Ensure backward compatibility with existing data
 
 ## Frontend Usage Notes
 
 - Development: `cd frontend && npm install && npm run dev` (Astro dev server)
 - API endpoint: by default the frontend points to `http://127.0.0.1:8000` in `frontend/src/lib/api.js` (`API_BASE`). Adjust if your backend runs elsewhere.
-- Assets: logo expected at `frontend/public/logo.webp`.
