@@ -41,7 +41,9 @@ journals <- tribble(
   "cup",    "apsrev", "American Political Science Review", "General Interest",  15557,  
   "oup",    "ecpoli", "Economic Policy", "General Interest", 20022,  
   "sae",    "amsocr",  "American Sociological Review,","General Interest",NA,
-  
+  "nat",    "nature", "Nature", "General Interest", NA,
+  "nat",    "nathum", "Nature Human Behaviour", "General Interest", NA,
+
   #Top Field Journals
   "bla",    "jorssb", "Journal of the Royal Statistical Society: Series B", "Top Field Journals (A)",  13531,  
   "ucp",    "jlabec", "Journal of Labor Economics (JOLE)", "Top Field Journals (A)", 20246,  
@@ -126,6 +128,8 @@ journals <- tribble(
   "eee",    "fambus",  "Journal of Family Business Strategy","Second in Field Journals (B)",19600161806,
   "kap",    "jbuset",  "Journal of Business Ethics","Second in Field Journals (B)",23859,
   "oup",    "wbrobs",  "World Bank Research Observer","Second in Field Journals (B)",18034,
+  "oup",    "ecinqu", "Economic Inquiry", "Second in Field Journals (B)", 20002,
+  
   
   #Other Journals
   "bpj",    "germec",  "German Economic Review", "Other Journals",                                       25564,  
@@ -192,6 +196,9 @@ journals <- tribble(
   "taf",    "entreg",  "Entrepreneurship and Regional Development","Other Journals",20662,
   "eee",    "streco",  "Structural Change and Economic Dynamics","Other Journals",29487,
   "cup",    "macdyn",  "Macroeconomic Dynamics","Other Journals",    20109,
+  "oup",     "refreg", "Regional Studies and Regional Science", "Other Journals", 21100864662,
+  "wly",     "canjec", "Canadian Journal of Economics", "Other Journals", NA,
+  "wly",     "jforec", "Journal of Forecasting", "Other Journals", NA,
   
   #WP Series
   "nbr",     "nberwo",  "NBER Working Papers", "Working Paper Series", NA,  
@@ -222,6 +229,17 @@ journals <- tribble(
   "fip",     "fedpwp",  "Federal Reserve Bank of Philadelphia Working Papers",  "Working Paper Series", NA,
   "wbk",     "wbrwps",  "The World Bank - Policy Research Working Paper Series",  "Working Paper Series", NA,
   "crm",     "wpaper",  "RFBerlin Discussion Paper Series",  "Working Paper Series", NA,
+  "bge",     "wpaper",  "Barcelona School of Economics Working Paper",  "Working Paper Series", NA,
+  "tiu",     "tiutis",  "Tilburg University, School of Economics and Management WP",  "Working Paper Series", NA,
+  "zbw",     "glodps",  "GLO Discussion Paper Series",  "Working Paper Series", NA,
+  #"zbw",     "espost",  "EconStor Open Access Articles and Book Chapters",  "Working Paper Series", NA,
+  "zbw",     "rwirep",  "Ruhr Economic Papers", "Working Paper Series", NA,
+  "cam",     "camdae",  "Cambridge Working Papers in Economics", "Working Paper Series", NA,
+  "tse",     "wpaper",   "TSE Working Papers", "Working Paper Series", NA,
+  "wrk",     "warwec",  "The Warwick Economics Research Paper Series (TWERPS)", "Working Paper Series", NA,
+  "ifs",     "ifsewp",  "IFS Working Papers", "Working Paper Series", NA,
+  "zbw",     "ifwkwp",  "Kiel Working Papers", "Working Paper Series", NA,
+  
 )
 
 #Test whether some journals are double in the list
@@ -232,3 +250,6 @@ journals |>
 
 #Write journals to disk 
 journals |> write_csv(config$journals_csv)
+
+
+

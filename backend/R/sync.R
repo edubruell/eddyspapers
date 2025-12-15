@@ -1,3 +1,33 @@
+#' List files in a RePEc archive or journal via rsync
+#'
+#' Shows remote file listings from rsync.repec.org without downloading anything.
+#'
+#' @param .archive Archive name (for example "oup", "eee")
+#' @param .journal Optional journal code within the archive
+#' @param rsync_bin Path to rsync binary
+#' @return Character vector with the listing (invisible)
+#' @export
+list_repec_folder <- function(.archive,
+                              .journal = NULL,
+                              rsync_bin = "/opt/homebrew/bin/rsync") {
+  if (!file.exists(rsync_bin)) rsync_bin <- "rsync"
+  
+  module <- if (is.null(.journal))
+    sprintf("RePEc-ReDIF/%s", .archive)
+  else
+    sprintf("RePEc-ReDIF/%s/%s", .archive, .journal)
+  
+  # Append slash only to request directory contents
+  src <- sprintf("rsync.repec.org::%s/", module)
+  
+  args <- c("--list-only", "-s", src)
+  
+  out <- system2(rsync_bin, args, stdout = TRUE, stderr = TRUE)
+  out
+}
+
+
+
 #' Sync a RePEc archive folder via rsync
 #'
 #' Downloads or updates a RePEc archive using rsync from rsync.repec.org.
