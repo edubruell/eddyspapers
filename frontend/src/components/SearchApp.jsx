@@ -244,9 +244,49 @@ export default function SearchApp() {
                 hasSearched={hasSearched}
                 onSave={handleSave}
                 savedHash={savedHash}
+                onExportBibtex={() => exportBibtex(results)}
+                onExportExcel={() => exportExcel(results)}
             />
+
 
         </div>
     );
+}
+
+function exportBibtex(results) {
+    const content = results
+        .map(r => r.bib_tex)
+        .filter(Boolean)
+        .join("\n\n");
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "papers.bib";
+    a.click();
+
+    URL.revokeObjectURL(url);
+}
+
+function exportExcel(results) {
+    const rows = results.map(r => ({
+        RePEcHandle: r.Handle,
+        Title: r.title,
+        Authors: r.authors,
+        Journal: r.journal,
+        Year: r.year,
+        Similarity: r.similarity_score,
+        Abstract: r.abstract,
+        URL: r.url
+    }));
+
+    import("xlsx").then(XLSX => {
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Results");
+        XLSX.writeFile(wb, "papers.xlsx");
+    });
 }
 
