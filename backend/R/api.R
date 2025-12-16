@@ -223,23 +223,39 @@ get_category_stats <- function(pool = NULL) {
   res
 }
 
-#' Get database last update date
+
+#' Returns the last recorded database rebuild or content update date.
 #'
-#' Returns the last modification date of the database file.
-#'
-#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
-#' @return Date string in YYYY-MM-DD format
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Date string in YYYY-MM-DD format, or NULL if not recorded
 #' @export
-get_last_updated <- function(db_path = NULL) {
-  if (is.null(db_path)) {
-    config <- get_folder_config()
-    db_path <- file.path(config$db_folder, "articles.duckdb")
+get_last_updated <- function(pool = NULL) {
+  
+  if (is.null(pool)) {
+    pool <- get_api_pool()
   }
   
-  db_age <- file.info(db_path)$mtime |> 
-    as.character() |>
-    stringr::str_extract("\\d{4}-\\d{2}-\\d{2}")
-  db_age
+  con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
+  
+  if (!DBI::dbExistsTable(con, "db_metadata")) {
+    return(NULL)
+  }
+  
+  res <- DBI::dbGetQuery(
+    con,
+    "
+    SELECT value
+    FROM db_metadata
+    WHERE key = 'last_content_update'
+    "
+  )
+  
+  if (nrow(res) == 0) {
+    return(NULL)
+  }
+  
+  res$value[[1]]
 }
 
 #' Ensure saved searches table exists

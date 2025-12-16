@@ -629,3 +629,43 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
 }
 
 
+#' Record database content update time
+#'
+#' Records the last successful database rebuild or update.
+#'
+#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
+#' @param time POSIXct or Date; defaults to Sys.time()
+#' @return Recorded date (YYYY-MM-DD) invisibly
+#' @export
+record_db_update_time <- function(db_path = NULL, time = Sys.time()) {
+  
+  if (is.null(db_path)) {
+    config <- get_folder_config()
+    db_path <- file.path(config$db_folder, "articles.duckdb")
+  }
+  
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS db_metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    )
+  ")
+  
+  date_str <- format(as.POSIXct(time), "%Y-%m-%d")
+  
+  DBI::dbExecute(
+    con,
+    "
+    INSERT INTO db_metadata (key, value)
+    VALUES ('last_content_update', ?)
+    ON CONFLICT (key)
+    DO UPDATE SET value = excluded.value
+    ",
+    params = list(date_str)
+  )
+  
+  invisible(date_str)
+}
