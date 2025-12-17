@@ -1,5 +1,5 @@
 library(eddyspapersbackend)
-
+devtools::load_all("backend")
 
 Sys.setenv("PAPER_SEARCH_DATA_ROOT" = "/Users/ebr/eddyspapers")
 config <- get_folder_config()
@@ -115,6 +115,11 @@ tryCatch({
 }, error = function(e) {
   info("⚠ Backup failed (non-fatal): ", e$message)
 })
+
+info("Changing update time record")
+record_db_update_time()
+info("✓ update time record changed")
+
 
 info("\n==== Update Complete ====")
 info("Finished at: ", Sys.time())

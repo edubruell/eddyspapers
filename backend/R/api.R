@@ -457,95 +457,58 @@ ensure_search_logs_table <- function(pool = NULL) {
 #' @param pool Database pool. Defaults to get_api_pool()
 #' @return Search log ID
 #' @export
-log_search <- function(ip,
-                       query_hash,
-                       result_count,
-                       top3_handles = NULL,
-                       filter_flags = NULL,
-                       response_time_ms = NULL,
-                       pool = NULL) {
+log_search <- function (ip, 
+                        query_hash, 
+                        result_count, 
+                        top3_handles = NULL, 
+                        filter_flags = NULL, 
+                        response_time_ms = NULL, 
+                        pool = NULL){
   
   if (is.null(pool)) {
     pool <- get_api_pool()
   }
   
   ensure_search_logs_table(pool)
-  
   con <- pool::poolCheckout(pool)
+  search_id <- DBI::dbGetQuery(con, "SELECT nextval('search_logs_seq') as id")$id
   
-  # ensure sequence is always ahead of table contents
-  DBI::dbExecute(con, "
-    SELECT setval(
-      'search_logs_seq',
-      COALESCE((SELECT MAX(search_id) FROM search_logs), 0) + 1
-    );
-  ")
+  has_year <- if (!is.null(filter_flags)) 
+    filter_flags$has_year
+  else FALSE
   
-  search_id <- DBI::dbGetQuery(
-    con,
-    "SELECT nextval('search_logs_seq') AS id"
-  )$id
+  has_journal_filter <- if (!is.null(filter_flags)) 
+    filter_flags$has_journal_filter
+  else FALSE
   
-  has_year <- isTRUE(filter_flags$has_year)
-  has_journal_filter <- isTRUE(filter_flags$has_journal_filter)
-  has_journal_name <- isTRUE(filter_flags$has_journal_name)
-  has_title_keyword <- isTRUE(filter_flags$has_title_keyword)
-  has_author_keyword <- isTRUE(filter_flags$has_author_keyword)
+  has_journal_name <- if (!is.null(filter_flags)) 
+    filter_flags$has_journal_name
+  else FALSE
   
-  handles_list <- if (!is.null(top3_handles) && length(top3_handles) > 0) {
-    list(top3_handles[seq_len(min(3, length(top3_handles)))])
-  } else {
+  has_title_keyword <- if (!is.null(filter_flags)) 
+    filter_flags$has_title_keyword
+  else FALSE
+  
+  has_author_keyword <- if (!is.null(filter_flags)) 
+    filter_flags$has_author_keyword
+  else FALSE
+  
+  handles_list <- if (!is.null(top3_handles) && length(top3_handles) > 
+                      0) {
+    list(top3_handles[1:min(3, length(top3_handles))])
+  }
+  else {
     list(character(0))
   }
-  
-  DBI::dbExecute(con, "
-    INSERT INTO search_logs (
-      search_id,
-      timestamp,
-      ip,
-      query_hash,
-      result_count,
-      top3_handles,
-      has_year_filter,
-      has_journal_filter,
-      has_journal_name_filter,
-      has_title_keyword,
-      has_author_keyword,
-      response_time_ms
-    )
-    VALUES (
-      ?,
-      CURRENT_TIMESTAMP,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?,
-      ?
-    )
-  ", params = list(
-    search_id,
-    ip,
-    query_hash,
-    result_count,
-    handles_list,
-    has_year,
-    has_journal_filter,
-    has_journal_name,
-    has_title_keyword,
-    has_author_keyword,
-    response_time_ms
-  ))
-  
+  DBI::dbExecute(con, "\n    INSERT INTO search_logs \n      (search_id, ip, query_hash, result_count, top3_handles,\n       has_year_filter, has_journal_filter, has_journal_name_filter,\n       has_title_keyword, has_author_keyword, response_time_ms)\n    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n  ", 
+                 params = list(search_id, ip, query_hash, result_count, 
+                               handles_list, has_year, has_journal_filter, has_journal_name, 
+                               has_title_keyword, has_author_keyword, response_time_ms))
   DBI::dbExecute(con, "CHECKPOINT;")
-  
   pool::poolReturn(con)
   search_id
 }
+
 
 
 #' Get search log statistics

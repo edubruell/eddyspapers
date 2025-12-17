@@ -45,6 +45,14 @@ function(req, res) {
 #* @apiTitle Semantic Paper Search API
 #* @apiDescription Vector search with deep filtering
 
+#* @apiTag Auth
+#* @apiSecurityDefinitions apikey
+#* @apiKeyName X-API-Key
+#* @apiKeyIn header
+
+#* @apiSecurity apikey
+NULL
+
 #* @schema PaperResult
 #* @property Handle string
 #* @property title string

@@ -34,6 +34,27 @@ init_articles_table <- function(con) {
   invisible(TRUE)
 }
 
+
+#' Get database connection
+#'
+#' Simple helper to open a connection to the articles database.
+#'
+#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
+#' @param read_only Logical, whether to open in read-only mode. Default FALSE.
+#' @return DuckDB connection object
+#' @export
+get_db_con <- function(db_path = NULL, read_only = FALSE) {
+  if (is.null(db_path)) {
+    config <- get_folder_config()
+    db_path <- file.path(config$db_folder, "articles.duckdb")
+  }
+  
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = read_only)
+  DBI::dbExecute(con, "LOAD vss;")
+  
+  con
+}
+
 #' Get list of processed paper handles
 #'
 #' Returns all paper handles already in the database.
@@ -649,8 +670,8 @@ record_db_update_time <- function(db_path = NULL, time = Sys.time()) {
   
   DBI::dbExecute(con, "
     CREATE TABLE IF NOT EXISTS db_metadata (
-      key TEXT PRIMARY KEY,
-      value TEXT
+      key VARCHAR PRIMARY KEY,
+      value VARCHAR
     )
   ")
   
@@ -658,14 +679,76 @@ record_db_update_time <- function(db_path = NULL, time = Sys.time()) {
   
   DBI::dbExecute(
     con,
-    "
-    INSERT INTO db_metadata (key, value)
-    VALUES ('last_content_update', ?)
-    ON CONFLICT (key)
-    DO UPDATE SET value = excluded.value
-    ",
-    params = list(date_str)
+    "DELETE FROM db_metadata WHERE key = 'last_content_update'"
+  )
+  
+  DBI::dbExecute(
+    con,
+    "INSERT INTO db_metadata (key, value) VALUES (?, ?)",
+    params = list("last_content_update", date_str)
   )
   
   invisible(date_str)
+}
+
+
+
+#' Get database tables with sizes and schemas
+#'
+#' Returns a list containing a tibble of all database tables with their sizes
+#' and a list of tibbles with the schema (columns and types) for each table.
+#' Size is calculated from actual database file size on disk.
+#'
+#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
+#' @return List with three elements:
+#'   - tables: tibble with columns table_name, row_count, size_mb
+#'   - schemas: named list of tibbles, one per table, with column names and types
+#'   - total_db_size_mb: total database file size on disk
+#' @export
+get_db_info <- function(db_path = NULL) {
+  if (is.null(db_path)) {
+    config <- get_folder_config()
+    db_path <- file.path(config$db_folder, "articles.duckdb")
+  }
+  
+  total_size_mb <- file.info(db_path)$size / 1024^2
+  
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  tables <- DBI::dbListTables(con)
+  
+  table_info <- purrr::map_dfr(tables, function(tbl) {
+    row_count <- DBI::dbGetQuery(
+      con,
+      sprintf("SELECT COUNT(*) as n FROM %s", tbl)
+    )$n
+    
+    tibble::tibble(
+      table_name = tbl,
+      row_count = row_count
+    )
+  })
+  
+  total_rows <- sum(table_info$row_count)
+  
+  table_info <- table_info |>
+    dplyr::mutate(
+      size_mb = (row_count / total_rows) * total_size_mb
+    )
+  
+  schemas <- purrr::map(tables, function(tbl) {
+    DBI::dbGetQuery(
+      con,
+      sprintf("DESCRIBE %s", tbl)
+    ) |>
+      tibble::as_tibble()
+  }) |>
+    purrr::set_names(tables)
+  
+  list(
+    tables = table_info,
+    schemas = schemas,
+    total_db_size_mb = total_size_mb
+  )
 }
