@@ -10,6 +10,7 @@ create_log_file(config)
 info("==== RePEc Update Script ====")
 info("Started at: ", Sys.time())
 info("Data root: ", config$data_root)
+iscited_file <- get_folder_refs(config)$repec("cit","conf","iscited.txt") 
 
 
 info("\n[1/7] Syncing RePEc archives...")
@@ -71,7 +72,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[5/7] Syncing and processing citation data...")
+info("\n[5/7] Processing citation data...")
 tryCatch({
   info("  Populating citation tables...")
   cit_result <- populate_citations(
@@ -86,6 +87,7 @@ tryCatch({
   info("✗ Citation processing failed: ", e$message)
   stop(e)
 })
+
 
 info("\n[6/7] Computing handle statistics...")
 tryCatch({

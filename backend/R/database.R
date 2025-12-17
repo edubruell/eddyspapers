@@ -444,8 +444,8 @@ populate_citations <- function(
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
   
   init_citations_tables(con)
-  
-  DBI::dbExecute(con, "DELETE FROM cit_all")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS cit_all")
+  init_citations_tables(con)
   info("Cleared existing cit_all table")
   
   total_edges <- parse_iscited_streaming(
