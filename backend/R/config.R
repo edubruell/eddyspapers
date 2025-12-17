@@ -10,11 +10,12 @@
 #' - PAPER_SEARCH_REPEC: RePEc folder (default: {data_root}/RePEc)
 #' - PAPER_SEARCH_RDS: RDS folder (default: {data_root}/rds_archivep)
 #' - PAPER_SEARCH_PQT: Parquet folder (default: {data_root}/pqt)
+#' - PAPER_SEARCH_PQT_DIFF: Parquet diff folder (default: {data_root}/pqt_diff)
 #' - PAPER_SEARCH_DB: Database folder (default: {data_root}/db)
 #' - PAPER_SEARCH_JOURNALS_CSV: Journals CSV file (default: {data_root}/journals.csv)
 #'
-#' @return A list with paths for data_root, repec_folder, rds_folder, pqt_folder, 
-#'   db_folder, and journals_csv
+#' @return A list with paths for data_root, repec_folder, rds_folder, pqt_folder,
+#'   pqt_diff_folder, db_folder, and journals_csv
 #' @param data_root Root folder for the data
 #'  
 #' @export
@@ -29,6 +30,8 @@ get_folder_config <- function(data_root = Sys.getenv("PAPER_SEARCH_DATA_ROOT",
                             unset = file.path(data_root, "rds_archivep")),
     pqt_folder = Sys.getenv("PAPER_SEARCH_PQT", 
                             unset = file.path(data_root, "pqt")),
+    pqt_diff_folder = Sys.getenv("PAPER_SEARCH_PQT_DIFF", 
+                                 unset = file.path(data_root, "pqt_diff")),
     db_folder = Sys.getenv("PAPER_SEARCH_DB", 
                            unset = file.path(data_root, "db")),
     logs      = Sys.getenv("PAPER_SEARCH_JOURNALS_CSV", 
@@ -56,6 +59,7 @@ ensure_folders <- function(config = NULL) {
     config$repec_folder,
     config$rds_folder,
     config$pqt_folder,
+    config$pqt_diff_folder,
     config$db_folder,
     config$logs
   )

@@ -12,7 +12,7 @@ info("Started at: ", Sys.time())
 info("Data root: ", config$data_root)
 
 
-info("\n[1/5] Syncing RePEc archives...")
+info("\n[1/7] Syncing RePEc archives...")
 tryCatch({
   sync_journals_from_csv(
     journals_csv = config$journals_csv,
@@ -23,12 +23,15 @@ tryCatch({
     dest_root = config$repec_folder
   )
   info("✓ CPD/Conf related works Sync completed successfully")
+  
+  iscited_file <- sync_repec_iscited(dest_root = config$repec_folder)
+  info("✓ iscited.txt Sync completed successfully")
 }, error = function(e) {
   info("✗ Sync failed: ", e$message)
   stop(e)
 })
 
-info("\n[2/5] Parsing ReDIF files...")
+info("\n[2/7] Parsing ReDIF files...")
 tryCatch({
   parse_all_journals(
     repec_folder = config$repec_folder,
@@ -41,7 +44,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[3/6] Generating embeddings and updating database...")
+info("\n[3/7] Generating embeddings and updating database...")
 tryCatch({
   embed_and_populate_db(
     db_path = file.path(config$db_folder, "articles.duckdb"),
@@ -56,7 +59,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[4/6] Creating Related Works Table in Database...")
+info("\n[4/7] Creating Related Works Table in Database...")
 tryCatch({
   write_version_links_to_db(
         db_path = file.path(config$db_folder, "articles.duckdb"),
@@ -70,9 +73,6 @@ tryCatch({
 
 info("\n[5/7] Syncing and processing citation data...")
 tryCatch({
-  info("  Syncing iscited.txt from RePEc...")
-  iscited_file <- sync_repec_iscited(dest_root = config$repec_folder)
-  
   info("  Populating citation tables...")
   cit_result <- populate_citations(
     db_path = file.path(config$db_folder, "articles.duckdb"),

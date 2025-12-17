@@ -2,16 +2,16 @@
 % Please edit documentation in R/api.R
 \name{get_last_updated}
 \alias{get_last_updated}
-\title{Get database last update date}
+\title{Returns the last recorded database rebuild or content update date.}
 \usage{
-get_last_updated(db_path = NULL)
+get_last_updated(pool = NULL)
 }
 \arguments{
-\item{db_path}{Path to DuckDB database. Defaults to config$db_folder/articles.duckdb}
+\item{pool}{Database pool. Defaults to get_api_pool()}
 }
 \value{
-Date string in YYYY-MM-DD format
+Date string in YYYY-MM-DD format, or NULL if not recorded
 }
 \description{
-Returns the last modification date of the database file.
+Returns the last recorded database rebuild or content update date.
 }

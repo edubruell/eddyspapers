@@ -752,3 +752,330 @@ get_db_info <- function(db_path = NULL) {
     total_db_size_mb = total_size_mb
   )
 }
+
+
+#' Compute differences between two parquet dumps
+#'
+#' Creates diff files showing NEW, DELETE, and UPDATE operations between two parquet dumps.
+#' Each table gets one diff file with an operation column indicating the change type.
+#'
+#' @param base_stamp Timestamp of base/older dump (e.g., "20250101_120000")
+#' @param update_stamp Timestamp of newer dump (e.g., "20250115_120000")
+#' @param pqt_folder Path to parquet folder. Defaults to config$pqt_folder
+#' @param pqt_diff_folder Path to diff output folder. Defaults to config$pqt_diff_folder
+#' @param tables Vector of table names to diff. Defaults to main tables.
+#' @return Named list of diff file paths invisibly
+#' @export
+compute_parquet_diffs <- function(base_stamp,
+                                  update_stamp,
+                                  pqt_folder = NULL,
+                                  pqt_diff_folder = NULL,
+                                  tables = c("articles", "handle_stats", "cit_all", 
+                                            "cit_internal", "version_links")) {
+  
+  if (is.null(pqt_folder)) {
+    config <- get_folder_config()
+    pqt_folder <- config$pqt_folder
+  }
+  
+  if (is.null(pqt_diff_folder)) {
+    config <- get_folder_config()
+    pqt_diff_folder <- config$pqt_diff_folder
+  }
+  
+  if (!dir.exists(pqt_diff_folder)) {
+    dir.create(pqt_diff_folder, recursive = TRUE, showWarnings = FALSE)
+  }
+  
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  table_keys <- list(
+    articles = "Handle",
+    handle_stats = "handle",
+    cit_all = c("citing", "cited"),
+    cit_internal = c("citing", "cited"),
+    version_links = c("source", "target", "type")
+  )
+  
+  diff_files <- list()
+  
+  for (tbl in tables) {
+    base_file <- file.path(pqt_folder, paste0(tbl, "_", base_stamp, ".parquet"))
+    update_file <- file.path(pqt_folder, paste0(tbl, "_", update_stamp, ".parquet"))
+    
+    if (!file.exists(base_file)) {
+      info("Skipping ", tbl, ": base file not found")
+      next
+    }
+    
+    if (!file.exists(update_file)) {
+      info("Skipping ", tbl, ": update file not found")
+      next
+    }
+    
+    info("Computing diff for ", tbl, "...")
+    
+    base_norm <- normalizePath(base_file, winslash = "/", mustWork = TRUE)
+    update_norm <- normalizePath(update_file, winslash = "/", mustWork = TRUE)
+    
+    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS base_%s", tbl))
+    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS update_%s", tbl))
+    
+    DBI::dbExecute(con, sprintf(
+      "CREATE TEMP TABLE base_%s AS SELECT * FROM read_parquet('%s')",
+      tbl, base_norm
+    ))
+    
+    DBI::dbExecute(con, sprintf(
+      "CREATE TEMP TABLE update_%s AS SELECT * FROM read_parquet('%s')",
+      tbl, update_norm
+    ))
+    
+    keys <- table_keys[[tbl]]
+    key_clause <- paste(keys, collapse = ", ")
+    
+    if (tbl == "articles") {
+      
+      join_conditions <- paste(
+        sprintf("b.%s = u.%s", keys, keys),
+        collapse = " AND "
+      )
+      
+      compare_cols <- DBI::dbGetQuery(con, sprintf("DESCRIBE base_%s", tbl))$column_name
+      compare_cols <- setdiff(compare_cols, c(keys, "embeddings"))
+      
+      compare_conditions <- paste(
+        sprintf("(b.%s IS DISTINCT FROM u.%s)", compare_cols, compare_cols),
+        collapse = " OR "
+      )
+      
+      diff_sql <- sprintf("
+        SELECT *, 'NEW' as operation FROM update_%s
+        WHERE %s NOT IN (SELECT %s FROM base_%s)
+        
+        UNION ALL
+        
+        SELECT *, 'DELETE' as operation FROM base_%s
+        WHERE %s NOT IN (SELECT %s FROM update_%s)
+        
+        UNION ALL
+        
+        SELECT u.*, 'UPDATE' as operation
+        FROM base_%s b
+        JOIN update_%s u ON %s
+        WHERE %s
+      ", tbl, key_clause, key_clause, tbl,
+         tbl, key_clause, key_clause, tbl,
+         tbl, tbl, join_conditions, compare_conditions)
+      
+    } else {
+      
+      diff_sql <- sprintf("
+        SELECT *, 'NEW' as operation FROM update_%s
+        WHERE (%s) NOT IN (SELECT %s FROM base_%s)
+        
+        UNION ALL
+        
+        SELECT *, 'DELETE' as operation FROM base_%s
+        WHERE (%s) NOT IN (SELECT %s FROM update_%s)
+      ", tbl, key_clause, key_clause, tbl,
+         tbl, key_clause, key_clause, tbl)
+    }
+    
+    diff_file <- file.path(
+      pqt_diff_folder, 
+      sprintf("%s_diff_%s_%s.parquet", tbl, base_stamp, update_stamp)
+    )
+    
+    diff_file_norm <- normalizePath(
+      diff_file, 
+      winslash = "/", 
+      mustWork = FALSE
+    )
+    
+    copy_sql <- sprintf(
+      "COPY (%s) TO '%s' (FORMAT PARQUET)",
+      diff_sql,
+      diff_file_norm
+    )
+    
+    DBI::dbExecute(con, copy_sql)
+    
+    diff_count <- DBI::dbGetQuery(con, sprintf(
+      "SELECT COUNT(*) as n FROM (%s) diff",
+      diff_sql
+    ))$n
+    
+    info("  ", tbl, ": ", diff_count, " changes → ", basename(diff_file))
+    diff_files[[tbl]] <- diff_file
+  }
+  
+  invisible(diff_files)
+}
+
+
+
+#' Apply parquet diff files to database
+#'
+#' Applies diff files created by compute_parquet_diffs() to a database.
+#' Handles NEW (insert), UPDATE (replace), and DELETE operations.
+#'
+#' @param base_stamp Base timestamp used in diff filenames
+#' @param update_stamp Update timestamp used in diff filenames
+#' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
+#' @param pqt_diff_folder Path to diff folder. Defaults to config$pqt_diff_folder
+#' @param tables Vector of table names to apply. Defaults to main tables.
+#' @param rebuild_indices Whether to rebuild indices after applying changes. Default TRUE.
+#' @return Named list with counts of operations applied per table
+#' @export
+apply_parquet_diffs <- function(base_stamp,
+                                update_stamp,
+                                db_path = NULL,
+                                pqt_diff_folder = NULL,
+                                tables = c("articles", "handle_stats", "cit_all",
+                                          "cit_internal", "version_links"),
+                                rebuild_indices = TRUE) {
+  
+  if (is.null(db_path)) {
+    config <- get_folder_config()
+    db_path <- file.path(config$db_folder, "articles.duckdb")
+  }
+  
+  if (is.null(pqt_diff_folder)) {
+    config <- get_folder_config()
+    pqt_diff_folder <- config$pqt_diff_folder
+  }
+  
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  DBI::dbExecute(con, "LOAD vss;")
+  
+  table_keys <- list(
+    articles = "Handle",
+    handle_stats = "handle",
+    cit_all = c("citing", "cited"),
+    cit_internal = c("citing", "cited"),
+    version_links = c("source", "target", "type")
+  )
+  
+  results <- list()
+  
+  for (tbl in tables) {
+    diff_file <- file.path(
+      pqt_diff_folder,
+      sprintf("%s_diff_%s_%s.parquet", tbl, base_stamp, update_stamp)
+    )
+    
+    if (!file.exists(diff_file)) {
+      info("Skipping ", tbl, ": diff file not found")
+      next
+    }
+    
+    info("Applying diff for ", tbl, "...")
+    
+    diff_file_norm <- normalizePath(diff_file, winslash = "/", mustWork = TRUE)
+    
+    DBI::dbExecute(con, "DROP TABLE IF EXISTS temp_diff")
+    DBI::dbExecute(con, sprintf(
+      "CREATE TEMP TABLE temp_diff AS SELECT * FROM read_parquet('%s')",
+      diff_file_norm
+    ))
+    
+    op_counts <- DBI::dbGetQuery(con, "
+      SELECT operation, COUNT(*) as count
+      FROM temp_diff
+      GROUP BY operation
+    ")
+    
+    info("  Operations: ", paste(
+      sprintf("%s=%d", op_counts$operation, op_counts$count),
+      collapse = ", "
+    ))
+    
+    keys <- table_keys[[tbl]]
+    
+    if ("DELETE" %in% op_counts$operation) {
+      key_where <- if (length(keys) == 1) {
+        sprintf("%s IN (SELECT %s FROM temp_diff WHERE operation = 'DELETE')", 
+                keys, keys)
+      } else {
+        sprintf("(%s) IN (SELECT %s FROM temp_diff WHERE operation = 'DELETE')",
+                paste(keys, collapse = ", "),
+                paste(keys, collapse = ", "))
+      }
+      
+      delete_sql <- sprintf("DELETE FROM %s WHERE %s", tbl, key_where)
+      deleted <- DBI::dbExecute(con, delete_sql)
+      info("  Deleted ", deleted, " rows")
+    }
+    
+    insert_cols <- DBI::dbGetQuery(con, sprintf("DESCRIBE %s", tbl))$column_name
+    insert_cols_str <- paste(insert_cols, collapse = ", ")
+    
+    new_sql <- sprintf("
+      INSERT INTO %s (%s)
+      SELECT %s FROM temp_diff
+      WHERE operation = 'NEW'
+    ", tbl, insert_cols_str, insert_cols_str)
+    
+    inserted <- DBI::dbExecute(con, new_sql)
+    info("  Inserted ", inserted, " new rows")
+    
+    if ("UPDATE" %in% op_counts$operation) {
+      if (tbl %in% c("articles", "handle_stats")) {
+        
+        key_col <- keys[1]
+        update_cols <- setdiff(insert_cols, c(key_col))
+        
+        set_clause <- paste(
+          sprintf("%s = excluded.%s", update_cols, update_cols),
+          collapse = ", "
+        )
+        
+        upsert_sql <- sprintf("
+          INSERT INTO %s (%s)
+          SELECT %s FROM temp_diff WHERE operation = 'UPDATE'
+          ON CONFLICT (%s) DO UPDATE SET %s
+        ", tbl, insert_cols_str, insert_cols_str, key_col, set_clause)
+        
+        updated <- DBI::dbExecute(con, upsert_sql)
+        info("  Updated ", updated, " rows")
+        
+      } else {
+        
+        key_where <- if (length(keys) == 1) {
+          sprintf("%s IN (SELECT %s FROM temp_diff WHERE operation = 'UPDATE')", 
+                  keys, keys)
+        } else {
+          sprintf("(%s) IN (SELECT %s FROM temp_diff WHERE operation = 'UPDATE')",
+                  paste(keys, collapse = ", "),
+                  paste(keys, collapse = ", "))
+        }
+        
+        deleted_for_update <- DBI::dbExecute(con, sprintf(
+          "DELETE FROM %s WHERE %s", tbl, key_where
+        ))
+        
+        inserted_for_update <- DBI::dbExecute(con, sprintf("
+          INSERT INTO %s (%s)
+          SELECT %s FROM temp_diff WHERE operation = 'UPDATE'
+        ", tbl, insert_cols_str, insert_cols_str))
+        
+        info("  Updated ", inserted_for_update, " rows (delete+insert)")
+      }
+    }
+    
+    DBI::dbExecute(con, "DROP TABLE temp_diff")
+    
+    results[[tbl]] <- op_counts
+  }
+  
+  if (rebuild_indices && "articles" %in% tables) {
+    info("Rebuilding indices...")
+    create_indices(con)
+  }
+  
+  invisible(results)
+}

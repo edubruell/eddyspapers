@@ -39,6 +39,7 @@ get_folder_refs <- function(config = NULL) {
     repec = folder_reference_factory(config$repec_folder),
     rds = folder_reference_factory(config$rds_folder),
     pqt = folder_reference_factory(config$pqt_folder),
+    pqt_diff = folder_reference_factory(config$pqt_diff_folder),
     db = folder_reference_factory(config$db_folder)
   )
 }
