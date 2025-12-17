@@ -14,7 +14,7 @@ get_folder_config(
 }
 \value{
 A list with paths for data_root, repec_folder, rds_folder, pqt_folder,
-db_folder, and journals_csv
+pqt_diff_folder, db_folder, and journals_csv
 }
 \description{
 Returns a list of configured folder paths for the paper search system.
@@ -29,6 +29,7 @@ Environment variables:
 \item PAPER_SEARCH_REPEC: RePEc folder (default: {data_root}/RePEc)
 \item PAPER_SEARCH_RDS: RDS folder (default: {data_root}/rds_archivep)
 \item PAPER_SEARCH_PQT: Parquet folder (default: {data_root}/pqt)
+\item PAPER_SEARCH_PQT_DIFF: Parquet diff folder (default: {data_root}/pqt_diff)
 \item PAPER_SEARCH_DB: Database folder (default: {data_root}/db)
 \item PAPER_SEARCH_JOURNALS_CSV: Journals CSV file (default: {data_root}/journals.csv)
 }

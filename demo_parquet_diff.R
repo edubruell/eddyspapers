@@ -60,3 +60,7 @@ info("  pqt_diff_folder = config$pqt_diff_folder")
 info(")")
 
 info("\n==== Demo Complete ====")
+
+devtools::install_github("edubruell/eddyspapers",subdir="backend")
+
+devtools::document("backend")
