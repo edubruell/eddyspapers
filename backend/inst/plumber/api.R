@@ -42,6 +42,14 @@ function(req, res) {
   plumber::forward()
 }
 
+get_client_ip <- function(req) {
+  if (!is.null(req$HTTP_X_FORWARDED_FOR)) {
+    strsplit(req$HTTP_X_FORWARDED_FOR, ",")[[1]][1]
+  } else {
+    req$REMOTE_ADDR
+  }
+}
+
 #* @apiTitle Semantic Paper Search API
 #* @apiDescription Vector search with deep filtering
 
@@ -125,7 +133,7 @@ function(req,
   )
   
   log_search(
-    ip                = req$REMOTE_ADDR,
+    ip                = get_client_ip(req),
     query_hash        = query_hash,
     result_count      = nrow(res),
     top3_handles      = top3_handles,
@@ -210,7 +218,7 @@ function(req,
   )
   
   log_search(
-    ip                = req$REMOTE_ADDR,
+    ip                = get_client_ip(req),
     query_hash        = hash,
     result_count      = nrow(res),
     top3_handles      = top3_handles,
