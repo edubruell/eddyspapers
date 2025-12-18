@@ -568,6 +568,33 @@ get_search_stats <- function(days = 30, pool = NULL) {
   )
 }
 
+#' Get raw search log entries for a single day
+#'
+#' @param day Date string YYYY-MM-DD
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Tibble of raw log rows
+#' @export
+get_search_logs_day <- function(day, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+  
+  con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
+  
+  DBI::dbGetQuery(
+    con,
+    "
+    SELECT *
+    FROM search_logs
+    WHERE timestamp >= ?::TIMESTAMP
+      AND timestamp <  (?::TIMESTAMP + INTERVAL 1 DAY)
+    ORDER BY timestamp
+    ",
+    params = list(day, day)
+  )
+}
+
 #' Get a saved search by hash
 #'
 #' Retrieves a saved search and its results.
@@ -797,6 +824,36 @@ get_handle_stats_api <- function(handle, pool = NULL) {
   as.list(result[1, ])
 }
 
+
+#' Apply parquet diffs and update database timestamp
+#'
+#' @param base_stamp Base timestamp (YYYYMMDD_HHMMSS)
+#' @param update_stamp Update timestamp (YYYYMMDD_HHMMSS)
+#' @param tables Tables to apply
+#' @return Result summary
+#' @export
+apply_diff_and_record_update <- function(base_stamp,
+                                         update_stamp,
+                                         tables = c("articles", "handle_stats",
+                                                    "cit_all", "cit_internal",
+                                                    "version_links")) {
+  
+  res <- apply_parquet_diffs(
+    base_stamp   = base_stamp,
+    update_stamp = update_stamp,
+    tables       = tables,
+    rebuild_indices = TRUE
+  )
+  
+  record_db_update_time(time = Sys.time())
+  
+  list(
+    base_stamp   = base_stamp,
+    update_stamp = update_stamp,
+    applied_at   = Sys.time(),
+    results      = res
+  )
+}
 
 #' Run the Plumber API server
 #'

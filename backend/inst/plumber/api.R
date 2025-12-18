@@ -448,3 +448,34 @@ function(handle) {
     result
   }
 }
+
+#* Get raw search logs for a day (admin)
+#* @get /dailylogs
+#* @param day YYYY-MM-DD
+function(day) {
+  stopifnot(!is.null(day))
+  get_search_logs_day(day)
+}
+
+#* Apply parquet diffs (admin)
+#* @post /admin/apply_diff
+#* @param base_stamp
+#* @param update_stamp
+#* @param tables Optional comma-separated list
+function(base_stamp, update_stamp, tables = NULL) {
+  
+  stopifnot(!is.null(base_stamp), !is.null(update_stamp))
+  
+  tbls <- if (is.null(tables)) {
+    c("articles", "handle_stats", "cit_all", "cit_internal", "version_links")
+  } else {
+    strsplit(tables, ",")[[1]]
+  }
+  
+  apply_diff_and_record_update(
+    base_stamp   = base_stamp,
+    update_stamp = update_stamp,
+    tables       = tbls
+  )
+}
+
