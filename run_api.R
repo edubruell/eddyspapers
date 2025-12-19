@@ -1,6 +1,8 @@
 library(eddyspapersbackend)
 
 config <- get_folder_config()
+ensure_folders(config)
+create_log_file(config)
 
 message("Starting Semantic Paper Search API")
 message("Data root: ", config$data_root)

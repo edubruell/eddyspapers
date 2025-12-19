@@ -4,8 +4,8 @@
 #' @param config List containing configuration options, including optional 'logs' directory path
 #' @return Path to created log file (invisibly)
 #' @export
-create_log_file <- function(config) {
-  log_file <- file.path(config$logs %||% tempdir(), paste0("repec_update_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".log"))
+create_log_file <- function(config,name="repec_update_") {
+  log_file <- file.path(config$logs %||% tempdir(), paste0(name, format(Sys.time(), "%Y%m%d_%H%M%S"), ".log"))
   assign("log_file", log_file, envir = .GlobalEnv)
   invisible(log_file)
 }
