@@ -65,10 +65,11 @@ eddyspaperui/
 ### Frontend
 - **Two-phase UI**: Landing view transitions to sidebar layout on search
 - **Semantic search**: Natural language paper queries
-- **Category filtering**: 11 JEL economic categories
+- **Category filtering**: Journal and Series Categories (Top 5, General Intereset, Top Field, Second in Field, Other, Working Paper Series)
 - **Year filtering**: Filter by minimum publication year
 - **BibTeX export**: One-click citation copying
 - **Expandable abstracts**: Toggle paper abstract visibility
+- **Extended Infromation on Citations/References:** Additional information in results cards
 
 ## Requirements
 
@@ -99,7 +100,7 @@ devtools::install("backend/")
 
 Create `data/` directory structure:
 ```bash
-mkdir -p data/{RePEc,rds_archivep,pqt,db}
+mkdir -p data/{RePEc,rds_archivep,pqt,pqt_diff,db}
 ```
 
 Add `data/journals.csv` with journal metadata.
@@ -139,8 +140,6 @@ npm install
 npm run dev
 ```
 
-Frontend will be available at `http://localhost:4321`
-
 ## Usage
 
 ### Production API
@@ -164,18 +163,12 @@ cd frontend && npm run dev
 ```bash
 curl -X POST http://localhost:8000/search \
   -H "Content-Type: application/json" \
+
   -d '{
     "query": "Reductions in Gouvernment Expenditures and Political Polarization",
     "min_year": 2020,
     "limit": 10
   }'
-```
-
-### Get Statistics
-```bash
-curl http://localhost:8000/stats/total
-curl http://localhost:8000/stats/categories
-curl http://localhost:8000/stats/journals
 ```
 
 ## Architecture
