@@ -105,10 +105,17 @@ export default function SearchApp() {
 
 
     useEffect(() => {
-        getLastUpdated()
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+
+        getLastUpdated({ signal: controller.signal })
             .then(d => setLastUpdated(d.last_updated))
-            .catch(() => setLastUpdated(null));
+            .catch(() => {
+                window.location.replace("/maintenance.html");
+            })
+            .finally(() => clearTimeout(timeout));
     }, []);
+
 
     function toggleCategory(id) {
         setSelectedCats(prev =>
