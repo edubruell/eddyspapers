@@ -2,6 +2,7 @@
 #' Create a log file for RePEc updates
 #'
 #' @param config List containing configuration options, including optional 'logs' directory path
+#' @param name Name pattern for log-file (default: "repec_update_")
 #' @return Path to created log file (invisibly)
 #' @export
 create_log_file <- function(config,name="repec_update_") {

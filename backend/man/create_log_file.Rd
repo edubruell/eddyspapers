@@ -4,10 +4,12 @@
 \alias{create_log_file}
 \title{Create a log file for RePEc updates}
 \usage{
-create_log_file(config)
+create_log_file(config, name = "repec_update_")
 }
 \arguments{
 \item{config}{List containing configuration options, including optional 'logs' directory path}
+
+\item{name}{Name pattern for log-file (default: "repec_update_")}
 }
 \value{
 Path to created log file (invisibly)
