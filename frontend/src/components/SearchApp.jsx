@@ -106,7 +106,7 @@ export default function SearchApp() {
 
     useEffect(() => {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
+        const timeout = setTimeout(() => controller.abort(), 5000);
 
         getLastUpdated({ signal: controller.signal })
             .then(d => setLastUpdated(d.last_updated))
