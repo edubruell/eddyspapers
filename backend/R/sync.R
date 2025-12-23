@@ -173,3 +173,44 @@ sync_repec_iscited <- function(
   
   invisible(decompressed_path)
 }
+
+#' Sync RePEc author identification data (pers archive)
+#'
+#' Downloads or updates the RePEc person (pers) archive, which contains
+#' author identifiers and metadata in RDF format.
+#'
+#' @param dest_root Root folder for RePEc data. Defaults to config$repec_folder
+#' @param rsync_bin Path to rsync binary
+#' @return Path to synced pers folder (invisibly)
+#' @export
+sync_repec_pers <- function(dest_root = NULL,
+                            rsync_bin = "/opt/homebrew/bin/rsync") {
+  if (is.null(dest_root)) {
+    config <- get_folder_config()
+    dest_root <- config$repec_folder
+  }
+  
+  if (!file.exists(rsync_bin)) rsync_bin <- "rsync"
+  
+  src  <- "rsync.repec.org::RePEc-ReDIF/per/pers/"
+  dest <- file.path(dest_root, "per", "pers")
+  
+  dir.create(dest, recursive = TRUE, showWarnings = FALSE)
+  dest <- normalizePath(dest, winslash = "/", mustWork = FALSE)
+  
+  withr::with_dir(dest, {
+    args <- c(
+      "-av",
+      "-s",
+      "--delete",
+      "--contimeout=20",
+      src,
+      "./"
+    )
+    status <- system2(rsync_bin, args)
+    if (status != 0) stop("rsync failed with status ", status)
+  })
+  
+  invisible(dest)
+}
+

@@ -220,7 +220,8 @@ find_redif_files <- function(repec_folder = NULL) {
   
   journal_base <- list.dirs(repec_folder, full.names = FALSE) |>
     purrr::keep(~stringr::str_detect(.x, "/")) |>
-    purrr::discard(~{.x == "cpd/conf"})
+    purrr::discard(~{.x == "cpd/conf"}) |>
+    purrr::discard(~{.x == "prs/pers"}) 
   
   journal_base |>
     purrr::map_dfr(~{
