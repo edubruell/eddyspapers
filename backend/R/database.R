@@ -78,7 +78,7 @@ get_processed_handles <- function(con) {
 #' @param journals_csv Path to journals CSV. Defaults to config$journals_csv
 #' @return Cleaned collection as tibble
 #' @export
-load_cleaned_collection <- function(rds_folder = NULL, 
+load_cleaned_collection <- function(rds_folder = NULL,
                                     journals_csv = NULL) {
   if (is.null(rds_folder)) {
     config <- get_folder_config()
@@ -90,8 +90,16 @@ load_cleaned_collection <- function(rds_folder = NULL,
     journals_csv <- config$journals_csv
   }
   
+  # Local helper: minimal, targeted year fix
+  parse_year_int <- function(x) {
+    x <- as.character(x)
+    x <- stringr::str_replace_all(x, "^Forthcoming$", "2026")
+    x <- stringr::str_extract(x, "^\\d{4}")
+    suppressWarnings(as.integer(x))
+  }
+  
   full_article_data <- list.files(rds_folder, full.names = TRUE) |>
-    purrr::map_dfr(~readRDS(.x))
+    purrr::map_dfr(readRDS)
   
   no_dup <- full_article_data |>
     dplyr::group_by(Handle) |>
@@ -99,28 +107,33 @@ load_cleaned_collection <- function(rds_folder = NULL,
     dplyr::ungroup()
   
   collection_all_files <- no_dup |>
-    dplyr::select(Handle,
-                  title,
-                  abstract,
-                  pages,
-                  vol = volume,
-                  issue,
-                  number,
-                  archive,
-                  journal_code,
-                  year,
-                  is_series,
-                  authors = authors_string,
-                  bib_tex = bib_tex,
-                  file) |>
+    dplyr::select(
+      Handle,
+      title,
+      abstract,
+      pages,
+      vol = volume,
+      issue,
+      number,
+      archive,
+      journal_code,
+      year,
+      is_series,
+      authors = authors_string,
+      bib_tex = bib_tex,
+      file
+    ) |>
+    dplyr::mutate(year = parse_year_int(year)) |>
     dplyr::filter((year >= 1995 & !is_series) | (year >= 2010 & is_series)) |>
     dplyr::filter(nchar(abstract) > 100) |>
     dplyr::left_join(
       readr::read_csv(journals_csv, show_col_types = FALSE) |>
-        dplyr::transmute(archive,
-                         journal_code = journal,
-                         journal = long_name,
-                         category),
+        dplyr::transmute(
+          archive,
+          journal_code = journal,
+          journal = long_name,
+          category
+        ),
       by = c("archive", "journal_code")
     ) |>
     dplyr::mutate(
@@ -141,11 +154,11 @@ load_cleaned_collection <- function(rds_folder = NULL,
   
   cleaned_collection <- collection_all_files |>
     dplyr::select(-file) |>
-    dplyr::left_join(article_urls, by = "Handle") |>
-    dplyr::mutate(year = stringr::str_replace_all(year, "Forthcoming", "2025"))
+    dplyr::left_join(article_urls, by = "Handle")
   
   cleaned_collection
 }
+
 
 #' Process and insert a batch of embeddings
 #'
