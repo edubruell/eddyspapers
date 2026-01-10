@@ -23,13 +23,14 @@ get_day_tibble_from_api <- function(day = lubridate::today()){
 
 get_stats_from_api(30)
 
-get_day_tibble_from_api("2025-12-23") |>
+get_day_tibble_from_api("2026-01-09") |>
   distinct(timestamp,ip) |>
   count(ip) |>
-  mutate(hostname = ip_address(ip) |> ip_to_hostname())
+  mutate(hostname = ip_address(ip) |> ip_to_hostname()) |>
+  print(n=Inf)
 
 
-handles <- get_day_tibble_from_api("2025-12-22") |>
+handles <- get_day_tibble_from_api("2026-01-08") |>
   dplyr::count(top3_handles) |>
   dplyr::pull(top3_handles)
 
@@ -52,8 +53,7 @@ sql <- paste0(
 
 top_papers_today <- DBI::dbGetQuery(get_db_con(), sql)
 
-get_day_tibble_from_api("2025-12-22") |>
-  filter(ip=="158.64.70.129") |>
+get_day_tibble_from_api("2026-01-08") |>
   distinct(search_id,timestamp,Handle=top3_handles) |>
   left_join(top_papers_today,by = join_by(Handle)) |>
   View()
