@@ -5,6 +5,7 @@ r_has_name <- function(.x, .name) {
   FALSE
 }
 
+
 #' Parse ReDIF file using Perl backend
 #'
 #' Parses a ReDIF format file using the Perl ReDIF library.
@@ -20,8 +21,11 @@ parse_redif_perl <- function(path,
                              simplify = TRUE,
                              error_on_fail = FALSE) {
   if (is.null(script_path)) {
-    script_path <- system.file("scripts", "parse_redif_simple.pl", 
-                               package = "eddyspapersbackend")
+    script_path <- system.file(
+      "scripts",
+      "parse_redif_simple.pl",
+      package = "eddyspapersbackend"
+    )
     if (script_path == "") {
       stop("Could not find parse_redif_simple.pl script in package")
     }
@@ -29,28 +33,46 @@ parse_redif_perl <- function(path,
   
   stopifnot(file.exists(path), file.exists(script_path))
   
-  lib <- path.expand("~/.perl5/lib/perl5")
-  arch <- file.path(lib, "darwin-thread-multi-2level")
-  Sys.setenv(PERL5LIB = paste(c(lib, arch), collapse = ":"))
+  perl_bin <- Sys.which("perl")
+  if (perl_bin == "") {
+    stop("No perl executable found on PATH")
+  }
   
   result <- tryCatch({
-    output <- system2("perl", args = c(script_path, shQuote(path)), 
-                      stdout = TRUE, stderr = TRUE)
+    res <- processx::run(
+      command = perl_bin,
+      args = c(script_path, path),
+      error_on_status = TRUE
+    )
     
-    json_start <- which(stringr::str_detect(output, "^\\s*\\["))
-    if (length(json_start) == 0) stop("No valid JSON found in output.")
+    output <- strsplit(res$stdout, "\n", fixed = TRUE)[[1]]
     
-    json_txt <- paste(output[json_start:length(output)], collapse = "\n")
+    json_start <- which(stringr::str_detect(output, "^\\s*\\["))[1]
+    json_end   <- tail(which(stringr::str_detect(output, "^\\s*\\]")), 1)
+    
+    if (is.na(json_start) || is.na(json_end) || json_end < json_start) {
+      stop(
+        paste(
+          "No valid JSON array found in Perl output.\n",
+          res$stderr
+        )
+      )
+    }
+    
+    json_txt <- paste(output[json_start:json_end], collapse = "\n")
     
     jsonlite::fromJSON(json_txt, simplifyVector = FALSE)
+    
   }, error = function(e) {
     if (error_on_fail) stop(e)
     warning(sprintf("Failed to parse: %s\n%s", path, e$message))
     NULL
   })
   
-  return(result)
+  result
 }
+
+
 
 #' Post-process a parsed ReDIF entry
 #'
@@ -357,8 +379,11 @@ parse_relatedworks_perl <- function(path,
                                     script_path = NULL,
                                     error_on_fail = FALSE) {
   if (is.null(script_path)) {
-    script_path <- system.file("scripts", "parse_related_works.pl", 
-                               package = "eddyspapersbackend")
+    script_path <- system.file(
+      "scripts",
+      "parse_related_works.pl",
+      package = "eddyspapersbackend"
+    )
     if (script_path == "") {
       stop("Could not find parse_related_works.pl script in package")
     }
@@ -366,15 +391,33 @@ parse_relatedworks_perl <- function(path,
   
   stopifnot(file.exists(path), file.exists(script_path))
   
+  perl_bin <- Sys.which("perl")
+  if (perl_bin == "") {
+    stop("No perl executable found on PATH")
+  }
+  
   result <- tryCatch({
-    output <- system2("perl", args = c(script_path, shQuote(path)),
-                      stdout = TRUE, stderr = TRUE)
+    res <- processx::run(
+      command = perl_bin,
+      args = c(script_path, path),
+      error_on_status = TRUE
+    )
     
-    json_start <- which(stringr::str_detect(output, "^\\s*\\{"))
-    if (length(json_start) == 0)
-      stop("No JSON object found in parser output.")
+    output <- strsplit(res$stdout, "\n", fixed = TRUE)[[1]]
     
-    json_txt <- paste(output[json_start:length(output)], collapse = "\n")
+    json_start <- which(stringr::str_detect(output, "^\\s*\\{"))[1]
+    json_end   <- tail(which(stringr::str_detect(output, "^\\s*\\}")), 1)
+    
+    if (is.na(json_start) || is.na(json_end) || json_end < json_start) {
+      stop(
+        paste(
+          "No valid JSON object found in Perl output.\n",
+          res$stderr
+        )
+      )
+    }
+    
+    json_txt <- paste(output[json_start:json_end], collapse = "\n")
     
     jsonlite::fromJSON(json_txt, simplifyVector = FALSE)
     
@@ -384,8 +427,10 @@ parse_relatedworks_perl <- function(path,
     NULL
   })
   
-  return(result)
+  result
 }
+
+
 
 
 #' Parse iscited file and populate cit_all table
