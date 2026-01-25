@@ -32,6 +32,9 @@ Imports:
     tibble,
     lubridate,
     digest,
-    R.utils
+    R.utils,
+    mcptools,
+    ellmer,
+    httr2
 Suggests:
     testthat (>= 3.0.0)

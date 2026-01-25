@@ -1,37 +1,12 @@
 ## Roadmap (eddy’s papers)
 
-### v0.3.0 (current)
-- Feature-complete core (search, citations, versions, saved searches, stats badges and histogramm)
-- Update pipeline stable
-
-### v0.3.1 (pre-launch, Dec)
-**Focus: production readiness**
-- Server setup 
-- Local sync helpers 
-- Frontend polish (layout, states, mobile)
-
-_No schema changes._
-
-### v0.3.2 (launch, Jan)
-**Focus: ship**
-- Deploy
-- Bug fixes only
-- Docs freeze
-
-### v0.3.3 (early post-launch)
+### v0.3.3 (early post-launch - current)
 **Focus: quality of life**
 - API defaults + ordering consistency
 - Minor frontend adjustments from real usage
 - Small performance wins
 
-### v0.4.0 (post-launch)
-**Focus: bibliographic coupling**
-- Add `bib_coupling` (precomputed)
-- API: Top `n` similar-by-references papers
-- Frontend: show in result expansion
-
-
-### v0.4.1 MCP + Agent Integration
+### v0.4.0 MCP + Agent Integration
 **Focus:** machine-facing search
 - Expose all stable API endpoints as MCP tools
 - Tool schemas for: search, cite, cited-by, stats, versions, topics
@@ -41,16 +16,22 @@ _No schema changes._
   - shinychat “deep research” mode
 - No UI changes required
 
+### v0.4.1 (post-launch)
+**Focus: bibliographic coupling**
+- Add `bib_coupling` (precomputed)
+- API: Top `n` similar-by-references papers
+- Frontend: show in result expansion
+
 ### v0.5.0 (author database, phase 1)
 **Focus: author identities + manual curation**
+- Preceeding work to get `pers` archive from RePEc is done! (Pers + what is there that is not in pers sounds good)
 - Seed distinct author strings (Top5 + selected fields + manual list)
 - Tables: `authors`, `author_name_variants`, `author_string_candidates`
-- Perhaps add repec pers data
 - No scraping yet; no public author pages yet
 
 ### v0.5.1 (author database, phase 2)
 **Focus: source discovery + human verification**
-- tidyllm with claude/openai webtools to find homepage/CV URLs
+- tidyllm with claude/gemini webtools to find homepage/CV URLs
 - Tables: `author_sources`, optional `author_raw_documents`
 - Admin UI: accept/reject URLs, track confidence
 - explicit handling for ORCID and Google Scholar URLs

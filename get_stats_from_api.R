@@ -194,8 +194,15 @@ get_day_tibble_from_api <- function(day = lubridate::today()){
 }
 
 get_stats_from_api(40)
+get_stats_from_api(30)
 
-day_tibble <- get_day_tibble_from_api("2026-01-22") |>
+day <- "2026-01-23"
+day <- today()
+
+day_query <- day |>
+  get_day_tibble_from_api() 
+
+day_tibble <- day_query |>
   distinct(day,timestamp, ip) |>
   count(day,ip)
 
@@ -216,35 +223,19 @@ day_tibble |>
   print(n=Inf)
 
 
+#What are the top papers recovered in the search, today?
+day_query |>
+  count(top3_handles,sort = TRUE)
+
+
+
+
 enrichment_data |>
   distinct(netname,org_name,country) |>
   print(n=Inf)
 
 
-get_day_tibble_from_api("2026-01-21") |>
-  filter(ip == "130.44.118.136") |>
-  select(search_id,top3_handles) |>
-  print(n=Inf)
 
-
-
-
-
-
-
-
-get_day_tibble_from_api("2026-01-22") |>
-  distinct(timestamp,ip) |>
-  count(ip) |>
-  mutate(hostname = ip_address(ip) |> ip_to_hostname()) |>
-  left_join(known_ips) |>
-  print(n=Inf)
-
-
-
-
-known_ips |>
-  print(n=Inf)
 
 handles <- get_day_tibble_from_api("2026-01-20") |>
   dplyr::count(top3_handles) |>
