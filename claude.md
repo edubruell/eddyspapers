@@ -144,7 +144,7 @@ API client:
    - Includes second-order metrics (citer quality, Top 5 share, weighted citations)
    - Includes time-series data (citations by year) and category breakdowns
 
-4. **`bib_coupling`** - Precomputed table for bibliographic coupling (Future)
+4. **`bib_coupling`** - Precomputed table for bibliographic coupling (Work in Progres)
    - Purpose: Show the top 5 or 10 papers with the most similar references
 
 #### Update Pipeline (with citations)

@@ -251,5 +251,8 @@ journals |>
 #Write journals to disk 
 journals |> write_csv(config$journals_csv)
 
+read_csv(config$journals_csv) |>
+  distinct(category)
+
 
 
