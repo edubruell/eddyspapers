@@ -193,10 +193,9 @@ get_day_tibble_from_api <- function(day = lubridate::today()){
                   day = day)
 }
 
-get_stats_from_api(40)
+get_stats_from_api(45)
 get_stats_from_api(30)
 
-day <- "2026-01-23"
 day <- today()
 
 day_query <- day |>
