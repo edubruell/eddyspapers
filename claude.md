@@ -210,6 +210,14 @@ API client:
 - Separate Tables when possible
 - Ensure backward compatibility with existing data
 
+## Development workflow rules
+
+After every implementation step:
+
+1. **Spawn a fresh-context sub-agent to extend tests and evaluate code quality.** Do not re-use the main conversation context for this — use `Agent` with `subagent_type: general-purpose`. The sub-agent should: read the files just written, assess correctness and style (R: purrr/functional, no loops; TS: effect/pipe, no mutation, no `any`), identify missing edge cases, and write additional tests.
+2. **Update the todo list / roadmap.** Mark completed tasks in `agentic/05_roadmap.md` (or the relevant phase checklist) and note any sub-tasks discovered during implementation.
+3. **Update design docs if the implementation diverges.** If code differs from what a design doc says, update the doc — code and docs must stay in sync.
+
 ## Frontend Usage Notes
 
 - Development: `cd frontend && npm install && npm run dev` (Astro dev server)
