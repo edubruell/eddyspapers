@@ -214,3 +214,37 @@ API client:
 
 - Development: `cd frontend && npm install && npm run dev` (Astro dev server)
 - API endpoint: by default the frontend points to `http://127.0.0.1:8000` in `frontend/src/lib/api.js` (`API_BASE`). Adjust if your backend runs elsewhere.
+
+---
+
+## Agentic Search (`/agentic`, in design phase)
+
+A second product, **`agenticsearch.eduard-bruell.de`**, is being designed alongside the existing semantic search. It is a hosted, multi-turn web + MCP service that takes a natural-language brief, writes a tailored R script against the same DuckDB, runs it in a hardened sandbox, and synthesises a literature review. It is modelled on the `lit-search` Claude Code skill (`~/.claude/skills/lit-search/`) but productised so it works without filesystem assumptions.
+
+**Status:** design only — no code yet. All decisions live in design notes; do not begin implementation without reading them.
+
+### Design corpus (read in order)
+
+| # | File | Owns |
+|---|---|---|
+| 00 | `agentic/00_overview.md` | high-level direction, doc map, glossary, hard decisions, non-goals |
+| 01 | `agentic/01_design.md` | system architecture: pipeline, defused-R sandbox, SSE protocol, wire schemas, MCP server, failure modes |
+| 02 | `agentic/02_implementation_plan.md` | repo layout (`agentic_backend/` TS+Hono, `agentic_frontend/` Astro+React, `r/` for `eddysearch.sandbox`), model selection + OpenRouter caching allowlist |
+| 03 | `agentic/03_interface.md` | UX: palette/primitives shared with `frontend/`, two-phase layout, stepper, reading order, microcopy, branding |
+| 04 | `agentic/04_prompts.md` | context engineering: cached corpus, per-stage prompts, retry-with-rejection-reason, MCP variant |
+| 05 | `agentic/05_roadmap.md` | 12-phase plan of attack with acceptance criteria + dependency graph |
+
+**When working on the agentic project, the lower-numbered doc wins for system decisions; the higher-numbered doc wins for surface decisions.** The four design docs are canonical — if you disagree with a decision there, update the doc rather than diverging in code.
+
+### Things the agentic build needs from the existing backend
+
+- **DuckDB file:** read-only copy of `articles.duckdb` repointed by `update_repec.R` after each weekly/monthly sync. The sandbox reads this directly; the REST API is a fallback for the rare lookup outside a script run.
+- **Existing tables used by the sandbox verbs:** `articles`, `cit_all`, `cit_internal`, `handle_stats`, `journals`, `versions`, `bib_coupling`.
+- **Existing REST endpoints reused:** `/search` (for the MCP `find_papers` passthrough), `/handlestats`, `/versions`, `/cites`, `/citedby`. No new endpoints needed.
+- **Deferred backend change:** adding a `doi VARCHAR` column to `articles` would improve agentic citation links. Deferred (parse side is trivial; backfilling the existing corpus needs care). Revisit when another initiative wants a clean DOI column anyway.
+
+### What this project does NOT touch
+
+- `backend/` — zero edits planned. `eddyspapersbackend` keeps its current Plumber routes.
+- `frontend/` — zero edits planned. The existing search UI keeps working at its current URL. The only future cross-link is a small "Detective mode →" button + dismissable banner (Phase 12).
+- The existing R MCP server (`backend/R/mcp_server.R`) — left running until the new Node MCP adapter has been dual-run for one week, then deleted (Phase 11).

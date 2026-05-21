@@ -1,0 +1,17 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+local_ai/
+.positai
+
+# Per-machine Claude Code settings
+.claude/settings.local.json
+
+# Local scratch / WIP scripts
+local_hacks.R
+local_test.R
+repec_wip.R
+
+# Contains a plaintext API key — never commit
+SKILL.md
