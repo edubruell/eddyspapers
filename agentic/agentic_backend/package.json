@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx --env-file=.env watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eyeball": "tsx --env-file=.env scripts/eyeball.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "1.5.3-r.1",
