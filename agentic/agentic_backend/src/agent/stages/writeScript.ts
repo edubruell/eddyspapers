@@ -17,9 +17,25 @@ export type WriteScriptOpts = {
 
 export type WriteScriptResult =
   | { ok: true; script: string; attempts: number; usage: UsageSummary }
-  | { ok: false; reason: string; attempts: number };
+  | { ok: false; reason: string; attempts: number }
+  | { ok: false; rejected: true; reason: string; attempts: 0 };
 
 const scriptSchema = z.object({ script: z.string() });
+
+export function preflight(brief: string): { ok: true } | { ok: false; reason: string } {
+  const trimmed = brief.trim();
+  if (trimmed.length < 15) {
+    return { ok: false, reason: "Brief is too short to search for — please describe what you're looking for." };
+  }
+  if (trimmed.length > 2000) {
+    return { ok: false, reason: "Brief exceeds 2000 characters — please shorten it." };
+  }
+  const wordLike = trimmed.match(/[a-zA-ZÀ-öø-ÿ]{3,}/g);
+  if (!wordLike || wordLike.length < 3) {
+    return { ok: false, reason: "Brief doesn't contain enough readable text — please describe the topic in plain words." };
+  }
+  return { ok: true };
+}
 
 function buildUserMessage(
   brief: string,
@@ -70,6 +86,10 @@ async function checkAndGetRejection(script: string): Promise<
 
 export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptResult> {
   const { brief, categories, minYear, mustInclude, dbDate } = opts;
+
+  const check = preflight(brief);
+  if (!check.ok) return { ok: false, rejected: true, reason: check.reason, attempts: 0 };
+
   let lastScript: string | undefined;
   let lastRejection: { reason: string; offendingNode: string; hint: string } | undefined;
   let totalUsage: UsageSummary = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 };
@@ -88,13 +108,20 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
       lastRejection
     );
 
-    const { object, usage } = await generateStructured({
-      model,
-      modelId,
-      messages: [writerSystemMessage, { role: "user", content: userPrompt }],
-      schema: scriptSchema,
-      stage: `write:attempt${attempt}`,
-    });
+    let object: { script: string };
+    let usage: UsageSummary;
+    try {
+      ({ object, usage } = await generateStructured({
+        model,
+        modelId,
+        messages: [writerSystemMessage, { role: "user", content: userPrompt }],
+        schema: scriptSchema,
+        stage: `write:attempt${attempt}`,
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, reason: `LLM error on attempt ${attempt}: ${message}`, attempts: attempt };
+    }
 
     totalUsage = {
       promptTokens: totalUsage.promptTokens + usage.promptTokens,
