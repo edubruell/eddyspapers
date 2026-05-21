@@ -10,50 +10,44 @@ semantic_search <- function(query, max_k = 30, min_year = NULL, journal_filter =
   emit_progress(paste0("semantic_search: ", stringr::str_trunc(query, 60)))
 
   con <- .sandbox_state$con
-  DBI::dbExecute(con, "LOAD vss;")
 
   emb_result <- tidyllm::ollama_embedding(query, .model = "mxbai-embed-large")
   vec <- unlist(emb_result$embeddings)
 
-  where_parts <- character(0)
-  params <- list()
+  filters <- character(0)
 
   if (!is.null(min_year)) {
-    where_parts <- c(where_parts, "a.year >= ?")
-    params <- c(params, list(min_year))
+    filters <- c(filters, sprintf("a.year >= %d", as.integer(min_year)))
   }
 
   if (!is.null(journal_filter) && length(journal_filter) > 0) {
-    placeholders <- paste(rep("?", length(journal_filter)), collapse = ", ")
-    where_parts <- c(where_parts, paste0("a.category IN (", placeholders, ")"))
-    params <- c(params, as.list(journal_filter))
+    cats_sql <- paste(shQuote(journal_filter), collapse = ", ")
+    filters <- c(filters, sprintf("a.category IN (%s)", cats_sql))
   }
 
   if (!is.null(journal_name)) {
-    where_parts <- c(where_parts, "a.journal LIKE ?")
-    params <- c(params, list(paste0("%", journal_name, "%")))
+    filters <- c(filters, sprintf("LOWER(a.journal) LIKE LOWER('%%%s%%')", journal_name))
   }
 
-  where_clause <- if (length(where_parts) > 0) {
-    paste0("WHERE ", paste(where_parts, collapse = " AND "))
+  where_clause <- if (length(filters) > 0) {
+    paste("WHERE", paste(filters, collapse = " AND "))
   } else {
     ""
   }
 
-  sql <- paste0(
+  sql <- sprintf(
     "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url,
             a.bib_tex, a.abstract,
             array_cosine_distance(a.embeddings, ?::FLOAT[1024]) AS similarity
      FROM articles a
-     ", where_clause, "
+     %s
      ORDER BY similarity ASC
-     LIMIT ?"
+     LIMIT ?",
+    where_clause
   )
 
-  params <- c(params, list(vec), list(max_k))
-
   rs <- DBI::dbSendQuery(con, sql)
-  DBI::dbBind(rs, params)
+  DBI::dbBind(rs, list(list(vec), max_k))
   result <- DBI::dbFetch(rs)
   DBI::dbClearResult(rs)
 
