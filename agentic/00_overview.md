@@ -12,6 +12,7 @@ This folder contains the design corpus. Read in this order:
 | 03 | [`03_interface.md`](./03_interface.md) | visual + UX design: palette, primitives shared with the existing app, two-phase layout, reading order, microcopy, mobile, branding |
 | 04 | [`04_prompts.md`](./04_prompts.md) | **context engineering** — how every stage's prompt is assembled, what stays in the cache, what gets injected per-run, lit-search-skill replication in a hosted setting |
 | 05 | [`05_roadmap.md`](./05_roadmap.md) | **plan of attack** — phased build order with concrete tasks, acceptance criteria per phase, dependency graph, cross-cutting risks |
+| — | [`typescript-functional-guidelines.md`](./typescript-functional-guidelines.md) | **code style reference** for all TS work in this project — pure functions, `effect`/`remeda` pipelines, discriminated unions, `Option`/`Either` over `null`/throws, no loops, no mutation, no `any`. Binding for `agentic_backend/` and `agentic_frontend/` |
 | — | [`reference_lit_search_skill.md`](./reference_lit_search_skill.md) | **reference snapshot** of the `lit-search` Claude Code skill that the agentic project is modelled on. Verbatim copy of `~/.claude/skills/lit-search/SKILL.md` — read alongside `04_prompts.md` to see what the hosted agent reproduces |
 
 The four documents are **canonical** — when they conflict, the lower-numbered one wins for system decisions, the higher-numbered one wins for surface decisions (a UI tweak in 03 supersedes a UI mention in 01).
@@ -55,7 +56,21 @@ The two apps differ only in **logo (detective meerkat)**, **wordmark (`AGENTIC S
 - Paper upload as brief context. Tempting, but doubles per-query cost; revisit once the cost picture stabilises. (`03_interface.md` §7.1.)
 - Mode pills as a UI primitive. The brief writer infers modes from prose; modes only show up as a small label inside the (collapsed) `SectionCard` header.
 
-## 6. Milestone arc
+## 6. Testing posture
+
+Non-negotiable: **everything in the TS backend is tested**. The style guide in [`typescript-functional-guidelines.md`](./typescript-functional-guidelines.md) is also a testing strategy — pure functions with typed inputs and typed outputs are tested at the boundary with no mocks, no fixtures-on-disk, no setup/teardown. That is the whole point of pushing effects (DB reads, model calls, subprocess spawns, SSE writes) to the edges.
+
+Concretely:
+
+- **Pure core, impure shell.** Pipeline stages (brief parsing, script validation result interpretation, `StreamEvent` shaping from raw FD-3 lines, `search_id` hashing, section/paper extraction for the synthesiser, MCP payload assembly) are pure functions of plain typed data. Each has unit tests covering nominal, empty, boundary, and malformed-input cases.
+- **Effectful boundaries are thin and integration-tested separately.** The R subprocess runner, OpenRouter client, DuckDB adapter (fallback path), SSE writer, MCP transport — these are wrapped behind small interfaces so the pure pipeline can be tested with plain in-memory inputs. Their own tests use real subprocesses / a temp DuckDB / a mocked HTTP server, never inline in pipeline tests.
+- **Discriminated-union dispatch is exhaustiveness-checked by the compiler** (see the `StreamEvent` switch in the style guide); tests then verify each branch produces the right rendered output / wire payload.
+- **If a function "needs a mock", it has a side effect that belongs at the boundary, not in the core.** Refactor before adding the mock.
+- **CI gate:** `tsc --noEmit` + `vitest run` + coverage threshold on `agentic_backend/src/**` (target ≥90% line coverage on pure modules; effectful shells exempt but must have at least one happy-path integration test).
+
+The R sandbox has its own `testthat` suite for `eddysearch.sandbox` verbs and the AST allowlist — covered in `02_implementation_plan.md`. This section is about the TS side.
+
+## 7. Milestone arc
 
 The full phased plan with concrete tasks, acceptance criteria, and dependency graph lives in **[`05_roadmap.md`](./05_roadmap.md)**. Twelve phases at a glance:
 
@@ -79,7 +94,7 @@ Phase 5 is the cost gate — nothing downstream commits until model picks and pe
 
 ---
 
-## 7. Glossary
+## 8. Glossary
 
 | Term | Meaning |
 |---|---|
