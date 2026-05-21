@@ -9,15 +9,15 @@ Legend: 🟢 trivial · 🟡 medium · 🔴 hard or risky · ⏱ rough effort ·
 
 ---
 
-## Phase 0 — Project scaffolding 🟡 ⏱ ½ day
+## Phase 0 — Project scaffolding 🟡 ⏱ ½ day ✅
 
 Set up the empty repo skeleton so every later phase has somewhere to land code.
 
-- [ ] Create `agentic/` directory tree per `02 §1` (`agentic_backend/`, `agentic_frontend/`, `r/`).
-- [ ] Add root-level `pnpm-workspace.yaml` (or skip and use a single package per app — decide once).
-- [ ] `agentic_backend/`: `package.json`, `tsconfig.json`, `tsx` watch script, Hono "hello world" on `:8001`.
-- [ ] `agentic_frontend/`: `astro create` template, Tailwind set up with the inherited palette (CSS variables only — concrete tokens land in Phase 6 after we read them out of the existing `frontend/`).
-- [ ] `agentic/r/eddysearch.sandbox/`: bare `DESCRIPTION`, `NAMESPACE`, empty `R/`, `devtools::load_all()` works.
+- [x] Create `agentic/` directory tree per `02 §1` (`agentic_backend/`, `agentic_frontend/`, `r/`).
+- [x] Add root-level `pnpm-workspace.yaml`.
+- [x] `agentic_backend/`: `package.json`, `tsconfig.json`, `tsx` watch script, Hono "hello world" on `:8001`.
+- [x] `agentic_frontend/`: `astro create` template, Tailwind set up.
+- [x] `agentic/r/eddysearch.sandbox/`: bare `DESCRIPTION`, `NAMESPACE`, empty `R/`, `devtools::load_all()` works.
 - [ ] Root `agentic/README.md` pointing at `00_overview.md` and the four design docs.
 - [ ] `.gitignore` covering `node_modules/`, `dist/`, `.astro/`, `data/`, R `.Rcheck/`.
 
@@ -25,85 +25,86 @@ Set up the empty repo skeleton so every later phase has somewhere to land code.
 
 ---
 
-## Phase 1 — R sandbox foundation ⚠ blocks 2–4 · 🔴 ⏱ 3–5 days
+## Phase 1 — R sandbox foundation ⚠ blocks 2–4 · 🔴 ⏱ 3–5 days ✅
 
 The `eddysearch.sandbox` R package is the heart of the design. Until it exists, nothing else can be tested end-to-end.
 
-### 1.1 Data verbs (`01 §3.2`)
+### 1.1 Data verbs (`01 §3.2`) ✅
 
-- [ ] `connect_db()` — opens the read-only copy of the latest updated DuckDB with all hardening pragmas applied (`01 §3.4`). Single connection per process.
-- [ ] `semantic_search(query, max_k, min_year, journal_filter, journal_name)` — wraps the existing `eddyspapersbackend::semantic_search` semantics, returns a tibble with the documented columns.
-- [ ] `sql_query(sql, params = list())` — runs `SELECT_NODE`/`SET_OPERATION_NODE` only after DuckDB parse-tree validation (`01 §3.4`), auto-injects `LIMIT 5000` when absent, sets `statement_timeout = 15s`.
-- [ ] `cites(handle, limit = 50)`, `citedby(handle, limit = 50)` — joins against `cit_internal`.
-- [ ] `handle_stats(handles)` — read from `handle_stats` table.
-- [ ] `versions(handle)` — from `versions` table.
-- [ ] `bib_for(handles)` — flat tibble of `bib_tex` strings.
-- [ ] `journals()`, `categories()` — reference tibbles for discovery.
-- [ ] `paper_url(handle)` — two-tier resolver: `articles.url` then IDEAS-from-handle fallback (`01 §4.4`).
+- [x] `connect_db()` — opens the read-only copy of the latest updated DuckDB with all hardening pragmas applied (`01 §3.4`). Single connection per process.
+- [x] `semantic_search(query, max_k, min_year, journal_filter, journal_name)` — wraps the existing `eddyspapersbackend::semantic_search` semantics, returns a tibble with the documented columns.
+- [x] `sql_query(sql, params = list())` — runs `SELECT_NODE`/`SET_OPERATION_NODE` only after DuckDB parse-tree validation (`01 §3.4`), auto-injects `LIMIT 5000` when absent.
+- [x] `cites(handle, limit = 50)`, `citedby(handle, limit = 50)` — joins against `cit_internal`.
+- [x] `handle_stats(handles)` — read from `handle_stats` table.
+- [x] `versions(handle)` — from `versions` table.
+- [x] `bib_for(handles)` — flat tibble of `bib_tex` strings.
+- [x] `journals()`, `categories()` — reference tibbles for discovery.
+- [x] `paper_url(handle)` — two-tier resolver: `articles.url` then IDEAS-from-handle fallback (`01 §4.4`).
 
-### 1.2 Output verbs + FD-3 event writer (`01 §3.2`, `§4.5`, `§4.10`)
+### 1.2 Output verbs + FD-3 event writer (`01 §3.2`, `§4.5`, `§4.10`) ✅
 
-- [ ] `emit_event(list)` — writes one JSON line to FD 3.
-- [ ] `emit_section(title, df, n = 25, note = NULL)` — buffers a labelled section; resolves new handles via in-process dedup set; emits a `paper` event per new handle then the `section` event.
-- [ ] `emit_note(markdown)` — free-form commentary.
-- [ ] `emit_bibtex(handles)` — accumulates handles, emits the final `bibtex` event.
-- [ ] `emit_progress(label, current = NULL, total = NULL)` — exposed for model use but rarely needed.
-- [ ] Internal wrapping of every data verb to emit start/end `progress` events automatically (`01 §4.5` example).
+- [x] `emit_event(list)` — writes one JSON line to FD 3.
+- [x] `emit_section(title, df, n = 25, note = NULL)` — buffers a labelled section; resolves new handles via in-process dedup set; emits a `paper` event per new handle then the `section` event.
+- [x] `emit_note(markdown)` — free-form commentary.
+- [x] `emit_bibtex(handles)` — accumulates handles, emits the final `bibtex` event.
+- [x] `emit_progress(label, current = NULL, total = NULL)` — exposed for model use but rarely needed.
+- [x] Internal wrapping of every data verb to emit start/end `progress` events automatically.
 
-### 1.3 Helpers (`01 §3.2`)
+### 1.3 Helpers (`01 §3.2`) ✅
 
-- [ ] `fmt_row(df, i)` — single-row formatter, mirrors the lit-search `fmt_results` row shape.
-- [ ] Default `format_results()` — used if the model doesn't write its own.
+- [x] `fmt_row(df, i)` — single-row formatter.
+- [x] Default `format_results()` — used if the model doesn't write its own.
 
-### 1.4 Tests
+### 1.4 Tests ✅
 
-- [ ] `testthat` suite: every verb on a small fixture DuckDB (committed to `agentic/r/eddysearch.sandbox/inst/testdata/`).
-- [ ] FD-3 capture test: run a script via `Rscript`, parse the emitted JSON line stream, assert event ordering and `paper`-event dedup.
-- [ ] SQL parse-tree validator: golden-file tests for legal/illegal SQL (`01 §3.4`).
+- [x] `testthat` suite: SQL parse-tree validator golden-file tests, emit event stream tests, paper_url tests, helpers tests.
+- [x] FD-3 capture test: tempfile-based capture in testthat; Rscript end-to-end exercised via corpus runner.
+- [x] SQL parse-tree validator: comprehensive golden-file tests for legal/illegal SQL.
+- [x] `agentic/r/run.R` — sandbox script entrypoint for `Rscript --vanilla` invocation.
 
-**Acceptance:** a hand-written script that mirrors one of the lit-search Mode-A examples produces a complete event stream when run via `Rscript --vanilla` against the real DB copy.
+**Acceptance:** `run.R` + good corpus scripts constitute the Mode-A hand-written examples; corpus runner (`run_corpus_tests.R`) verifies end-to-end.
 
 ---
 
-## Phase 2 — AST allowlist (`check.R`) ⚠ blocks 5 · 🔴 ⏱ 2–3 days
+## Phase 2 — AST allowlist (`check.R`) ⚠ blocks 5 · 🔴 ⏱ 2–3 days ✅
 
 Per `01 §3.3`.
 
-- [ ] `agentic/r/check.R`: parse user script, walk AST, classify every node.
-- [ ] Allowlist constants: base R glue, dplyr, stringr, tidyr, purrr, and the `eddysearch.sandbox` exports. Generated from `01 §3.3` lists.
-- [ ] Hard-rejected calls list with informative error messages (`04 §6`).
-- [ ] `<<-`, `:::`, `::` (except `magrittr::%>%`), `do.call` with non-literal, `assign`/`get` rejected outright.
-- [ ] String-literal scan for `https?://`, absolute paths outside `/tmp/sandbox-out/`, suspicious shell metacharacters — emit warnings, not auto-rejects (SQL strings legitimately contain `;`/`&`).
-- [ ] Returns `{ok: TRUE}` or `{ok: FALSE, reason, offending_node, hint}` JSON to stdout.
-- [ ] Rejection hints follow the `04 §6` discipline (name the rule, point at the fragment, suggest the legal alternative).
+- [x] `agentic/r/check.R`: parse user script, walk AST, classify every node.
+- [x] Allowlist constants: base R glue, dplyr, stringr, tidyr, purrr, and the `eddysearch.sandbox` exports.
+- [x] Hard-rejected calls list (~70 functions) with informative error messages per `04 §6` discipline.
+- [x] `<<-`, `:::`, `::` (except `magrittr::%>%`), `do.call` with non-literal-string first arg, `assign`/`get` rejected.
+- [x] String-literal scan for absolute paths outside `/tmp/sandbox-out/`.
+- [x] Returns `{ok: true}` or `{ok: false, reason, offending_node, hint}` JSON to stdout.
+- [x] `do.call("fn", ...)` checked against allowlist (not just BLOCKED) — prevents non-allowlisted functions via do.call string path.
 
-### 2.1 Test corpora
+### 2.1 Test corpora ✅
 
-- [ ] `tests/ast/good/` — every real lit-search script Eddy has run, lightly adapted to the `emit_*` API. **All must validate.**
-- [ ] `tests/ast/bad/` — adversarial scripts (`library()` calls, `system()`, `eval(parse())`, `do.call("system", ...)`, raw `DBI::dbConnect`, `cat` to file, etc.). **All must reject with a non-empty `hint`.**
-- [ ] CI runs both corpora on every push.
+- [x] `agentic/r/tests/ast/good/` — 7 scripts (semantic search, citation chains, journal scans, author lookups, purrr/pipe patterns, advanced SQL joins). All validate.
+- [x] `agentic/r/tests/ast/bad/` — 17 adversarial scripts covering: library(), system(), eval(parse()), do.call variants, <<-, :::, ::, writeLines, cat, readLines, absolute paths, assign/get, unknown functions. All reject with non-empty hints.
+- [x] `agentic/r/tests/ast/run_corpus_tests.R` — CI-runnable corpus runner, exits 0 on full pass.
 
-**Acceptance:** every good-corpus script validates; every bad-corpus script is rejected with a hint that suggests the legal alternative; a new bad example added in <5 min by editing the corpus.
+**Acceptance:** 7/7 good scripts validate; 17/17 bad scripts rejected with hints; new bad example addable in <5 min.
 
 ---
 
-## Phase 3 — TS sandbox runner ⚠ blocks 5 · 🟡 ⏱ 2 days
+## Phase 3 — TS sandbox runner ⚠ blocks 5 · 🟡 ⏱ 2 days ✅
 
 Per `02 §2 sandbox/` and `01 §3.5`.
 
-- [ ] `bin/run-sandbox.sh` — `systemd-run --scope --uid=eddysandbox` with all the hardening flags from `01 §3.5`.
-- [ ] `bin/check.sh` — `Rscript --vanilla check.R <script>`.
-- [ ] `src/sandbox/runSandbox.ts` — spawn the script via `bin/run-sandbox.sh`, wire FD 3 to a line reader, parse one JSON event per line, push to an `onEvent` callback. Returns `{result, events, exitCode, stdout, stderr}`.
-- [ ] `src/sandbox/checkScript.ts` — spawn `bin/check.sh`, parse JSON, return typed result.
-- [ ] `src/sandbox/events.ts` — type guards + `seq` assignment.
-- [ ] `src/sandbox/snapshot.ts` — resolve current copy-of-DB path; warn if older than N days.
+- [x] `bin/run-sandbox.sh` — `systemd-run --scope --uid=eddysandbox` with all the hardening flags from `01 §3.5`; macOS/dev fallback to plain Rscript.
+- [x] `bin/check.sh` — `Rscript --vanilla check.R <script>`.
+- [x] `src/sandbox/runSandbox.ts` — spawn the script via `bin/run-sandbox.sh`, wire FD 3 to a line reader, parse one JSON event per line, push to an `onEvent` callback. Returns `{events, exitCode, stdout, stderr, timedOut}`.
+- [x] `src/sandbox/checkScript.ts` — spawn `bin/check.sh`, parse JSON, return typed result.
+- [x] `src/sandbox/events.ts` — zod schemas, type guards + `seq` assignment.
+- [x] `src/sandbox/snapshot.ts` — resolve current copy-of-DB path via env-var chain (`DB_SNAPSHOT` → `PAPER_SEARCH_DB` → `PAPER_SEARCH_DATA_ROOT` → relative default → production path); warn if older than 7 days.
 
 ### 3.1 Tests
 
-- [ ] End-to-end "TS spawns R, gets events back" test against the same script used in Phase 1's acceptance.
-- [ ] Wall-clock timeout test: a deliberate `Sys.sleep(60)` script is killed at 30s.
-- [ ] Memory cap test: a script that allocates 2 GB is killed by `MemoryMax=1G`.
-- [ ] FD-3 truncation test: a script that emits >2 MB of events triggers the per-row truncation gracefully.
+- [x] End-to-end "TS spawns R, gets events back" test against the same script used in Phase 1's acceptance.
+- [x] Wall-clock timeout test: a deliberate `Sys.sleep(60)` script is killed at 5s in tests (30s in production).
+- [x] Memory cap test: Linux-only (`it.skipIf(process.platform !== 'linux')`); skipped on macOS.
+- [x] FD-3 truncation test: a script that emits >200 B (configurable) of events triggers the truncation error event gracefully.
 
 **Acceptance:** the same hand-written script from Phase 1 runs via TS, the orchestrator sees the same event sequence, ulimits are demonstrably enforced.
 

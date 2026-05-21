@@ -1,0 +1,22 @@
+Package: eddysearch.sandbox
+Title: Hardened R Sandbox for Agentic Literature Search
+Version: 0.1.0
+Authors@R: person("Eduard", "Bruell", email = "eduard.bruell@zew.de", role = c("aut", "cre"))
+Description: Provides the only allowed data verbs and output emitters for
+    LLM-generated R scripts running inside the agentic search sandbox.
+    Depends on eddyspapersbackend for DB access.
+License: MIT
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    dplyr,
+    stringr,
+    purrr,
+    tidyllm,
+    DBI,
+    duckdb,
+    jsonlite
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
