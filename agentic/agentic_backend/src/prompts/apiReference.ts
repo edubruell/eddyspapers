@@ -14,7 +14,7 @@ semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journ
     See "Semantic query writing guide" section of the system prompt.
   - max_k: number of results to return (≤ 30 for broad sweeps, ≤ 15 for WP/recent passes)
   - min_year: integer filter, e.g. 2015L
-  - journal_filter: character vector of category names, e.g. c("Top 5", "AEJ", "Top Field A")
+  - journal_filter: character vector of category names, e.g. c("Top 5 Journals", "AEJs", "Top Field Journals (A)")
   - journal_name: substring match on journal name, e.g. "Journal of Labor Economics"
   Returns columns: Handle, title, year, authors, journal, category, url, bib_tex, abstract, similarity
   Lower similarity = closer match (cosine distance).
@@ -22,7 +22,7 @@ semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journ
   Examples:
     top <- semantic_search(
       "How do minimum wage increases affect employment and hours worked in low-wage labor markets?",
-      max_k = 20, journal_filter = c("Top 5", "AEJ", "Top Field A"), min_year = 2010L
+      max_k = 20, journal_filter = c("Top 5 Journals", "AEJs", "Top Field Journals (A)"), min_year = 2010L
     )
     wps <- semantic_search(
       "Natural experiments and regression discontinuity designs to identify minimum wage effects",
@@ -51,7 +51,7 @@ sql_query(sql, params = list())
               hs.total_citations, hs.citation_percentile
        FROM articles a
        JOIN handle_stats hs ON a.Handle = hs.handle
-       WHERE a.category IN ('Top 5', 'AEJ')
+       WHERE a.category IN ('Top 5 Journals', 'AEJs')
          AND a.year >= 2000
        ORDER BY hs.total_citations DESC LIMIT 30"
     )

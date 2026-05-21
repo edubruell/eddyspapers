@@ -18,7 +18,7 @@ all_handles <- character(0)
 kw <- sql_query(
   "SELECT Handle, title, year, authors, journal, category, url, bib_tex, abstract
    FROM articles
-   WHERE category IN ('Top 5', 'AEJ', 'Top Field A')
+   WHERE category IN ('Top 5 Journals', 'AEJs', 'Top Field Journals (A)')
      AND (LOWER(title) LIKE '%minimum wage%' OR LOWER(title) LIKE '%wage floor%'
           OR LOWER(title) LIKE '%minimum-wage%')
    ORDER BY year DESC LIMIT 80"
@@ -31,7 +31,7 @@ sem1 <- semantic_search(
   "Minimum wage increases and their effects on employment levels, hours worked, and earnings.
    Studies examining whether higher wage floors reduce employment, shift hours to part-time,
    or generate worker welfare gains. Includes monopsony models and competitive labor market tests.",
-  max_k = 25, journal_filter = c("Top 5", "AEJ", "Top Field A", "General Interest"),
+  max_k = 25, journal_filter = c("Top 5 Journals", "AEJs", "Top Field Journals (A)", "General Interest"),
   min_year = 2005L
 )
 emit_section("Semantic: employment and hours effects (published)", sem1, n = 20)
@@ -42,7 +42,7 @@ sem2 <- semantic_search(
   "Causal identification of minimum wage effects using regression discontinuity, bunching
    estimators, synthetic control, or cross-border comparisons. Studies that exploit spatial
    or temporal variation in minimum wage legislation to isolate employment and earnings effects.",
-  max_k = 20, journal_filter = c("Top 5", "AEJ", "Top Field A", "General Interest"),
+  max_k = 20, journal_filter = c("Top 5 Journals", "AEJs", "Top Field Journals (A)", "General Interest"),
   min_year = 2010L
 )
 emit_section("Semantic: RD and quasi-experimental designs", sem2, n = 15)
@@ -53,7 +53,7 @@ wps <- semantic_search(
   "Recent empirical research on minimum wage effects on employment, hours, turnover, and
    earnings inequality. New quasi-experimental evidence from administrative records or
    linked employer-employee data.",
-  max_k = 15, journal_filter = c("Working Paper"), min_year = 2019L
+  max_k = 15, journal_filter = c("Working Paper Series"), min_year = 2019L
 )
 emit_section("Recent working papers (2019+)", wps, n = 12)
 all_handles <- unique(c(all_handles, wps$Handle))
@@ -94,7 +94,7 @@ sem1 <- semantic_search(
   "How does immigration affect wages and labor market outcomes for native workers?
    Evidence on wage complementarity, substitution effects between immigrant and native skill groups,
    regional labor market adjustments, and distributional consequences of immigration shocks.",
-  max_k = 25, journal_filter = c("Top 5", "AEJ", "Top Field A"), min_year = 2005L
+  max_k = 25, journal_filter = c("Top 5 Journals", "AEJs", "Top Field Journals (A)"), min_year = 2005L
 )
 emit_section("Semantic: immigration and wages (top journals)", sem1, n = 20)
 all_handles <- unique(c(all_handles, sem1$Handle))
@@ -114,7 +114,7 @@ if (nrow(authors_sql) > 0) {
 wps <- semantic_search(
   "Recent empirical studies on immigration and native wages using administrative linked data,
    shift-share IV, or policy discontinuities. German, Austrian, or European evidence preferred.",
-  max_k = 15, journal_filter = c("Working Paper"), min_year = 2020L
+  max_k = 15, journal_filter = c("Working Paper Series"), min_year = 2020L
 )
 emit_section("Recent WPs on immigration and wages (2020+)", wps, n = 12)
 all_handles <- unique(c(all_handles, wps$Handle))

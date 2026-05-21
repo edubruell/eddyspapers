@@ -2,6 +2,11 @@ connect_db <- function(db_path) {
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = TRUE)
   .sandbox_state$con <- con
 
+  # Load required extensions before the security lockdown prevents auto-loading
+  purrr::walk(c("LOAD json", "LOAD vss"), function(sql) {
+    tryCatch(DBI::dbExecute(con, sql), error = function(e) invisible(NULL))
+  })
+
   pragmas <- c(
     "SET disabled_filesystems = 'LocalFileSystem,HTTPFileSystem,S3FileSystem'",
     "SET autoinstall_known_extensions = false",
