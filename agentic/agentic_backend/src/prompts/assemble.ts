@@ -1,4 +1,5 @@
 import type { CoreMessage } from "ai";
+import { z } from "zod";
 import { apiReferencePrompt } from "./apiReference.js";
 import { journalCategoriesPrompt } from "./journalCategories.js";
 import { semanticQueryGuidePrompt } from "./semanticQueryGuide.js";
@@ -6,6 +7,14 @@ import { examplesPrompt } from "./examples.js";
 import { writerRulesPrompt } from "./writerRules.js";
 import { clarifierPrompt } from "./clarifier.js";
 import { synthesizerPrompt } from "./synthesizer.js";
+
+// Three possible clarifier outputs: proceed, ask one question, or reject the brief
+export const clarifierOutputSchema = z.union([
+  z.object({ done: z.literal(true) }),
+  z.object({ done: z.literal(false), question: z.string().max(280) }),
+  z.object({ done: z.literal(false), reject: z.literal(true), reason: z.string().max(280) }),
+]);
+export type ClarifierOutput = z.infer<typeof clarifierOutputSchema>;
 
 function cachedSystemMessage(text: string): CoreMessage {
   return {

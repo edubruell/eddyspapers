@@ -150,6 +150,18 @@ Per `02 §2.1` and `04 §1–§3`.
 - [x] `eddysearch.sandbox/R/data_verbs.R` — match the backend's binding pattern: build all WHERE filters as SQL string literals via `sprintf`/`shQuote`, bind only `list(list(vec), max_k)`.
 - [x] `tsconfig.json` — removed `rootDir: "src"` (pre-existing bug; blocked `tests/` and `scripts/` from type-check).
 
+### 4.6 Input guardrails ✅
+
+Two layers before an expensive write+sandbox run:
+
+- [x] **Pre-flight validation** (`src/agent/stages/writeScript.ts`) — rejects synchronously, no LLM cost:
+  - Brief < 15 chars or > 2000 chars
+  - Fewer than 3 word-like tokens (pure symbols / numbers / gibberish)
+- [x] **Clarifier rejection path** — extended schema: `done | question | reject(reason)`.
+  Updated clarifier prompt instructs the model to reject briefs that are clearly not
+  economics literature searches (recipes, coding help, personal advice, pure nonsense)
+  with a short user-friendly explanation. Wired into the pipeline in Phase 6 (`runAgent`).
+
 **Caching note (updated):** At ~50–100 searches/day, inter-search cache hits are uncommon (TTL 5 min, average gap >10 min). Caching pays off **within a single run**: writer retry (same 6.7k-token system prompt, seconds apart) and synthesiser (same 2k prompt, fired 30–60s after write). Cross-user caching is a bonus, not the primary economic justification.
 
 **Acceptance:** all samples tested produce valid scripts on first attempt; exit 0 on full pipeline with live DB.
