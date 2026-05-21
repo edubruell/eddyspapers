@@ -10,8 +10,8 @@ package not listed here. Every call to a data verb emits a progress event automa
 
 semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journal_name = NULL)
   Vector similarity search over the articles database. Returns a tibble.
-  - query: dense prose describing the mechanism or phenomenon (3–6 sentences). NOT keywords.
-    See "Semantic query writing guide" section of the system prompt.
+  - query: a mock abstract — 2–4 sentences written as if they were the abstract of an ideal
+    result paper. NOT a question, NOT keywords. See "Semantic query writing guide".
   - max_k: number of results to return (≤ 30 for broad sweeps, ≤ 15 for WP/recent passes)
   - min_year: integer filter, e.g. 2015L
   - journal_filter: character vector of category names, e.g. c("Top 5 Journals", "AEJs", "Top Field Journals (A)")
@@ -21,11 +21,16 @@ semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journ
 
   Examples:
     top <- semantic_search(
-      "How do minimum wage increases affect employment and hours worked in low-wage labor markets?",
+      "This paper studies the employment effects of minimum wage increases in low-wage labor
+       markets using linked employer-employee administrative data. We find that higher wage
+       floors reduce employment margins through hours reductions and delayed hiring, with
+       larger effects among part-time workers in sectors near the wage floor.",
       max_k = 20, journal_filter = c("Top 5 Journals", "AEJs", "Top Field Journals (A)"), min_year = 2010L
     )
     wps <- semantic_search(
-      "Natural experiments and regression discontinuity designs to identify minimum wage effects",
+      "Using a regression discontinuity design around the minimum wage threshold, this paper
+       estimates bunching in the wage distribution and identifies employment effects. We exploit
+       cross-regional variation in wage bite to isolate causal impacts on job creation.",
       max_k = 15, journal_filter = c("Working Paper Series"), min_year = 2018L
     )
 
