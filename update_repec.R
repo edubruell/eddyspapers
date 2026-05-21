@@ -1,5 +1,4 @@
 library(eddyspapersbackend)
-devtools::load_all("backend")
 
 Sys.setenv("PAPER_SEARCH_DATA_ROOT" = "/Users/ebr/eddyspapers")
 config <- get_folder_config()
@@ -51,7 +50,7 @@ tryCatch({
     db_path = file.path(config$db_folder, "articles.duckdb"),
     rds_folder = config$rds_folder,
     journals_csv = config$journals_csv,
-    batch_size = 50,
+    batch_size = 20,
     model = "mxbai-embed-large"
   )
   info("✓ Embeddings and database updated successfully")
@@ -126,3 +125,37 @@ info("✓ update time record changed")
 info("\n==== Update Complete ====")
 info("Finished at: ", Sys.time())
 info("Database: ", file.path(config$db_folder, "articles.duckdb"))
+
+info("\n==== Create Diffs for server sync ====")
+
+info("\n[1] List available parquet dumps:")
+pqt_files <- list.files(config$pqt_folder, pattern = "^articles_.*\\.parquet$")
+info("Available dumps: ", paste(pqt_files, collapse = ", "))
+
+if (length(pqt_files) < 2) {
+  stop("Need at least 2 parquet dumps to compute diffs. Run update_repec.R twice.")
+}
+
+
+stamps <- sub("^articles_(.*)\\.parquet$", "\\1", pqt_files)
+stamps <- sort(stamps)
+base_stamp <- stamps[length(stamps) - 1]
+update_stamp <- stamps[length(stamps)]
+
+info("\nComparing:")
+info("  Base:   ", base_stamp)
+info("  Update: ", update_stamp)
+
+
+info("\n[2] Computing diffs...")
+diff_files <- compute_parquet_diffs(
+  base_stamp = base_stamp,
+  update_stamp = update_stamp,
+  pqt_folder = config$pqt_folder,
+  pqt_diff_folder = config$pqt_diff_folder
+)
+
+info("\n[3] Diff files created:")
+for (tbl in names(diff_files)) {
+  info("  ", tbl, ": ", diff_files[[tbl]])
+}

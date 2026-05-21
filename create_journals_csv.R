@@ -73,7 +73,7 @@ journals <- tribble(
   "eee",  "corfin", "Journal of Corporate Finance", "Top Field Journals (A)", 17496,  
   "pal",  "imfecr", "IMF Economic Review", "Top Field Journals (A)", 19900192439,  
   "wly",  "ajagec", "American Journal of Agricultural Economics", "Top Field Journals (A)", 69623,  
-  "aen",  "journl", "The Energy Journal", "Top Field Journals (A)", NA,  
+  #"aen",  "journl", "The Energy Journal", "Top Field Journals (A)", NA,  
   "oup",  "rcorpf", "Review of Corporate Finance Studies", "Top Field Journals (A)", 21100926579,  
   "taf",  "jnlasa", "Journal of the American Statistical Association", "Top Field Journals (A)", 12094,  
   "bla",  "jscmgt", "Journal of Supply Chain Management", "Top Field Journals (A)", 100147317,  
