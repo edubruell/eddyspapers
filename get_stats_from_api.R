@@ -193,11 +193,13 @@ get_day_tibble_from_api <- function(day = lubridate::today()){
                   day = day)
 }
 
-get_stats_from_api(45)
+get_stats_from_api(140)
 get_stats_from_api(30)
+get_stats_from_api(7)
+get_stats_from_api(1)
 
+day <- "2026-05-07"
 day <- today()
-
 day_query <- day |>
   get_day_tibble_from_api() 
 
@@ -224,7 +226,8 @@ day_tibble |>
 
 #What are the top papers recovered in the search, today?
 day_query |>
-  count(top3_handles,sort = TRUE)
+  count(top3_handles,sort = TRUE) |>
+  print(n=Inf)
 
 
 

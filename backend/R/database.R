@@ -171,11 +171,13 @@ load_cleaned_collection <- function(rds_folder = NULL,
 #' @return NULL invisibly
 process_embedding_batch <- function(batch, con, num_batches, 
                                    model = "mxbai-embed-large") {
+  #browser()
   current_batch <- unique(batch$batch)
   info("Processing batch ", current_batch, " of ", num_batches)
   
   emb_result <- batch$abstract |>
-    tidyllm::ollama_embedding(.model = model)
+    #stringr::str_sub(1,2000) |>
+    tidyllm::ollama_embedding(.model = model,.truncate = TRUE)
   
   batch_with_embeddings <- batch |>
     dplyr::bind_cols(emb_result |> dplyr::select(-input))
