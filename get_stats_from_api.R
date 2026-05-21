@@ -193,15 +193,27 @@ get_day_tibble_from_api <- function(day = lubridate::today()){
                   day = day)
 }
 
-get_stats_from_api(140)
-get_stats_from_api(30)
+
+search_run <- map_dfr(c(7,30,60,90,100,120,140,160),~{get_stats_from_api(.x) |> 
+  as_tibble() |>
+  select(-filter_usage) |>
+  unnest(cols = c(days, total_searches, avg_results, avg_response_ms))})
+
+search_run |>
+  mutate(searches_per_day = total_searches/days)
+
 get_stats_from_api(7)
 get_stats_from_api(1)
 
-day <- "2026-05-07"
+day <- "2026-05-20"
 day <- today()
+
 day_query <- day |>
   get_day_tibble_from_api() 
+
+day_query  |>
+  distinct(timestamp,ip) |>
+  print(n=Inf)
 
 day_tibble <- day_query |>
   distinct(day,timestamp, ip) |>
@@ -224,12 +236,11 @@ day_tibble |>
   print(n=Inf)
 
 
-#What are the top papers recovered in the search, today?
-day_query |>
-  count(top3_handles,sort = TRUE) |>
+day_query  |>
+  distinct(timestamp,ip) |>
+  left_join(enrichment_data |>
+              select(ip,netname,org_name,country), by="ip") |>
   print(n=Inf)
-
-
 
 
 enrichment_data |>
@@ -238,6 +249,9 @@ enrichment_data |>
 
 
 
+#What are the top papers recovered in the search, today?
+day_query |>
+  count(top3_handles,sort = TRUE)
 
 handles <- get_day_tibble_from_api("2026-01-20") |>
   dplyr::count(top3_handles) |>
@@ -270,5 +284,12 @@ get_day_tibble_from_api("2026-01-19") |>
 
 
 
+search_trend <- 1:30 |> map(~{get_stats_from_api(.x)$total_searches})
+
+tibble(day = 30:1, 
+       total_searches = search_trend |> 
+  unlist() |> rev()) |>
+  mutate(diff = total_searches - lead(total_searches)) |>
+  print(n=Inf)
 
 
