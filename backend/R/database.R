@@ -160,28 +160,98 @@ load_cleaned_collection <- function(rds_folder = NULL,
 }
 
 
+#' Safely embed a single abstract with progressive truncation
+#'
+#' Some Ollama embedding models (e.g. mxbai-embed-large) ignore the API
+#' \code{.truncate} flag and error out when an input exceeds the model's
+#' context length. This tries the full text first and, on error, retries
+#' with successively shorter character truncations. Returns NULL if every
+#' attempt fails (e.g. dense non-latin scripts that exhaust context even
+#' when short), signalling that the article should be skipped.
+#'
+#' @param text Single abstract string
+#' @param model Ollama embedding model name
+#' @param max_chars Decreasing vector of character limits to attempt
+#' @return Numeric embedding vector, or NULL if all attempts fail
+embed_one_safe <- function(text, model,
+                           max_chars = c(1000000L, 2000L, 800L, 300L)) {
+  purrr::reduce(
+    max_chars,
+    function(acc, mc) {
+      if (!is.null(acc)) return(acc)
+      tryCatch(
+        tidyllm::ollama_embedding(
+          stringr::str_sub(text, 1, mc),
+          .model = model,
+          .truncate = TRUE
+        )$embeddings[[1]],
+        error = function(e) NULL
+      )
+    },
+    .init = NULL
+  )
+}
+
+#' Embed a batch of abstracts with graceful degradation
+#'
+#' Fast path embeds the whole batch in a single call. If that fails because
+#' one or more abstracts exceed the context length, it falls back to
+#' embedding article-by-article with progressive truncation, skipping any
+#' that cannot be embedded at all.
+#'
+#' @param texts Character vector of abstracts
+#' @param model Ollama embedding model name
+#' @return List of embedding vectors aligned to \code{texts}; failed
+#'   articles are NULL entries
+embed_batch_safe <- function(texts, model = "mxbai-embed-large") {
+  batch_emb <- tryCatch(
+    tidyllm::ollama_embedding(texts, .model = model, .truncate = TRUE)$embeddings,
+    error = function(e) NULL
+  )
+
+  if (!is.null(batch_emb)) {
+    return(batch_emb)
+  }
+
+  warn("Batch embedding failed (context length); retrying article-by-article")
+  purrr::map(texts, ~embed_one_safe(.x, model))
+}
+
 #' Process and insert a batch of embeddings
 #'
 #' Generates embeddings for a batch of papers and inserts them into the database.
+#' Articles whose abstracts cannot be embedded (context length exceeded even
+#' after truncation) are skipped and logged rather than failing the whole run.
 #'
 #' @param batch Data frame batch with paper data
 #' @param con DuckDB connection
 #' @param num_batches Total number of batches (for progress reporting)
 #' @param model Ollama embedding model name
 #' @return NULL invisibly
-process_embedding_batch <- function(batch, con, num_batches, 
+process_embedding_batch <- function(batch, con, num_batches,
                                    model = "mxbai-embed-large") {
   #browser()
   current_batch <- unique(batch$batch)
   info("Processing batch ", current_batch, " of ", num_batches)
-  
-  emb_result <- batch$abstract |>
-    #stringr::str_sub(1,2000) |>
-    tidyllm::ollama_embedding(.model = model,.truncate = TRUE)
-  
-  batch_with_embeddings <- batch |>
-    dplyr::bind_cols(emb_result |> dplyr::select(-input))
-  
+
+  emb_list <- embed_batch_safe(batch$abstract, model)
+
+  keep <- !purrr::map_lgl(emb_list, is.null)
+
+  if (!all(keep)) {
+    warn("Batch ", current_batch, ": skipped ", sum(!keep),
+         " article(s) exceeding context length: ",
+         paste(batch$Handle[!keep], collapse = ", "))
+  }
+
+  if (!any(keep)) {
+    warn("Batch ", current_batch, ": no embeddable articles, skipping batch")
+    return(invisible(NULL))
+  }
+
+  batch_with_embeddings <- batch[keep, ] |>
+    dplyr::mutate(embeddings = emb_list[keep])
+
   batch_with_embeddings |>
     dplyr::copy_to(
       con,
