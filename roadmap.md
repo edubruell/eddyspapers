@@ -3,7 +3,7 @@
 **Priority order (as of 2026-05-21):**
 1. **Agentic search** at `agenticsearch.eduard-bruell.de` — design complete, build next. The cooler idea and clear next thing to ship. Full design in `agentic/` (start at `agentic/00_overview.md`; 12-phase plan in `agentic/05_roadmap.md`).
 2. Bibliographic coupling (v0.4.1) — small follow-through on the MCP/citation work; can land alongside or after agentic.
-3. **People search** using the `pers` data — interesting and worth doing, but **not a current priority**. Sequenced as the author-database track below (v0.5.x → v0.6.0). The Diogenes-meerkat at `econpeople.eduard-bruell.de` stays the destination once we get there.
+3. **People search** using the `pers` data — interesting and worth doing, but **not a current priority**. Sequenced as the author-database track below (v0.5.x → v0.6.0). The Diogenes-meerkat at `econpeople.eduard-bruell.de` stays the destination once we get there. **Design drafted in `econpeople/`** (start at `econpeople/00_overview.md`; data model in `01_data_model.md`, API in `02_api.md`). Phase A = ingest all registered `pers` + topic→author overlap search + profile/full-publication API (no MCP, frontend deferred); Phase B enrichment later.
 4. Long-tail items (topic clustering, full-text, author graphs) — unchanged, post-people-search.
 
 ---
