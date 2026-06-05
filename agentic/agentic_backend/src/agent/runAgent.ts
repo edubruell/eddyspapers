@@ -69,6 +69,9 @@ export async function runAgent(
       return;
     }
 
+    // The user-facing signal is the plain-language strategy, not the R script.
+    // The script event is still emitted (debug / fixtures) but the frontend does not render it.
+    emit({ type: "strategy", strategy: writeResult.strategy });
     emit({ type: "script", delta: writeResult.script });
     stageExit("write", tStage);
 

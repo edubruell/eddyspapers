@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+:root {
+  /* Inherited from the semantic-search app so the two feel like siblings.
+     The only deliberate shift is --primary (indigo-leaning navy) so the
+     two tabs are distinguishable side-by-side (03_interface.md §2). */
+  --bg-page: #eee7da;
+  --bg-card: #faf7f0;
+  --bg-card-2: #f4efe5;
+  --border-soft: #e2dacb;
+  --text-strong: #1f2937;
+  --text-muted: #6b7280;
+  --primary: #2d3fa0;
+  --primary-hover: #233291;
+  --accent-orange: #d4602a;
+  --accent-sky: #5fa8c9;
+  --sim-hi: #2f9e5c;
+  --sim-lo: #c0463a;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-strong);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Spinner used by the active stepper dot. */
+@keyframes agentic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.agentic-spin {
+  animation: agentic-spin 0.9s linear infinite;
+}
+
+/* Markdown synthesis prose tweaks. */
+.synthesis a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.synthesis a:hover {
+  text-decoration: underline;
+}
+.synthesis h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 1rem 0 0.4rem;
+}
+.synthesis h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0.8rem 0 0.3rem;
+}
+.synthesis p {
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+.synthesis code {
+  background: var(--bg-card-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 0.85em;
+}
+.synthesis ul {
+  list-style: disc;
+  margin: 0.5rem 0 0.5rem 1.2rem;
+}

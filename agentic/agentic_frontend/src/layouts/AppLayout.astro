@@ -1,0 +1,25 @@
+---
+import "../styles/global.css";
+const { title = "Eddy's Papers — Agentic Search" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      rel="preconnect"
+      href="https://rsms.me/"
+    />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <main class="min-h-screen px-3 py-4 md:px-6 md:py-6">
+      <slot />
+    </main>
+  </body>
+</html>

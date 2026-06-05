@@ -1,5 +1,7 @@
 paper_url <- function(handle, url = NULL) {
-  if (!is.null(url) && nchar(url) > 0) return(url)
+  # url may arrive as NA (DB null read into R) — guard before nchar() so a null
+  # URL on any single paper doesn't abort the whole script.
+  if (!is.null(url) && length(url) == 1 && !is.na(url) && nzchar(url)) return(url)
   path <- sub("^repec:", "", handle)
   path <- gsub(":", "/", path)
   paste0("https://ideas.repec.org/", path)

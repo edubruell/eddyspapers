@@ -1,0 +1,69 @@
+$ tsx --env-file=.env scripts/benchmark.ts --models=qwen/qwen3.6-35b-a3b,anthropic/claude-haiku-4-5 --briefs=b06,b07,b08,b09,b10
+[1m
+═══ PHASE-5 MINI BENCHMARK ═══
+[0m
+Models:  qwen3.6-35b-a3b, claude-haiku-4-5
+Briefs:  b06, b07, b08, b09, b10
+Sandbox: [32menabled[0m
+DB:      /Users/ebr/eddyspapers/db/articles.duckdb
+
+[1m
+── b06 (journal_prestige) ─────────────────────────────[0m
+[2m   "which labour economics papers were published in the top five general-interest ec…"[0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6283 prompt | 1354 completion
+[32m✓ attempt 1[0m 68p[2m 28719ms $0.00230[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7261 prompt | 948 completion
+[32m✓ attempt 1[0m 41p[2m 8502ms $0.01200[0m
+[1m
+── b07 (citation_seek) ─────────────────────────────[0m
+[2m   "most cited papers on the employment effects of minimum wage increases — I want t…"[0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6260 prompt | 1495 completion
+[32m✓ attempt 1[0m 47p[2m 38710ms $0.00243[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7236 prompt | 1558 completion
+[32m✓ attempt 1[0m 41p[2m 12710ms $0.01503[0m
+[1m
+── b08 (cross_discipline) ─────────────────────────────[0m
+[2m   "behavioral economics papers on retirement savings and pension decisions — nudges…"[0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6251 prompt | 1667 completion
+[32m✓ attempt 1[0m 63p[2m 59597ms $0.00260[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7227 prompt | 1101 completion
+[32m✓ attempt 1[0m 53p[2m 10590ms $0.01273[0m
+[1m
+── b09 (country_specific) ─────────────────────────────[0m
+[2m   "papers studying the employment effects of the German minimum wage introduction i…"[0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6261 prompt | 1861 completion
+[32m✓ attempt 1[0m 39p[2m 70531ms $0.00280[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7235 prompt | 1047 completion
+[32m✓ attempt 1[0m 33p[2m 9998ms $0.01247[0m
+[1m
+── b10 (methodological) ─────────────────────────────[0m
+[2m   "papers applying regression discontinuity design to labour market questions — not…"[0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6257 prompt | 1909 completion
+[32m✓ attempt 1[0m 53p[2m 73480ms $0.00285[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7238 prompt | 1287 completion
+[32m✓ attempt 1[0m 89p[2m 11540ms $0.01367[0m
+[1m
+══════════════════════════ SUMMARY ══════════════════════════
+[0m
+[1mqwen3.6-35b-a3b[0m
+  Valid: [32m5/5[0m  (first-attempt: 5)  Avg papers: 54.0  Total cost: $0.0130
+  [32m✓[0m b06 (journal_prestige) — 68p 5s  [2m28719ms write + 2869ms exec[0m  $0.00230
+  [32m✓[0m b07 (citation_seek) — 47p 7s  [2m38710ms write + 5199ms exec[0m  $0.00243
+  [32m✓[0m b08 (cross_discipline) — 63p 5s  [2m59597ms write + 5743ms exec[0m  $0.00260
+  [32m✓[0m b09 (country_specific) — 39p 6s  [2m70531ms write + 3733ms exec[0m  $0.00280
+  [32m✓[0m b10 (methodological) — 53p 5s  [2m73480ms write + 6560ms exec[0m  $0.00285
+
+[1mclaude-haiku-4-5[0m
+  Valid: [32m5/5[0m  (first-attempt: 5)  Avg papers: 51.4  Total cost: $0.0659
+  [32m✓[0m b06 (journal_prestige) — 41p 4s  [2m8502ms write + 2306ms exec[0m  $0.01200
+  [32m✓[0m b07 (citation_seek) — 41p 6s  [2m12710ms write + 4509ms exec[0m  $0.01503
+  [32m✓[0m b08 (cross_discipline) — 53p 5s  [2m10590ms write + 4587ms exec[0m  $0.01273
+  [32m✓[0m b09 (country_specific) — 33p 5s  [2m9998ms write + 4629ms exec[0m  $0.01247
+  [32m✓[0m b10 (methodological) — 89p 6s  [2m11540ms write + 5134ms exec[0m  $0.01367
+
+[1mCost table ($/run median brief ~7k tokens):[0m
+  qwen3.6-35b-a3b                          avg/run=$0.00260  [2min=$0.15/M out=$1/M[0m
+  claude-haiku-4-5                         avg/run=$0.01318  [2min=$1/M out=$5/M[0m
+[2m
+Full results: /Users/ebr/git_projects/eddyspapers/agentic/agentic_backend/tests/benchmarks/results/2026-05-21.jsonl[0m
+[2mRuns: 10/10[0m

@@ -1,0 +1,714 @@
+{"type":"stage","stage":"clarify","state":"enter","seq":0}
+{"type":"stage","stage":"clarify","state":"exit","ms":3267,"seq":1}
+{"type":"stage","stage":"write","state":"enter","seq":2}
+{"type":"strategy","strategy":"I will sweep for papers on minimum wage effects on youth employment using three approaches: a keyword search over Top 5 and Top Field Journals, two semantic searches with varied mock abstracts (one emphasizing developing-country labor market mechanisms and youth-specific outcomes, another emphasizing quasi-experimental identification in low-income settings), and a scan of recent working papers. Results will be deduplicated and BibTeX-exported.","seq":3}
+{"type":"script","delta":"emit_note(\"Strategy: keyword sweep over Top 5 and Top Field Journals, two semantic sections with varied mock abstracts (developing-country mechanisms vs. identification strategies), and recent working paper scan.\")\n\nall_handles <- character(0)\n\n# --- Section 1: keyword sweep over Top 5 and Top Field Journals ---\nkw <- sql_query(\n  \"SELECT Handle, title, year, authors, journal, category, url, bib_tex, abstract\n   FROM articles\n   WHERE category IN ('Top 5 Journals', 'Top Field Journals (A)')\n     AND (LOWER(title) LIKE '%minimum wage%' OR LOWER(title) LIKE '%wage floor%')\n     AND (LOWER(title) LIKE '%youth%' OR LOWER(title) LIKE '%young worker%' OR LOWER(title) LIKE '%adolescent%')\n   ORDER BY year DESC LIMIT 80\"\n)\nemit_section(\"Top-journal keyword hits: minimum wage and youth employment\", kw, n = 25)\nall_handles <- unique(c(all_handles, kw$Handle))\n\n# --- Section 2: semantic — youth employment in developing countries (mechanism framing) ---\nsem1 <- semantic_search(\n  \"This paper studies the employment effects of minimum wage reforms on youth workers in\n   low-income labor markets. Using linked administrative data from a developing country,\n   we find that statutory wage floors reduce youth employment through reduced hiring and\n   hours cuts, with larger effects in informal sectors where enforcement is weak.\n   The results are consistent with monopsony models with search frictions.\",\n  max_k = 25,\n  journal_filter = c(\"Top 5 Journals\", \"Top Field Journals (A)\"),\n  min_year = 2000L\n)\nemit_section(\"Semantic: minimum wage and youth employment in developing countries\", sem1, n = 20)\nall_handles <- unique(c(all_handles, sem1$Handle))\n\n# --- Section 3: semantic — quasi-experimental identification in youth labor markets ---\nsem2 <- semantic_search(\n  \"Using a staggered difference-in-differences design and regression discontinuity around\n   the minimum wage threshold, this paper estimates causal effects on youth employment.\n   We exploit cross-regional variation in wage bite and find that youth workers in\n   low-wage sectors experience significant employment losses, with offsetting gains\n   in older workers through substitution effects.\",\n  max_k = 25,\n  journal_filter = c(\"Top 5 Journals\", \"Top Field Journals (A)\"),\n  min_year = 2005L\n)\nemit_section(\"Semantic: quasi-experimental designs for youth labor markets\", sem2, n = 20)\nall_handles <- unique(c(all_handles, sem2$Handle))\n\n# --- Section 4: recent working papers ---\nwps <- semantic_search(\n  \"This working paper estimates the impact of minimum wage increases on youth employment\n   in low-income labor markets using administrative linked employer-employee data.\n   We exploit staggered policy variation across regions and find that youth employment\n   declines through reduced entry hiring and hours reductions, with heterogeneous effects\n   across informal and formal sectors.\",\n  max_k = 15,\n  journal_filter = c(\"Working Paper Series\"),\n  min_year = 2019L\n)\nemit_section(\"Recent working papers on minimum wage and youth employment (2019+)\", wps, n = 12)\nall_handles <- unique(c(all_handles, wps$Handle))\n\nemit_bibtex(all_handles)","seq":4}
+{"type":"stage","stage":"write","state":"exit","ms":8594,"seq":5}
+{"type":"stage","stage":"validate","state":"enter","seq":6}
+{"type":"validate","ok":true,"seq":7}
+{"type":"stage","stage":"validate","state":"exit","ms":0,"seq":8}
+{"type":"stage","stage":"execute","state":"enter","seq":9}
+{}
+{"type":"progress","label":"Strategy: keyword sweep over Top 5 and Top Field Journals, two semantic sections with varied mock abstracts (developing-country mechanisms vs. identification strategies), and recent working paper scan.","seq":10}
+{"type":"section","section":{"id":"section-1","title":"Top-journal keyword hits: minimum wage and youth employment","mode":"custom","n_total":2,"n_shown":2,"rows":[{"handle":"RePEc:uwp:jhriss:v:38:y:2003:i:3:p647-672","rank":1},{"handle":"RePEc:uwp:jhriss:v:31:y:1996:i:2:p:404-428","rank":2}]},"seq":11}
+{"type":"paper","paper":{"handle":"RePEc:red:issued:20-43","title":"Does Public Sector Employment Buffer the Minimum Wage Effects?","authors":["Lucas Navarro; Mauricio Tejada"],"year":2022,"journal":"Review of Economic Dynamics","category":"Top Field Journals (A)","url":"https://dx.doi.org/10.1016/j.red.2021.02.004","abstract":"This paper studies the impact of a minimum wage policy in a labor market with a private and a public sector. We develop a two-sector search and matching model with minimum wage and heterogeneous workers in their human capital. We structurally estimate the model using data for Chile, a country with a large fraction of employment in the public sector and a binding minimum wage. Counterfactual analysis shows that institutional features of public sector employment reduce labor market frictions and mitigate the negative effect of the minimum wage on unemployment and welfare. (Copyright: Elsevier)","bibtex":""},"seq":12}
+{"type":"paper","paper":{"handle":"RePEc:eee:pubeco:v:206:y:2022:i:c:s0047272721002188","title":"When the minimum wage really bites hard: The negative spillover effect on high-skilled workers","authors":["Gregory","Terry; Zierahn","Ulrich"],"year":2022,"journal":"Journal of Public Economics","category":"Top Field Journals (A)","url":"http://www.sciencedirect.com/science/article/pii/S0047272721002188","abstract":"Minimum wage levels are rising around the globe. To shed more light on the possible unintended side effects of higher wage floors, we study the impact of a minimum wage introduction on wages and employment in a quasi-experimental setting where the minimum wage is set extraordinarily high during an economic downturn. We identify treatment effects along different wage and skill groups and find positive wage and employment spillover effects for medium-skilled workers with salaries just above the minimum wage. More striking, we find negative wage and employment effects for high-skilled workers who are further up the wage distribution, followed by reduced returns to skills and industry skill supply. We explain these adjustments with a substitution-scale model that predicts negative spillover effects whenever labor-labor substitutions toward high-skilled workers are overcompensated by an overall decline in industry employment. Even though we focus on a specialized industry, we lay out the general conditions under which such unfavorable adjustments may occur in other contexts.","bibtex":""},"seq":13}
+{"type":"paper","paper":{"handle":"RePEc:ucp:jlabec:doi:10.1086/711355","title":"State Minimum Wages, Employment, and Wage Spillovers: Evidence from Administrative Payroll Data","authors":["Radhakrishnan Gopalan; Barton H. Hamilton; Ankit Kalda; David Sovich"],"year":2021,"journal":"Journal of Labor Economics (JOLE)","category":"Top Field Journals (A)","url":"http://dx.doi.org/10.1086/711355","abstract":"We use administrative payroll data to estimate the effect of the minimum wage on employment and wages. We find that both effects are nuanced. While the overall number of low-wage workers in firms declines, incumbent workers are no less likely to remain employed. We find that firms reduce employment primarily through hiring, and there is significant heterogeneity across the nontradable and tradable sectors. For wages, we find modest spillovers extending up to $2.50 above the minimum wage. Spillovers accrue to both incumbent workers and new hires, but only within firms that employ a significant fraction of low-wage workers.","bibtex":""},"seq":14}
+{"type":"paper","paper":{"handle":"RePEc:oup:restud:v:91:y:2024:i:4:p:1843-1883.","title":"Minimum Wage Employment Effects and Labour Market Concentration","authors":["José Azar; Emiliano Huet; Ioana Marinescu; Bledi Taska; Till von"],"year":2024,"journal":"Review of Economic Studies","category":"Top 5 Journals","url":"http://hdl.handle.net/10.1093/restud/rdad091","abstract":"This paper shows that more highly concentrated labour markets experience more positive employment effects of the minimum wage. In the most concentrated labour markets, employment rises following a minimum wage increase. The paper establishes its main findings by studying the effects of local minimum wage increases on a key low-wage retail sector, and using data on labour market concentration that covers the entirety of the U.S. with fine spatial variation at the occupation level. The results carry over to the fast-food sector and the entire low-wage labour market and are robust to using proxies of labour market concentration available for a broader range of industries, such as the number of establishments and population density. A model of oligopsonistic competition can explain these effects: there is more room to increase wages in high-concentration areas where wages tend to be further below marginal productivity. These findings provide evidence supporting monopsonistic wage setting as an explanation for the near-zero minimum wage employment effect documented in prior work.","bibtex":""},"seq":15}
+{"type":"paper","paper":{"handle":"RePEc:uwp:jhriss:v:51:y:2016:i:2:p:500-522","title":"Effects of the Minimum Wage on Employment Dynamics","authors":["Jonathan Meer; Jeremy West"],"year":2016,"journal":"Journal of Human Resources","category":"Top Field Journals (A)","url":"http://jhr.uwpress.org/cgi/reprint/51/2/500","abstract":"The voluminous literature on minimum wages offers little consensus on the extent to which a wage floor impacts employment. We argue that the minimum wage will impact employment over time through changes in growth rather than an immediate drop in relative employment levels. We show that commonly used specifications in this literature, especially those that include state-specific time trends, will not accurately capture these effects. Using three separate state panels of administrative employment data, we find that the minimum wage reduces job growth over a period of several years. This finding is supported using several empirical specifications.","bibtex":""},"seq":16}
+{"type":"paper","paper":{"handle":"RePEc:ucp:jlabec:doi:10.1086/666921","title":"Minimum Wage Effects on Employment, Substitution, and the Teenage Labor Supply: Evidence from Personnel Data","authors":["Laura Giuliano"],"year":2013,"journal":"Journal of Labor Economics (JOLE)","category":"Top Field Journals (A)","url":"http://dx.doi.org/10.1086/666921","abstract":"Using personnel data from a large US retail firm, I examine the firm's response to the 1996 federal minimum wage increase. Compulsory increases in average wages had negative but statistically insignificant effects on overall employment. However, increases in the relative wages of teenagers led to significant increases in the relative employment of teenagers, especially younger and more affluent teenagers. Further analysis suggests a pattern consistent with noncompetitive models. Where the legislation affected mainly the wages of teenagers and so was only moderately binding, it led both to higher teenage labor market participation and to higher absolute employment of teenagers.","bibtex":""},"seq":17}
+{"type":"paper","paper":{"handle":"RePEc:uwp:jhriss:v:39:y:2004:i:2:p425-450","title":"Minimum Wage Effects throughout the Wage Distribution","authors":["David Neumark; DMark Schweitzer; DaWilliam Wascher"],"year":2004,"journal":"Journal of Human Resources","category":"Top Field Journals (A)","url":"http://jhr.uwpress.org/cgi/reprint/XXXIX/2/425","abstract":"This paper provides evidence on a wide set of margins along which labor markets can adjust in response to increases in the minimum wage, including wages, hours, employment, and ultimately labor income. Not surprisingly, the evidence indicates that low-wage workers are most strongly affected, while higher-wage workers are little affected. Workers who initially earn near the minimum wage experience wage gains. Nevertheless, their hours and employment decline, and the combined effect of these changes on earned income suggests adverse consequences, on net, for low-wage workers.","bibtex":""},"seq":18}
+{"type":"paper","paper":{"handle":"RePEc:uwp:jhriss:v:61:y:2026:i:1:p:211-239","title":"Minimum Wage, Employment, and Margins of Adjustment: Evidence from Employer–Employee Matched Panel Data","authors":["Jungmin Lee; Geumbi Park"],"year":2026,"journal":"Journal of Human Resources","category":"Top Field Journals (A)","url":"http://jhr.uwpress.org/cgi/reprint/61/1/211","abstract":"We decompose the employment effect of the minimum wage into changes in employment within continued establishments and changes due to the exits of establishments. For small-sized establishments, we distinguish between other labor adjustment margins, such as hours worked, hiring, and separation at the individual level. Using employer–employee matched panel data, we show that the magnitude and channels of the employment effect differ by establishment size and industry. We find a negative effect of the minimum wage on employment growth, which is highly concentrated among small establishments. In particular, in the food and lodging and manufacturing industries, a substantial part of the effect is driven by business closing.","bibtex":""},"seq":19}
+{"type":"paper","paper":{"handle":"RePEc:ucp:jlabec:v:18:y:2000:i:4:p:653-80","title":"A Reassessment of the New Economics of the Minimum Wage Literature with Monthly Data from the Current Population Survey.","authors":["Burkhauser","Richard V; Couch","Kenneth A; Wittenburg","David C"],"year":2000,"journal":"Journal of Labor Economics (JOLE)","category":"Top Field Journals (A)","url":"http://dx.doi.org/10.1086/209972","abstract":"We estimate the employment effects of federal minimum wage increases using monthly Current Population Survey (CPS) data from 1979 through 1997. We find that the empirical differences in the new minimum wage literature based on CPS data primarily can be traced to alternative methods of controlling for macroeconomic conditions. We argue that the macroeconomic controls commonly included in models where no employment impact is found are inappropriate. We consistently find a significant but modest negative relationship between minimum wage increases and teenage employment using alternative controls or allowing employer responses to the policy to occur with some delay. Copyright 2000 by University of Chicago Press.","bibtex":""},"seq":20}
+{"type":"paper","paper":{"handle":"RePEc:taf:jnlbes:v:29:y:2011:i:1:p:12-23","title":"The Distributional Impacts of Minimum Wage Increases When Both Labor Supply and Labor Demand Are Endogenous","authors":["Tom Ahn; Peter Arcidiacono; Walter Wessels"],"year":2011,"journal":"Journal of Business and Economic Statistics","category":"Top Field Journals (A)","url":"http://hdl.handle.net/10.1198/jbes.2010.07076","abstract":"We develop and estimate a one-shot search model with endogenous firm entry, and therefore zero expected profits, and endogenous labor supply. Positive employment effects from a minimum wage increase can result as the employment level depends upon both the numbers of searching firms and workers. Welfare implications are similar to the classical analysis: workers who most want the minimum wage jobs are hurt by the minimum wage hike with workers marginally interested in minimum wage jobs benefiting. We estimate the model using CPS data on teenagers and show that small changes in the employment level are masking large changes in labor supply and demand. Teenagers from well-educated families see increases in their employment probabilities and push out their less-privileged counterparts from the labor market. This article has supplementary material online.","bibtex":""},"seq":21}
+{"type":"paper","paper":{"handle":"RePEc:uwp:jhriss:v:37:y:2002:i:1:p:35-62","title":"State-Level Estimates of Minimum Wage Effects: New Evidence and Interpretations from Disequilibrium Methods","authors":["David Neumark; William Wascher"],"year":2002,"journal":"Journal of Human Resources","category":"Top Field Journals (A)","url":"http://www.jstor.org/stable/pdfplus/3069603","abstract":"Research using state-level data to estimate minimum wage effects on employment follows the textbook treatment of minimum wages, assuming that minimum wages are binding and that labor markets are competitive. We present an alternative method of estimating minimum wage effects using similar data that relaxes these assumptions, using a disequilibrium approach. Applying this approach to the data and sample period used in many earlier state-level studies suggests that simple state-level reduced-form estimates of minimum wage effects on employment depend on the sample used, and may badly understate the disemployment effects of a binding minimum wage.","bibtex":""},"seq":22}
+{"type":"paper","paper":{"handle":"RePEc:eee:juecon:v:80:y:2014:i:c:p:1-12","title":"Recent immigrants as labor market arbitrageurs: Evidence from the minimum wage","authors":["Cadena","Brian C."],"year":2014,"journal":"Journal of Urban Economics","category":"Top Field Journals (A)","url":"http://www.sciencedirect.com/science/article/pii/S0094119013000806","abstract":"This paper investigates the local labor supply effects of changes to the minimum wage by examining the response of low-skilled immigrants’ location decisions. Canonical models emphasize the importance of labor mobility when evaluating the employment effects of the minimum wage; yet few studies address this outcome directly. Low-skilled immigrant populations shift toward labor markets with stagnant minimum wages, and this result is robust to a number of alternative interpretations. This mobility provides behavior-based evidence in favor of a non-trivial negative employment effect of the minimum wage. Further, it reduces the estimated demand elasticity using teens; employment losses among native teens are substantially larger in states that have historically attracted few immigrant residents.","bibtex":""},"seq":23}
+{"type":"paper","paper":{"handle":"RePEc:aea:aecrev:v:112:y:2022:i:12:p:3803-47","title":"Earnings Inequality and the Minimum Wage: Evidence from Brazil","authors":["Niklas Engbom; Christian Moser"],"year":2022,"journal":"American Economic Review","category":"Top 5 Journals","url":"https://www.aeaweb.org/doi/10.1257/aer.20181506","abstract":"Increases in the minimum wage can substantially reduce earnings inequality. To demonstrate this, we combine administrative and survey data with an equilibrium model of the Brazilian labor market. We find that a 128 percent increase in the real minimum wage in Brazil between 1996 and 2018 had far-reaching spillover effects on wages higher up in the distribution. The increased minimum wage accounts for 45 percent of a large fall in earnings inequality over this period. At the same time, the effects of the minimum wage on employment and output are muted by reallocation of workers toward more productive firms.","bibtex":""},"seq":24}
+{"type":"paper","paper":{"handle":"RePEc:eee:pubeco:v:253:y:2026:i:c:s0047272725002397","title":"The devil is in the details: Heterogeneous effects of the German minimum wage on working hours and minijobs","authors":["Bossler","Mario; Liang","Ying; Schank","Thorsten"],"year":2026,"journal":"Journal of Public Economics","category":"Top Field Journals (A)","url":"http://www.sciencedirect.com/science/article/pii/S0047272725002397","abstract":"Germany introduced a national minimum wage in 2015. While prior studies find limited effects on overall employment, we go into detail and examine its impact on working hours and minijobs. The minimum wage significantly reduces inequality in hourly and monthly wages. While average working hours remain stable, minijobbers experience notable cuts in working hours, which can be explained by the institutional context shaping the effects of the minimum wage. Employment in regular jobs remains unaffected, but minijobs decline, driven by transitions into both regular jobs and non-employment. The latter implies an employment elasticity of −0.16 for minijob employment. Following the first major minimum wage increase in 2022, we reveal a reduction in working hours that is not limited to minijobs, corresponding to an employment volume elasticity of −0.38.","bibtex":""},"seq":25}
+{"type":"paper","paper":{"handle":"RePEc:oup:qjecon:v:134:y:2019:i:3:p:1405-1454.","title":"The Effect of Minimum Wages on Low-Wage Jobs","authors":["Doruk Cengiz; Arindrajit Dube; Attila Lindner; Ben Zipperer"],"year":2019,"journal":"Quarterly Journal of Economics","category":"Top 5 Journals","url":"http://hdl.handle.net/10.1093/qje/qjz014","abstract":"We estimate the effect of minimum wages on low-wage jobs using 138 prominent state-level minimum wage changes between 1979 and 2016 in the United States using a difference-in-differences approach. We first estimate the effect of the minimum wage increase on employment changes by wage bins throughout the hourly wage distribution. We then focus on the bottom part of the wage distribution and compare the number of excess jobs paying at or slightly above the new minimum wage to the missing jobs paying below it to infer the employment effect. We find that the overall number of low-wage jobs remained essentially unchanged over the five years following the increase. At the same time, the direct effect of the minimum wage on average earnings was amplified by modest wage spillovers at the bottom of the wage distribution. Our estimates by detailed demographic groups show that the lack of job loss is not explained by labor-labor substitution at the bottom of the wage distribution. We also find no evidence of disemployment when we consider higher levels of minimum wages. However, we do find some evidence of reduced employment in tradeable sectors. We also show how decomposing the overall employment effect by wage bins allows a transparent way of assessing the plausibility of estimates.","bibtex":""},"seq":26}
+{"type":"paper","paper":{"handle":"RePEc:eee:pubeco:v:190:y:2020:i:c:s004727272030092x","title":"Minimum wage policy with optimal taxes and unemployment","authors":["Lavecchia","Adam M."],"year":2020,"journal":"Journal of Public Economics","category":"Top Field Journals (A)","url":"http://www.sciencedirect.com/science/article/pii/S004727272030092X","abstract":"Using a search model, I derive a formula that links the welfare gains from the minimum wage to its effect on low-skilled labor force participation and employment. This formula shows that the minimum wage is welfare improving if pushing the low-skilled labor market tightness downwards brings it closer to its efficient level. I estimate the causal effect of the minimum wage on low-skilled labor force participation and employment using federal and state minimum wage variation. I discuss the policy implications of my estimates when viewed through the lens of the marginal welfare gain formula.","bibtex":""},"seq":27}
+{"type":"paper","paper":{"handle":"RePEc:ecm:emetrp:v:74:y:2006:i:4:p:1013-1062","title":"Minimum Wage Effects on Labor Market Outcomes under Search, Matching, and Endogenous Contact Rates","authors":["Christopher J. Flinn"],"year":2006,"journal":"Econometrica","category":"Top 5 Journals","url":"http://hdl.handle.net/10.1111/j.1468-0262.2006.00693.x","abstract":"Building upon a continuous-time model of search with Nash bargaining in a stationary environment, we analyze the effect of changes in minimum wages on labor market outcomes and welfare. Although minimum wage increases may or may not lead to increases in unemployment in our model, they can be welfare-improving to labor market participants on both the supply and demand sides of the labor market. We discuss identification of the model using Current Population Survey data on accepted wages and unemployment durations, and show that by incorporating a limited amount of information from the demand side of the market it is possible to obtain credible and precise estimates of all primitive parameters. We show that the optimal minimum wage in 1996 depends critically on whether or not contact rates can be considered to be exogenous and we note that the limited variation in minimum wages makes testing this assumption problematic. Copyright The Econometric Society 2006.","bibtex":""},"seq":28}
+{"type":"paper","paper":{"handle":"RePEc:ucp:jlabec:doi:10.1086/728471","title":"The Employment and Distributional Impacts of Nationwide Minimum Wage Changes","authors":["Giulia Giupponi; Robert Joyce; Attila Lindner; Tom Waters; Thomas Wernham; Xiaowei Xu"],"year":2024,"journal":"Journal of Labor Economics (JOLE)","category":"Top Field Journals (A)","url":"http://dx.doi.org/10.1086/728471","abstract":"We assess the impact of nationwide minimum wages on employment throughout the whole wage distribution by exploiting geographical variation in the level of wages. We find a substantial increase in wages at the bottom of the wage distribution, while we detect a small, statistically insignificant negative effect on employment. Combining the estimated change in the wage distribution with a tax and benefit microsimulation model, we show that the minimum wage generates considerable proportional income gains up to the middle of the household income distribution.","bibtex":""},"seq":29}
+{"type":"paper","paper":{"handle":"RePEc:oup:restud:v:88:y:2021:i:6:p:2970-3010.","title":"Workforce Composition, Productivity, and Labour Regulations in a Compensating Differentials Theory of Informality","authors":["Daniel Haanwinckel; Rodrigo R Soares"],"year":2021,"journal":"Review of Economic Studies","category":"Top 5 Journals","url":"http://hdl.handle.net/10.1093/restud/rdab017","abstract":"We develop a search model of informal labour markets with realistic labour regulations, including minimum wage, and heterogeneous workers and firms. Smaller firms and lower wages in the informal sector emerge endogenously as firms and workers decide whether to comply with regulations. Because skilled and unskilled workers are imperfect substitutes in production, the model uniquely captures the informality consequences of shocks that affect returns to skill, such as rising educational levels. The model also reproduces empirical patterns incompatible with other frameworks: the presence of skilled and unskilled workers in the formal and informal sectors, the rising share of skilled workers by firm size, and formal and firm-size wage premiums that vary by skill level. We estimate the model using 2003 data from Brazil and show that it successfully predicts labour market changes observed between 2003 and 2012. Under a range of different assumptions, changes in workforce composition appear as the main drivers of the reduction in informality over this period. Policy simulations using the estimated model suggest that progressive payroll taxes are a cost-effective way to reduce informality.","bibtex":""},"seq":30}
+{"type":"paper","paper":{"handle":"RePEc:aea:aecrev:v:115:y:2025:i:12:p:4137-82","title":"Supply, Demand, Institutions, and Firms: A Theory of Labor Market Sorting and the Wage Distribution","authors":["Daniel Haanwinckel"],"year":2025,"journal":"American Economic Review","category":"Top 5 Journals","url":"https://www.aeaweb.org/doi/10.1257/aer.20201293","abstract":"This paper examines how workforce composition, labor demand, and minimum wage jointly determine wages through their effects on worker-task assignments, firm wage premiums, and firm-worker sorting. Using an estimated model of monopsonistic local labor markets, it finds that minimum wage hikes and labor demand shocks drove the decline in Brazilian wage inequality from 1998 to 2012. While rising educational attainment compressed skill premiums within firms, it also reallocated skilled workers to high-wage firms, limiting that shock's effect on inequality. The analysis highlights interactions among exogenous factors, showing that concurrent supply and demand changes attenuated minimum wage impacts.","bibtex":""},"seq":31}
+{"type":"section","section":{"id":"section-2","title":"Semantic: minimum wage and youth employment in developing countries","mode":"custom","n_total":20,"n_shown":20,"rows":[{"handle":"RePEc:red:issued:20-43","rank":1,"similarity":0.1587},{"handle":"RePEc:eee:pubeco:v:206:y:2022:i:c:s0047272721002188","rank":2,"similarity":0.1663},{"handle":"RePEc:ucp:jlabec:doi:10.1086/711355","rank":3,"similarity":0.1693},{"handle":"RePEc:oup:restud:v:91:y:2024:i:4:p:1843-1883.","rank":4,"similarity":0.1729},{"handle":"RePEc:uwp:jhriss:v:51:y:2016:i:2:p:500-522","rank":5,"similarity":0.1764},{"handle":"RePEc:ucp:jlabec:doi:10.1086/666921","rank":6,"similarity":0.177},{"handle":"RePEc:uwp:jhriss:v:39:y:2004:i:2:p425-450","rank":7,"similarity":0.1817},{"handle":"RePEc:uwp:jhriss:v:61:y:2026:i:1:p:211-239","rank":8,"similarity":0.1822},{"handle":"RePEc:ucp:jlabec:v:18:y:2000:i:4:p:653-80","rank":9,"similarity":0.1826},{"handle":"RePEc:taf:jnlbes:v:29:y:2011:i:1:p:12-23","rank":10,"similarity":0.1828},{"handle":"RePEc:uwp:jhriss:v:37:y:2002:i:1:p:35-62","rank":11,"similarity":0.1859},{"handle":"RePEc:eee:juecon:v:80:y:2014:i:c:p:1-12","rank":12,"similarity":0.1906},{"handle":"RePEc:aea:aecrev:v:112:y:2022:i:12:p:3803-47","rank":13,"similarity":0.1907},{"handle":"RePEc:eee:pubeco:v:253:y:2026:i:c:s0047272725002397","rank":14,"similarity":0.191},{"handle":"RePEc:oup:qjecon:v:134:y:2019:i:3:p:1405-1454.","rank":15,"similarity":0.1927},{"handle":"RePEc:eee:pubeco:v:190:y:2020:i:c:s004727272030092x","rank":16,"similarity":0.196},{"handle":"RePEc:ecm:emetrp:v:74:y:2006:i:4:p:1013-1062","rank":17,"similarity":0.1976},{"handle":"RePEc:ucp:jlabec:doi:10.1086/728471","rank":18,"similarity":0.1978},{"handle":"RePEc:oup:restud:v:88:y:2021:i:6:p:2970-3010.","rank":19,"similarity":0.1981},{"handle":"RePEc:aea:aecrev:v:115:y:2025:i:12:p:4137-82","rank":20,"similarity":0.1984}]},"seq":32}
+{"type":"paper","paper":{"handle":"RePEc:eee:pubeco:v:234:y:2024:i:c:s0047272724000677","title":"Local minimum wage laws, boundary discontinuity methods, and policy spillovers","authors":["Jardim","Ekaterina; Long","Mark C.; Plotnick","Robert; Vigdor","Jacob; Wiles","Emma"],"year":2024,"journal":"Journal of Public Economics","category":"Top Field Journals (A)","url":"http://www.sciencedirect.com/science/article/pii/S0047272724000677","abstract":"We use geographically precise longitudinal employment data documenting worker job-to-job mobility to study policy spillovers in the context of three local minimum wage increases. Estimated spillover impacts on wages and hours are statistically significant, geographically diffuse, and sufficient to create concern regarding interpretation of results even using not-immediately-adjacent regions as controls. Spillover effects appear less concerning with smaller interventions or those adopted in smaller jurisdictions. The boundary discontinuity method of causal inference may yield misleading results if a policy’s impacts do not stop at the border of the implementing jurisdiction.","bibtex":""},"seq":33}
+{"type":"paper","paper":{"handle":"RePEc:eee:pubeco:v:170:y:2019:i:c:p:53-67","title":"The minimum wage and the Great Recession: Evidence of effects on the employment and income trajectories of low-skilled workers","authors":["Clemens","Jeffrey; Wither","Michael"],"year":2019,"journal":"Journal of Public Economics","category":"Top Field Journals (A)","url":"http://www.sciencedirect.com/science/article/pii/S0047272719300052","abstract":"We estimate the minimum wage's effects on low-skilled individuals' employment and income trajectories following the Great Recession. Our approach exploits two dimensions of the data we analyze. First, we compare individuals in states that were fully bound by the 2007 to 2009 increases in the federal minimum wage to individuals in states that were not. Second, we use variation in the minimum wage's bite across skill groups to separate our samples into “target” and “within-state control” groups. Using the 2008 panel of the Survey of Income and Program Participation, we find that binding minimum wage increases had significant, negative effects on the employment and income growth of targeted workers. Although there are important limitations to our research designs, our estimates are robust to adopting a range of alternative strategies to construct our analysis samples and to account for variation in the Great Recession's underlying severity across states. In aggregate, our estimates suggest that this period's minimum wage increases reduced aggregate employment rates by at least half of a percentage point in states that were bound by the federal minimum wage increases. Because our estimates are large relative to what one would infer from past research, we emphasize the relevance of the historical episode we analyze.","bibtex":""},"seq":34}
+{"type":"paper","paper":{"handle":"RePEc:uwp:jhriss:v:58:y:2023:i:1:p:335-362","title":"Heterogeneous Impact of the Minimum Wage: Implications for Changes in Between- and Within-Group Inequality","authors":["Tatsushi Oka; Ken Yamada"],"year":2023,"journal":"Journal of Human Resources","category":"Top Field Journals (A)","url":"http://jhr.uwpress.org/cgi/reprint/58/1/335","abstract":"In the United States, most of the workers who earn at or below the minimum wage are either less educated, young, orfemale. We examine the extent to which the minimum wage influences the wage differential among workers with different observed characteristics and the wage differential among workers with the same observed characteristics. Our results suggest that changes in the real value of the minimum wage account in part for the patterns of changes in education, experience, and gender wage differentials and for most of the changes in within-group wage differentials for workers with lower levels of experience.","bibtex":""},"seq":35}
+{"type":"paper","paper":{"handle":"RePEc:eee:pubeco:v:235:y:2024:i:c:s0047272724000732","title":"Long-term effects of hiring subsidies for low-educated unemployed youths","authors":["Albanese","Andrea; Cockx","Bart; Dejemeppe","Muriel"],"year":2024,"journal":"Journal of Public Economics","category":"Top Field Journals (A)","url":"http://www.sciencedirect.com/science/article/pii/S0047272724000732","abstract":"We use regression discontinuity design and difference-in-differences methods to estimate the impact of a one-time hiring subsidy for low-educated unemployed youths in Belgium during the recovery from the Great Recession. Within a year of unemployment, the subsidy increases job-finding in the private sector by 10 percentage points. Over six years, high school graduates secure 2.8 more quarters of private employment. However, they transition from public jobs and self-employment, resulting in no net increase in overall employment, albeit with better wages. High school dropouts experience no lasting benefits. Additionally, in tight labor markets near Luxembourg’s employment hub, the subsidy results in a complete deadweight loss.","bibtex":""},"seq":36}
+{"type":"paper","paper":{"handle":"RePEc:aea:aecrev:v:103:y:2013:i:3:p:418-22","title":"The Effects of Job Corps Training on Wages of Adolescents and Young Adults","authors":["German Blanco; Carlos A. Flores; Alfonso Flores-Lagunes"],"year":2013,"journal":"American Economic Review","category":"Top 5 Journals","url":"http://www.aeaweb.org/articles.php?doi=10.1257/aer.103.3.418","abstract":"Previous evaluations of Job Corps document disparate effects on the earnings of adolescents (aged 16-19) and young adults (aged 20-24). These are conjectured to be due to differential human capital accumulation within the program between these groups. If correct, the effect of the program on wages should be larger than that on earnings, since wages more accurately reflect human capital. We estimate bounds on average and quantile treatment effects of Job Corps on wages and find that the relative effects on both outcomes are similar, casting some doubt on the conjecture that human capital is driving the disparate effects.","bibtex":""},"seq":37}
+{"type":"paper","paper":{"handle":"RePEc:red:issued:13-225","title":"Are There Long-Run Effects of the Minimum Wage?","authors":["Isaac Sorkin"],"year":2015,"journal":"Review of Economic Dynamics","category":"Top Field Journals (A)","url":"http://dx.doi.org/10.1016/j.red.2014.05.003","abstract":"An empirical consensus suggests that there are small employment effects of minimum wage increases. This paper argues that these are short-run elasticities. Long-run elasticities, which may differ from short-run elasticities, are policy relevant. This paper develops a dynamic industry equilibrium model of labor demand. The model makes two points. First, long-run regressions have been misinterpreted because even if the short- and long-run employment elasticities differ, standard methods would not detect a difference using US variation. Second, the model offers a reconciliation of the small estimated short-run employment effects with the commonly found pass-through of minimum wage increases to product prices. (Copyright: Elsevier)","bibtex":""},"seq":38}
+{"type":"paper","paper":{"handle":"RePEc:oup:emjrnl:v:29:y:2026:i:1:p:87-105.","title":"Using post-regularization distribution regression to measure the effects of a minimum wage on hourly wages, hours worked, and monthly earnings","authors":["Martin Biewen; Pascal Erhardt"],"year":2026,"journal":"Econometrics Journal","category":"Top Field Journals (A)","url":"http://hdl.handle.net/10.1093/ectj/utaf014","abstract":"SummaryWe evaluate the distributional effects of a minimum wage introduction based on a dataset with a moderate sample size, but a large number of potential covariates. In this context, the selection of relevant control variables at each distributional threshold is crucial to test hypotheses about the impact of the continuous treatment variable. To this end, we use a post-double-selection logistic distribution regression approach, which allows for uniformly valid inference about the target coefficients of our low-dimensional treatment variables across the entire outcome distribution. Our empirical results show that the minimum wage replaced hourly wages below the minimum threshold, increased monthly earnings in the lower-middle segment, but not at the very bottom of the distribution, and did not significantly affect the distribution of working hours.","bibtex":""},"seq":39}
+{"type":"paper","paper":{"handle":"RePEc:ucp:jlabec:doi:10.1086/685449","title":"Minimum Wage Shocks, Employment Flows, and Labor Market Frictions","authors":["Arindrajit Dube; T. William Lester; Michael Reich"],"year":2016,"journal":"Journal of Labor Economics (JOLE)","category":"Top Field Journals (A)","url":"http://dx.doi.org/10.1086/685449","abstract":"We provide the first estimates of the effects of minimum wages on employment flows in the US labor market, identifying the impact by using policy discontinuities at state borders. We find that minimum wages have a sizable negative effect on employment flows but not on stocks. Separations and accessions fall among affected workers, especially those with low tenure. We do not find changes in the duration of nonemployment for separations or hires. This evidence is consistent with search models with endogenous separations.","bibtex":""},"seq":40}
+{"type":"paper","paper":{"handle":"RePEc:oup:qjecon:v:137:y:2022:i:1:p:267-328.","title":"Reallocation Effects of the Minimum Wage","authors":["Christian Dustmann; Attila Lindner; Uta Schönberg; Matthias Umkehrer; Philipp vom Berge"],"year":2022,"journal":"Quarterly Journal of Economics","category":"Top 5 Journals","url":"http://hdl.handle.net/10.1093/qje/qjab028","abstract":"We investigate the wage, employment, and reallocation effects of the introduction of a nationwide minimum wage in Germany that affected 15% of all employees. Based on identification designs that exploit variation in exposure across individuals and local areas, we find that the minimum wage raised wages but did not lower employment. It also led to the reallocation of low-wage workers from smaller to larger, from lower- to higher-paying, and from less to more productive establishments. This worker upgrading accounts for up to 17% of the wage increase induced by the minimum wage. Moreover, at the regional level, average establishment quality increased in more affected areas in the years following the introduction of the minimum wage.","bibtex":""},"seq":41}
+{"type":"section","section":{"id":"section-3","title":"Semantic: quasi-experimental designs for youth labor markets","mode":"custom","n_total":20,"n_shown":20,"rows":[{"handle":"RePEc:eee:juecon:v:80:y:2014:i:c:p:1-12","rank":1,"similarity":0.1906},{"handle":"RePEc:eee:pubeco:v:234:y:2024:i:c:s0047272724000677","rank":2,"similarity":0.1518},{"handle":"RePEc:oup:qjecon:v:134:y:2019:i:3:p:1405-1454.","rank":3,"similarity":0.1927},{"handle":"RePEc:eee:pubeco:v:170:y:2019:i:c:p:53-67","rank":4,"similarity":0.1527},{"handle":"RePEc:eee:pubeco:v:206:y:2022:i:c:s0047272721002188","rank":5,"similarity":0.1663},{"handle":"RePEc:oup:restud:v:91:y:2024:i:4:p:1843-1883.","rank":6,"similarity":0.1729},{"handle":"RePEc:ucp:jlabec:doi:10.1086/728471","rank":7,"similarity":0.1978},{"handle":"RePEc:uwp:jhriss:v:61:y:2026:i:1:p:211-239","rank":8,"similarity":0.1822},{"handle":"RePEc:ucp:jlabec:doi:10.1086/711355","rank":9,"similarity":0.1693},{"handle":"RePEc:uwp:jhriss:v:58:y:2023:i:1:p:335-362","rank":10,"similarity":0.1731},{"handle":"RePEc:eee:pubeco:v:235:y:2024:i:c:s0047272724000732","rank":11,"similarity":0.1735},{"handle":"RePEc:eee:pubeco:v:190:y:2020:i:c:s004727272030092x","rank":12,"similarity":0.196},{"handle":"RePEc:aea:aecrev:v:103:y:2013:i:3:p:418-22","rank":13,"similarity":0.1779},{"handle":"RePEc:ucp:jlabec:doi:10.1086/666921","rank":14,"similarity":0.177},{"handle":"RePEc:red:issued:13-225","rank":15,"similarity":0.1784},{"handle":"RePEc:oup:emjrnl:v:29:y:2026:i:1:p:87-105.","rank":16,"similarity":0.1792},{"handle":"RePEc:eee:pubeco:v:253:y:2026:i:c:s0047272725002397","rank":17,"similarity":0.191},{"handle":"RePEc:ucp:jlabec:doi:10.1086/685449","rank":18,"similarity":0.1812},{"handle":"RePEc:oup:qjecon:v:137:y:2022:i:1:p:267-328.","rank":19,"similarity":0.1829},{"handle":"RePEc:uwp:jhriss:v:51:y:2016:i:2:p:500-522","rank":20,"similarity":0.1764}]},"seq":42}
+{"type":"paper","paper":{"handle":"RePEc:crm:wpaper:2425","title":"Minimum Wages in the 21st Century","authors":["Arindrajit Dube; Attila Lindner"],"year":2024,"journal":"RFBerlin Discussion Paper Series","category":"Working Paper Series","url":"https://www.rfberlin.com/wp-content/uploads/2024/10/24025.pdf","abstract":"This chapter surveys the literature on the impact of minimum wages on low-wage labor markets. We describe and critically review the empirical methods in the new minimum wage literature, particularly those leveraging quasi-experimental variation. We provide a quantitative overview of the most recent evidence on the employment and wage effects of the policy, while also exploring emerging research on its impact on other margins, including amenities, other inputs (such as capital and high-skilled workers), firm entry and exit, output prices and demand, profits, and productivity. This approach allows us to present a comprehensive picture of how minimum wage policies affect firms, workers, and labor markets. We also review the evidence on the policyâ€™s impact on wage inequality and income distribution. Finally, we discuss how these effects can vary depending on the economic context and the level of a countryâ€™s development.","bibtex":""},"seq":43}
+{"type":"paper","paper":{"handle":"RePEc:nbr:nberwo:32878","title":"Minimum Wages in the 21st Century","authors":["Arindrajit Dube; Attila S. Lindner"],"year":2024,"journal":"NBER Working Papers","category":"Working Paper Series","url":"http://www.nber.org/papers/w32878.pdf","abstract":"This chapter surveys the literature on the impact of minimum wages on low-wage labor markets. We describe and critically review the empirical methods in the new minimum wage literature, particularly those leveraging quasi-experimental variation. We provide a quantitative overview of the most recent evidence on the employment and wage effects of the policy. We also explore emerging research on its impact on other margins, including amenities, other inputs (such as capital and high-skilled workers), firm entry and exit, as well as output prices, demand, profits, and productivity. This approach allows us to present a comprehensive picture of how minimum wage policies affect firms, workers, and labor markets. We also review the evidence on the policy’s impact on wage inequality and income distribution. Finally, we discuss how these effects can vary depending on the economic context and the level of a country’s development.","bibtex":""},"seq":44}
+{"type":"paper","paper":{"handle":"RePEc:zbw:rwirep:829","title":"It is real: On the relation between minimum wages and labor market outcomes for teenagers","authors":["Micheli","Martin"],"year":2019,"journal":"Ruhr Economic Papers","category":"Working Paper Series","url":"https://www.econstor.eu/bitstream/10419/214182/1/1690477652.pdf","abstract":"This paper reexamines the relation between minimum wages and labor market outcomes for teenagers in the US. Economic theory suggests that real minimum wages drive labor market outcomes. Instead of the commonly used nominal minimum wages, we therefore use real minimum wages to examine this relation. Increasing real minimum wages are associated with a reduction in teen employment and working hours. The correlation with real hourly wages of teenagers is positive. These results are robust to the choice of the control group, whether we compare labor market outcomes in the respective state to all other states or to spatially close states, only. This strongly suggests that interpreting nominal minimum wage changes as minimum wage shocks is not a valid identification strategy.","bibtex":""},"seq":45}
+{"type":"paper","paper":{"handle":"RePEc:iza:izadps:dp13286","title":"Minimum Wage Analysis Using a Pre-Committed Research Design: Evidence through 2018","authors":["Clemens","Jeffrey; Strain","Michael R."],"year":2020,"journal":"IZA Discussion Papers","category":"Working Paper Series","url":"https://docs.iza.org/dp13286.pdf","abstract":"This paper presents results from the fourth year of a multi-year, pre-committed research design for analyzing recent minimum wage changes. Using ACS and CPS data through 2018, we find that relatively large minimum wage increases reduced employment among low-skilled individuals by roughly 2.5 percentage points. The effects of smaller statutory increases and inflation-indexed increases vary across data sets and specifications, but are generally not distinguishable from zero. The relationship between minimum wage increases and employment is quite strongly negative in states that began enacting substantial increases between 2013 and 2015. In states that began enacting increases later in the economic expansion, estimates are more variable and tend towards zero.","bibtex":""},"seq":46}
+{"type":"paper","paper":{"handle":"RePEc:iza:izadps:dp15254","title":"Minimum Wage Increases and Vacancies","authors":["Kudlyak","Marianna; Tasci","Murat; Tüzemen","Didem"],"year":2022,"journal":"IZA Discussion Papers","category":"Working Paper Series","url":"https://docs.iza.org/dp15254.pdf","abstract":"Using a unique data set and a novel identification strategy, we estimate the effect of minimum wage increases on job vacancy postings. Using occupation-specific county- level vacancy data from the Conference Board's Help Wanted Online for 2005-2018, we find that state-level minimum wage increases lead to substantial declines in existing and new vacancy postings in occupations with a larger share of workers who earn close to the prevailing minimum wage. We estimate that a 10 percent increase in the state- level effective minimum wage reduces vacancies by 2.4 percent in the same quarter, and the cumulative effect is as large as 4.5 percent a year later, in these occupations relative to the rest. The negative effect on vacancies is more pronounced for occupations where workers typically have lower educational attainment (high school or less) and in counties with higher poverty rates. We argue that our focus on vacancies versus on employment has a distinct advantage of highlighting a mechanism through which minimum wage hikes affect labor markets. Our finding of a negative effect on vacancies is not inconsistent with the wide range of findings in the literature about the effect of minimum wage changes on employment, which is driven by changes in both hiring and separation margins.","bibtex":""},"seq":47}
+{"type":"paper","paper":{"handle":"RePEc:iza:izadps:dp12388","title":"Minimum Wage Analysis Using a Pre-Committed Research Design: Evidence through 2017","authors":["Clemens","Jeffrey; Strain","Michael R."],"year":2019,"journal":"IZA Discussion Papers","category":"Working Paper Series","url":"https://docs.iza.org/dp12388.pdf","abstract":"This paper presents results from the third year of a multi-year, pre-committed research design for analyzing recent minimum wage changes. Using ACS and CPS data through 2017, we find that relatively large minimum wage increases reduced employment among low-skilled individuals by just over 2 percentage points. The effects of smaller increases are more variable and estimates for inflation-indexed increases tend toward moderately positive values. The effects of smaller increases are relatively more positive when we analyze the CPS. The most recently enacted minimum wage changes tend to be positively correlated with employment among low-skilled individuals, while relatively early and large increases are strongly negatively correlated with employment. Analysis of future data will be needed to determine whether this apparent difference between short- and medium-run effects is systematic.","bibtex":""},"seq":48}
+{"type":"paper","paper":{"handle":"RePEc:cep:cepdps:dp2096","title":"Minimum wages and low wage workers: Compliance as non-employment margin","authors":["Nicolas Gonzalez-Pampillon; Javier Vazquez-Grenno"],"year":2025,"journal":"CEP Discussion Papers","category":"Working Paper Series","url":"https://cep.lse.ac.uk/pubs/download/dp2096.pdf","abstract":"This paper examines the impact of a substantial minimum wage increase in Uruguay - a middle-income developing economy - on wages and employment. Using administrative data and a difference-in-differences approach, we analyze the consequences of a 2005 policy reform that raised the real minimum wage by 80% within a year. Our findings show that the reform led to significant wage gains for low-wage earners, with at most minimal negative effects on employment. Survey data further reveal no significant changes in unemployment or informality, suggesting the reform did not distort labor market dynamics. To contextualize these results, we investigate compliance with minimum wage laws and document a post-reform decline in compliance, particularly among low-wage workers. This pattern aligns with firms' cost-benefit trade-offs under weak enforcement of wage regulations. Our study contributes to the literature by providing causal evidence on the labor market effects of minimum wage policies in a developing economy, underscoring the pivotal role of enforcement in shaping policy outcomes.","bibtex":""},"seq":49}
+{"type":"paper","paper":{"handle":"RePEc:ehl:lserod:100800","title":"Do lower minimum wages for young workers raise their employment? Evidence from a Danish discontinuity","authors":["Kreiner","Claus Thustrup; Reck","Daniel; Skov","Peer Ebbesen"],"year":2020,"journal":"LSE Research Online Documents on Economics","category":"Working Paper Series","url":"http://eprints.lse.ac.uk/100800/","abstract":"We estimate the impact of youth minimum wages on youth employment by exploiting a large discontinuity in Danish minimum wage rules at age 18, using monthly payroll records for the Danish population. The hourly wage jumps by 40% at the discontinuity. Employment falls by 33%, and total input of hours decreases by 45%, leaving the aggregate wage payment almost unchanged. We show theoretically how the discontinuity may be exploited to evaluate policy changes. The relevant elasticity for evaluating the effect on youth employment of changes in their minimum wage is in the range 0.6 to 1.1.","bibtex":""},"seq":50}
+{"type":"paper","paper":{"handle":"RePEc:nbr:nberwo:28555","title":"Effects of Recent Minimum Wage Policies in California and Nationwide: Results from a Pre-specified Analysis Plan","authors":["David Neumark; Maysen Yen"],"year":2021,"journal":"NBER Working Papers","category":"Working Paper Series","url":"http://www.nber.org/papers/w28555.pdf","abstract":"We analyze the impacts of recent city minimum wage increases in California and nationwide, following a pre-analysis plan (PAP) registered prior to the release of data covering two years of minimum wage increases. For California cities we find a hint of negative employment effects. Nationally, we find some evidence of disemployment effects for teens, but not young adults or high school dropouts. City-specific analyses provide limited evidence of adverse effects on the share low-income, but the pooled city analysis does not; the national analysis generally finds no impact on the share low-income, with one exception that may reflect prior trends.","bibtex":""},"seq":51}
+{"type":"paper","paper":{"handle":"RePEc:zbw:glodps:973","title":"The impact of age-specific minimum wages on youth employment and education: A regression discontinuity analysis","authors":["Dayioglu","Meltem; Kucukbayrak","Muserref; Tumen","Semih"],"year":2021,"journal":"GLO Discussion Paper Series","category":"Working Paper Series","url":"https://www.econstor.eu/bitstream/10419/245914/1/GLO-DP-0973.pdf","abstract":"We exploit an age-specific minimum wage rule - which sets a lower minimum wage for workers of age 15 than the adult minimum wage paid to workers of age 16 and above - and its abolition to estimate the causal effect of a minimum wage increase on youth employment and education in Turkey. Using a regression discontinuity design in tandem with a difference-in-discontinuities analysis, we find that increasing the minimum wage reduces the employment probability of young males by 2.5-3.1 percentage points. We also document that, initially, the minimum wage increase does not lead to a major change in high school enrollment, while the likelihood of transitioning into \"neither in employment nor in education and training\" (NEET) category notably increases. However, in the medium term, the NEET effect is transitory; school enrollment increases over time and absorbs the negative employment effect. We argue that policy effects have mostly been driven by demand-side forces rather than supply side.","bibtex":""},"seq":52}
+{"type":"paper","paper":{"handle":"RePEc:iza:izadps:dp13982","title":"The Impact of Age-Specific Minimum Wages on Youth Employment and Education: A Regression Discontinuity Analysis","authors":["Dayioglu-Tayfur","Meltem; Kucukbayrak","Muserref; Tumen","Semih"],"year":2020,"journal":"IZA Discussion Papers","category":"Working Paper Series","url":"https://docs.iza.org/dp13982.pdf","abstract":"We exploit an age-specific minimum wage rule – which sets a lower minimum wage for workers of age 15 than that for workers of age 16 and above in Turkey – and its abolition to estimate the causal effect of a minimum wage increase on youth employment and education. Using a regression discontinuity design in tandem with a difference-in-discontinuities analysis, we find that increasing the minimum wage substantially reduces the employment of young males. In terms of magnitudes, the employment probability declines by 2.5-3.1 percentage points at the 16-year-old age cut-off. Moreover, the probability of unemployment increases approximately 2 percentage points. We also document that the minimum wage hike does not generate a major change in high school enrollment, while the likelihood of transitioning into \"neither in employment nor in education and training\" (NEET) category notably increases among young males. We argue that the effects of the policy have mostly been driven by the demand-side forces rather than the supply side.","bibtex":""},"seq":53}
+{"type":"paper","paper":{"handle":"RePEc:nbr:nberwo:25434","title":"The Effect of Minimum Wages on Low-Wage Jobs: Evidence from the United States Using a Bunching Estimator","authors":["Doruk Cengiz; Arindrajit Dube; Attila Lindner; Ben Zipperer"],"year":2019,"journal":"NBER Working Papers","category":"Working Paper Series","url":"http://www.nber.org/papers/w25434.pdf","abstract":"We propose a novel method that infers the employment effect of a minimum wage increase by comparing the number of excess jobs paying at or slightly above the new minimum wage to the missing jobs paying below it. To implement our approach, we estimate the effect of the minimum wage on the frequency distribution of hourly wages using 138 prominent state-level minimum wage changes between 1979 and 2016. We find that the overall number of low-wage jobs remained essentially unchanged over five years following the increase. At the same time, the direct effect of the minimum wage on average earnings was amplified by modest wage spillovers at the bottom of the wage distribution. Our estimates by detailed demographic groups show that the lack of job loss is not explained by labor-labor substitution at the bottom of the wage distribution. We also find no evidence of disemployment when we consider higher levels of minimum wages. However, we do find some evidence of reduced employment in tradable sectors. In contrast to our bunching-based estimates, we show that some conventional studies can produce misleading inference due to spurious changes in employment higher up in the wage distribution.","bibtex":""},"seq":54}
+{"type":"section","section":{"id":"section-4","title":"Recent working papers on minimum wage and youth employment (2019+)","mode":"custom","n_total":12,"n_shown":12,"rows":[{"handle":"RePEc:crm:wpaper:2425","rank":1,"similarity":0.1153},{"handle":"RePEc:nbr:nberwo:32878","rank":2,"similarity":0.1178},{"handle":"RePEc:zbw:rwirep:829","rank":3,"similarity":0.1277},{"handle":"RePEc:iza:izadps:dp13286","rank":4,"similarity":0.1286},{"handle":"RePEc:iza:izadps:dp15254","rank":5,"similarity":0.1345},{"handle":"RePEc:iza:izadps:dp12388","rank":6,"similarity":0.1351},{"handle":"RePEc:cep:cepdps:dp2096","rank":7,"similarity":0.1386},{"handle":"RePEc:ehl:lserod:100800","rank":8,"similarity":0.1401},{"handle":"RePEc:nbr:nberwo:28555","rank":9,"similarity":0.1407},{"handle":"RePEc:zbw:glodps:973","rank":10,"similarity":0.1415},{"handle":"RePEc:iza:izadps:dp13982","rank":11,"similarity":0.1416},{"handle":"RePEc:nbr:nberwo:25434","rank":12,"similarity":0.1423}]},"seq":55}
+{"type":"bibtex","entries":0,"bibtex":"","seq":56}
+{"type":"bibtex","entries":53,"bibtex":"@techreport{dube2024,\n  author = {Arindrajit Dube and Attila S. Lindner},\n  title = {Minimum Wages in the 21st Century},\n  year = {2024},\n  institution = {nberwo},\n  note = {RePEc:nbr:nberwo:32878}\n}\n\n@article{cengiz2019,\n  author = {Doruk Cengiz and Arindrajit Dube and Attila Lindner and Ben Zipperer},\n  title = {The Effect of Minimum Wages on Low-Wage Jobs},\n  year = {2019},\n  volume = {134},\n  number = {3},\n  pages = {1405-1454},\n  journal = {The Quarterly Journal of Economics},\n  note = {RePEc:oup:qjecon:v:134:y:2019:i:3:p:1405-1454.}\n}\n\n@article{dustmann2022,\n  author = {Christian Dustmann and Attila Lindner and Uta Schönberg and Matthias Umkehrer and Philipp vom Berge},\n  title = {Reallocation Effects of the Minimum Wage},\n  year = {2022},\n  volume = {137},\n  number = {1},\n  pages = {267-328},\n  journal = {The Quarterly Journal of Economics},\n  note = {RePEc:oup:qjecon:v:137:y:2022:i:1:p:267-328.}\n}\n\n@article{haanwinckel2021,\n  author = {Daniel Haanwinckel and Rodrigo R Soares},\n  title = {Workforce Composition, Productivity, and Labour Regulations in a Compensating Differentials Theory of Informality},\n  year = {2021},\n  volume = {88},\n  number = {6},\n  pages = {2970-3010},\n  journal = {The Review of Economic Studies},\n  note = {RePEc:oup:restud:v:88:y:2021:i:6:p:2970-3010.}\n}\n\n@article{azar2024,\n  author = {José Azar and Emiliano Huet and Ioana Marinescu and Bledi Taska and Till von},\n  title = {Minimum Wage Employment Effects and Labour Market Concentration},\n  year = {2024},\n  volume = {91},\n  number = {4},\n  pages = {1843-1883},\n  journal = {Review of Economic Studies},\n  note = {RePEc:oup:restud:v:91:y:2024:i:4:p:1843-1883.}\n}\n\n@article{ahn2011,\n  author = {Tom Ahn and Peter Arcidiacono and Walter Wessels},\n  title = {The Distributional Impacts of Minimum Wage Increases When Both Labor Supply and Labor Demand Are Endogenous},\n  year = {2011},\n  volume = {29},\n  number = {1},\n  pages = {12-23},\n  month = {1},\n  journal = {Journal of Business & Economic Statistics},\n  note = {RePEc:taf:jnlbes:v:29:y:2011:i:1:p:12-23}\n}\n\n@article{giuliano2013,\n  author = {Laura Giuliano},\n  title = {Minimum Wage Effects on Employment, Substitution, and the Teenage Labor Supply: Evidence from Personnel Data},\n  year = {2013},\n  volume = {31},\n  number = {1},\n  pages = {155 - 194},\n  journal = {Journal of Labor Economics},\n  note = {RePEc:ucp:jlabec:doi:10.1086/666921}\n}\n\n@article{dube2016,\n  author = {Arindrajit Dube and T. William Lester and Michael Reich},\n  title = {Minimum Wage Shocks, Employment Flows, and Labor Market Frictions},\n  year = {2016},\n  volume = {34},\n  number = {3},\n  pages = {663 - 704},\n  journal = {Journal of Labor Economics},\n  note = {RePEc:ucp:jlabec:doi:10.1086/685449}\n}\n\n@article{gopalan2021,\n  author = {Radhakrishnan Gopalan and Barton H. Hamilton and Ankit Kalda and David Sovich},\n  title = {State Minimum Wages, Employment, and Wage Spillovers: Evidence from Administrative Payroll Data},\n  year = {2021},\n  volume = {39},\n  number = {3},\n  pages = {673 - 707},\n  journal = {Journal of Labor Economics},\n  note = {RePEc:ucp:jlabec:doi:10.1086/711355}\n}\n\n@article{giupponi2024,\n  author = {Giulia Giupponi and Robert Joyce and Attila Lindner and Tom Waters and Thomas Wernham and Xiaowei Xu},\n  title = {The Employment and Distributional Impacts of Nationwide Minimum Wage Changes},\n  year = {2024},\n  volume = {42},\n  number = {S1},\n  pages = {S293 - S333},\n  journal = {Journal of Labor Economics},\n  note = {RePEc:ucp:jlabec:doi:10.1086/728471}\n}\n\n@article{v2000,\n  author = {Burkhauser, Richard V and Couch, Kenneth A and Wittenburg, David C},\n  title = {A Reassessment of the New Economics of the Minimum Wage Literature with Monthly Data from the Current Population Survey.},\n  year = {2000},\n  volume = {18},\n  number = {4},\n  pages = {653-80},\n  month = {October},\n  journal = {Journal of Labor Economics},\n  note = {RePEc:ucp:jlabec:v:18:y:2000:i:4:p:653-80}\n}\n\n@article{aaronson2007,\n  author = {Daniel Aaronson and Eric French},\n  title = {Product Market Evidence on the Employment Effects of the Minimum Wage},\n  year = {2007},\n  volume = {25},\n  number = {1},\n  pages = {167-200},\n  journal = {Journal of Labor Economics},\n  note = {RePEc:ucp:jlabec:v:25:y:2007:p:167-200}\n}\n\n@article{currie1996,\n  author = {Janet Currie and Bruce C. Fallick},\n  title = {The Minimum Wage and the Employment of Youth Evidence from the NLSY},\n  year = {1996},\n  volume = {31},\n  number = {2},\n  journal = {Journal of Human Resources},\n  note = {RePEc:uwp:jhriss:v:31:y:1996:i:2:p:404-428}\n}\n\n@article{neumark2002,\n  author = {David Neumark and William Wascher},\n  title = {State-Level Estimates of Minimum Wage Effects: New Evidence and Interpretations from Disequilibrium Methods},\n  year = {2002},\n  volume = {37},\n  number = {1},\n  journal = {Journal of Human Resources},\n  note = {RePEc:uwp:jhriss:v:37:y:2002:i:1:p:35-62}\n}\n\n@article{yuen2003,\n  author = {Terence Yuen},\n  title = {The Effect of Minimum Wages on Youth Employment in Canada: A Panel Study},\n  year = {2003},\n  volume = {38},\n  number = {3},\n  journal = {Journal of Human Resources},\n  note = {RePEc:uwp:jhriss:v:38:y:2003:i:3:p647-672}\n}\n\n@article{neumark2004,\n  author = {David Neumark and DMark Schweitzer and DaWilliam Wascher},\n  title = {Minimum Wage Effects throughout the Wage Distribution},\n  year = {2004},\n  volume = {39},\n  number = {2},\n  journal = {Journal of Human Resources},\n  note = {RePEc:uwp:jhriss:v:39:y:2004:i:2:p425-450}\n}\n\n@article{aaronson2008,\n  author = {Daniel Aaronson and Eric French and James MacDonald},\n  title = {The Minimum Wage, Restaurant Prices, and Labor Market Structure},\n  year = {2008},\n  volume = {43},\n  number = {3},\n  journal = {Journal of Human Resources},\n  note = {RePEc:uwp:jhriss:v:43:y:2008:i:3:p:688-720}\n}\n\n@article{meer2016,\n  author = {Jonathan Meer and Jeremy West},\n  title = {Effects of the Minimum Wage on Employment Dynamics},\n  year = {2016},\n  volume = {51},\n  number = {2},\n  journal = {Journal of Human Resources},\n  note = {RePEc:uwp:jhriss:v:51:y:2016:i:2:p:500-522}\n}\n\n@article{brummund2020,\n  author = {Peter Brummund and Michael R. Strain},\n  title = {Does Employment Respond Differently to Minimum Wage Increases in the Presence of Inflation Indexing?},\n  year = {2020},\n  volume = {55},\n  number = {3},\n  journal = {Journal of Human Resources},\n  note = {RePEc:uwp:jhriss:v:55:y:2020:i:3:p:999-1024}\n}\n\n@article{oka2023,\n  author = {Tatsushi Oka and Ken Yamada},\n  title = {Heterogeneous Impact of the Minimum Wage: Implications for Changes in Between- and Within-Group Inequality},\n  year = {2023},\n  volume = {58},\n  number = {1},\n  journal = {Journal of Human Resources},\n  note = {RePEc:uwp:jhriss:v:58:y:2023:i:1:p:335-362}\n}\n\n@techreport{thustrup2020,\n  author = {Kreiner, Claus Thustrup and Reck, Daniel and Skov, Peer Ebbesen},\n  title = {Do lower minimum wages for young workers raise their employment? Evidence from a Danish discontinuity},\n  year = {2020},\n  institution = {lserod},\n  note = {RePEc:ehl:lserod:100800}\n}\n\n@article{sorkin2015,\n  author = {Isaac Sorkin},\n  title = {Are There Long-Run Effects of the Minimum Wage?},\n  year = {2015},\n  volume = {18},\n  number = {2},\n  pages = {306-333},\n  month = {April},\n  doi = {10.1016/j.red.2014.05.003},\n  journal = {Review of Economic Dynamics},\n  note = {RePEc:red:issued:13-225}\n}\n\n@article{navarro2022,\n  author = {Lucas Navarro and Mauricio Tejada},\n  title = {Does Public Sector Employment Buffer the Minimum Wage Effects?},\n  year = {2022},\n  volume = {43},\n  pages = {168-196},\n  month = {January},\n  doi = {10.1016/j.red.2021.02.004},\n  journal = {Review of Economic Dynamics},\n  note = {RePEc:red:issued:20-43}\n}\n\n@article{mario2026,\n  author = {Bossler, Mario and Liang, Ying and Schank, Thorsten},\n  title = {The devil is in the details: Heterogeneous effects of the German minimum wage on working hours and minijobs},\n  year = {2026},\n  volume = {253},\n  number = {C},\n  journal = {Journal of Public Economics},\n  note = {RePEc:eee:pubeco:v:253:y:2026:i:c:s0047272725002397}\n}\n\n@article{lee2026,\n  author = {Jungmin Lee and Geumbi Park},\n  title = {Minimum Wage, Employment, and Margins of Adjustment: Evidence from Employer–Employee Matched Panel Data},\n  year = {2026},\n  volume = {61},\n  number = {1},\n  journal = {Journal of Human Resources},\n  note = {RePEc:uwp:jhriss:v:61:y:2026:i:1:p:211-239}\n}\n\n@article{biewen2026,\n  author = {Martin Biewen and Pascal Erhardt},\n  title = {Using post-regularization distribution regression to measure the effects of a minimum wage on hourly wages, hours worked, and monthly earnings},\n  year = {2026},\n  volume = {29},\n  number = {1},\n  pages = {87-105},\n  journal = {The Econometrics Journal},\n  note = {RePEc:oup:emjrnl:v:29:y:2026:i:1:p:87-105.}\n}\n\n@article{vogel2025,\n  author = {Jonathan Vogel},\n  title = {The Race Between Education, Technology, and the Minimum Wage*},\n  year = {2025},\n  volume = {140},\n  number = {3},\n  pages = {1857-1899},\n  journal = {The Quarterly Journal of Economics},\n  note = {RePEc:oup:qjecon:v:140:y:2025:i:3:p:1857-1899.}\n}\n\n@techreport{gonzalez-pampillon2025,\n  author = {Nicolas Gonzalez-Pampillon and Javier Vazquez-Grenno},\n  title = {Minimum wages and low wage workers: Compliance as non-employment margin},\n  year = {2025},\n  institution = {cepdps},\n  note = {RePEc:cep:cepdps:dp2096}\n}\n\n@techreport{dawn2023,\n  author = {Otterby, Dawn and Crawley, Andrew and Gabe, Todd},\n  title = {Effects of the Minimum Wage on U.S. County Labor Markets},\n  year = {2023},\n  institution = {mprapa},\n  note = {RePEc:pra:mprapa:116162}\n}\n\n@article{blanco2013,\n  author = {German Blanco and Carlos A. Flores and Alfonso Flores-Lagunes},\n  title = {The Effects of Job Corps Training on Wages of Adolescents and Young Adults},\n  year = {2013},\n  volume = {103},\n  number = {3},\n  pages = {418-22},\n  month = {May},\n  journal = {American Economic Review},\n  note = {RePEc:aea:aecrev:v:103:y:2013:i:3:p:418-22}\n}\n\n@article{engbom2022,\n  author = {Niklas Engbom and Christian Moser},\n  title = {Earnings Inequality and the Minimum Wage: Evidence from Brazil},\n  year = {2022},\n  volume = {112},\n  number = {12},\n  pages = {3803-47},\n  month = {December},\n  doi = {10.1257/aer.20181506},\n  journal = {American Economic Review},\n  note = {RePEc:aea:aecrev:v:112:y:2022:i:12:p:3803-47}\n}\n\n@article{bender2006,\n  author = {Stefan Bender and Till von Wachter},\n  title = {In the Right Place at the Wrong Time: The Role of Firms and Luck in Young Workers' Careers},\n  year = {2006},\n  volume = {96},\n  number = {5},\n  pages = {1679-1705},\n  month = {December},\n  journal = {American Economic Review},\n  note = {RePEc:aea:aecrev:v:96:y:2006:i:5:p:1679-1705}\n}\n\n@article{flinn2006,\n  author = {Christopher J. Flinn},\n  title = {Minimum Wage Effects on Labor Market Outcomes under Search, Matching, and Endogenous Contact Rates},\n  year = {2006},\n  volume = {74},\n  number = {4},\n  pages = {1013-1062},\n  month = {07},\n  journal = {Econometrica},\n  note = {RePEc:ecm:emetrp:v:74:y:2006:i:4:p:1013-1062}\n}\n\n@article{c.2014,\n  author = {Cadena, Brian C.},\n  title = {Recent immigrants as labor market arbitrageurs: Evidence from the minimum wage},\n  year = {2014},\n  volume = {80},\n  number = {C},\n  pages = {1-12},\n  journal = {Journal of Urban Economics},\n  note = {RePEc:eee:juecon:v:80:y:2014:i:c:p:1-12}\n}\n\n@article{jeffrey2019,\n  author = {Clemens, Jeffrey and Wither, Michael},\n  title = {The minimum wage and the Great Recession: Evidence of effects on the employment and income trajectories of low-skilled workers},\n  year = {2019},\n  volume = {170},\n  number = {C},\n  pages = {53-67},\n  journal = {Journal of Public Economics},\n  note = {RePEc:eee:pubeco:v:170:y:2019:i:c:p:53-67}\n}\n\n@article{m.2020,\n  author = {Lavecchia, Adam M.},\n  title = {Minimum wage policy with optimal taxes and unemployment},\n  year = {2020},\n  volume = {190},\n  number = {C},\n  journal = {Journal of Public Economics},\n  note = {RePEc:eee:pubeco:v:190:y:2020:i:c:s004727272030092x}\n}\n\n@article{emmanuel2021,\n  author = {Saez, Emmanuel and Schoefer, Benjamin and Seim, David},\n  title = {Hysteresis from employer subsidies},\n  year = {2021},\n  volume = {200},\n  number = {C},\n  journal = {Journal of Public Economics},\n  note = {RePEc:eee:pubeco:v:200:y:2021:i:c:s0047272721000955}\n}\n\n@article{terry2022,\n  author = {Gregory, Terry and Zierahn, Ulrich},\n  title = {When the minimum wage really bites hard: The negative spillover effect on high-skilled workers},\n  year = {2022},\n  volume = {206},\n  number = {C},\n  journal = {Journal of Public Economics},\n  note = {RePEc:eee:pubeco:v:206:y:2022:i:c:s0047272721002188}\n}\n\n@article{ekaterina2024,\n  author = {Jardim, Ekaterina and Long, Mark C. and Plotnick, Robert and Vigdor, Jacob and Wiles, Emma},\n  title = {Local minimum wage laws, boundary discontinuity methods, and policy spillovers},\n  year = {2024},\n  volume = {234},\n  number = {C},\n  journal = {Journal of Public Economics},\n  note = {RePEc:eee:pubeco:v:234:y:2024:i:c:s0047272724000677}\n}\n\n@article{andrea2024,\n  author = {Albanese, Andrea and Cockx, Bart and Dejemeppe, Muriel},\n  title = {Long-term effects of hiring subsidies for low-educated unemployed youths},\n  year = {2024},\n  volume = {235},\n  number = {C},\n  journal = {Journal of Public Economics},\n  note = {RePEc:eee:pubeco:v:235:y:2024:i:c:s0047272724000732}\n}\n\n@article{olivier2011,\n  author = {Bargain, Olivier and Doorley, Karina},\n  title = {Caught in the trap? Welfare's disincentive and the labor supply of single men},\n  year = {2011},\n  volume = {95},\n  number = {9},\n  pages = {1096-1110},\n  journal = {Journal of Public Economics},\n  note = {RePEc:eee:pubeco:v:95:y:2011:i:9:p:1096-1110}\n}\n\n@techreport{jeffrey2019,\n  author = {Clemens, Jeffrey and Strain, Michael R.},\n  title = {Minimum Wage Analysis Using a Pre-Committed Research Design: Evidence through 2017},\n  year = {2019},\n  institution = {izadps},\n  note = {RePEc:iza:izadps:dp12388}\n}\n\n@techreport{jeffrey2020,\n  author = {Clemens, Jeffrey and Strain, Michael R.},\n  title = {Minimum Wage Analysis Using a Pre-Committed Research Design: Evidence through 2018},\n  year = {2020},\n  institution = {izadps},\n  note = {RePEc:iza:izadps:dp13286}\n}\n\n@techreport{meltem2020,\n  author = {Dayioglu-Tayfur, Meltem and Kucukbayrak, Muserref and Tumen, Semih},\n  title = {The Impact of Age-Specific Minimum Wages on Youth Employment and Education: A Regression Discontinuity Analysis},\n  year = {2020},\n  institution = {izadps},\n  note = {RePEc:iza:izadps:dp13982}\n}\n\n@techreport{marianna2022,\n  author = {Kudlyak, Marianna and Tasci, Murat and Tüzemen, Didem},\n  title = {Minimum Wage Increases and Vacancies},\n  year = {2022},\n  institution = {izadps},\n  note = {RePEc:iza:izadps:dp15254}\n}\n\n@techreport{cengiz2019,\n  author = {Doruk Cengiz and Arindrajit Dube and Attila Lindner and Ben Zipperer},\n  title = {The Effect of Minimum Wages on Low-Wage Jobs: Evidence from the United States Using a Bunching Estimator},\n  year = {2019},\n  institution = {nberwo},\n  note = {RePEc:nbr:nberwo:25434}\n}\n\n@techreport{cengiz2021,\n  author = {Doruk Cengiz and Arindrajit Dube and Attila S. Lindner and David Zentler-Munro},\n  title = {Seeing Beyond the Trees: Using Machine Learning to Estimate the Impact of Minimum Wages on Labor Market Outcomes},\n  year = {2021},\n  institution = {nberwo},\n  note = {RePEc:nbr:nberwo:28399}\n}\n\n@techreport{neumark2021,\n  author = {David Neumark and Maysen Yen},\n  title = {Effects of Recent Minimum Wage Policies in California and Nationwide: Results from a Pre-specified Analysis Plan},\n  year = {2021},\n  institution = {nberwo},\n  note = {RePEc:nbr:nberwo:28555}\n}\n\n@techreport{yves2019,\n  author = {Bossavie,Laurent Loic Yves and Acar,Aysenur and Makovec,Mattia},\n  title = {Do Firms Exit the Formal Economy after a Minimum Wage Hike ?},\n  year = {2019},\n  institution = {wbrwps},\n  note = {RePEc:wbk:wbrwps:8749}\n}\n\n@article{haanwinckel2025,\n  author = {Daniel Haanwinckel},\n  title = {Supply, Demand, Institutions, and Firms: A Theory of Labor Market Sorting and the Wage Distribution},\n  year = {2025},\n  volume = {115},\n  number = {12},\n  pages = {4137-82},\n  month = {December},\n  doi = {10.1257/aer.20201293},\n  journal = {American Economic Review},\n  note = {RePEc:aea:aecrev:v:115:y:2025:i:12:p:4137-82}\n}\n\n@techreport{dube2024,\n  author = {Arindrajit Dube and Attila Lindner},\n  title = {Minimum Wages in the 21st Century},\n  year = {2024},\n  institution = {wpaper},\n  note = {RePEc:crm:wpaper:2425}\n}\n\n@techreport{meltem2021,\n  author = {Dayioglu, Meltem and Kucukbayrak, Muserref and Tumen, Semih},\n  title = {The impact of age-specific minimum wages on youth employment and education: A regression discontinuity analysis},\n  year = {2021},\n  institution = {glodps},\n  note = {RePEc:zbw:glodps:973}\n}\n\n@techreport{martin2019,\n  author = {Micheli, Martin},\n  title = {It is real: On the relation between minimum wages and labor market outcomes for teenagers},\n  year = {2019},\n  doi = {10.4419/86788962},\n  institution = {rwirep},\n  note = {RePEc:zbw:rwirep:829}\n}","seq":57}
+{"type":"stage","stage":"execute","state":"exit","ms":7267,"seq":58}
+{"type":"stage","stage":"synthesize","state":"enter","seq":59}
+{"type":"synthesis","delta":"##","seq":60}
+{"type":"synthesis","delta":" Overview","seq":61}
+{"type":"synthesis","delta":"\n\nThe","seq":62}
+{"type":"synthesis","delta":" search","seq":63}
+{"type":"synthesis","delta":" identifie","seq":64}
+{"type":"synthesis","delta":"d a substantial","seq":65}
+{"type":"synthesis","delta":" literature","seq":66}
+{"type":"synthesis","delta":" on minimum wage effects,","seq":67}
+{"type":"synthesis","delta":" with particular","seq":68}
+{"type":"synthesis","delta":" strength","seq":69}
+{"type":"synthesis","delta":" in quasi","seq":70}
+{"type":"synthesis","delta":"-experimental designs","seq":71}
+{"type":"synthesis","delta":" and recent","seq":72}
+{"type":"synthesis","delta":" work on developing","seq":73}
+{"type":"synthesis","delta":" economies","seq":74}
+{"type":"synthesis","delta":". The core","seq":75}
+{"type":"synthesis","delta":" publishe","seq":76}
+{"type":"synthesis","delta":"d literature","seq":77}
+{"type":"synthesis","delta":" (","seq":78}
+{"type":"synthesis","delta":"Top","seq":79}
+{"type":"synthesis","delta":" 5","seq":80}
+{"type":"synthesis","delta":" an","seq":81}
+{"type":"synthesis","delta":"d Top Fiel","seq":82}
+{"type":"synthesis","delta":"d journals","seq":83}
+{"type":"synthesis","delta":") spans","seq":84}
+{"type":"synthesis","delta":" ~","seq":85}
+{"type":"synthesis","delta":"20","seq":86}
+{"type":"synthesis","delta":" papers","seq":87}
+{"type":"synthesis","delta":",","seq":88}
+{"type":"synthesis","delta":" supplement","seq":89}
+{"type":"synthesis","delta":"ed by ~","seq":90}
+{"type":"synthesis","delta":"12","seq":91}
+{"type":"synthesis","delta":" recent","seq":92}
+{"type":"synthesis","delta":" working","seq":93}
+{"type":"synthesis","delta":" papers (","seq":94}
+{"type":"synthesis","delta":"2019+","seq":95}
+{"type":"synthesis","delta":"). The consensus","seq":96}
+{"type":"synthesis","delta":" has","seq":97}
+{"type":"synthesis","delta":" shifte","seq":98}
+{"type":"synthesis","delta":"d:","seq":99}
+{"type":"synthesis","delta":" while older","seq":100}
+{"type":"synthesis","delta":" work emphasized employment","seq":101}
+{"type":"synthesis","delta":" losses","seq":102}
+{"type":"synthesis","delta":" among","seq":103}
+{"type":"synthesis","delta":" youth","seq":104}
+{"type":"synthesis","delta":", recent ca","seq":105}
+{"type":"synthesis","delta":"usal studies","seq":106}
+{"type":"synthesis","delta":" using","seq":107}
+{"type":"synthesis","delta":" administrative","seq":108}
+{"type":"synthesis","delta":" data an","seq":109}
+{"type":"synthesis","delta":"d spatial","seq":110}
+{"type":"synthesis","delta":" discontin","seq":111}
+{"type":"synthesis","delta":"uities","seq":112}
+{"type":"synthesis","delta":" fin","seq":113}
+{"type":"synthesis","delta":"d modest","seq":114}
+{"type":"synthesis","delta":" or","seq":115}
+{"type":"synthesis","delta":" near","seq":116}
+{"type":"synthesis","delta":"-zero employment","seq":117}
+{"type":"synthesis","delta":" effects in","seq":118}
+{"type":"synthesis","delta":" develope","seq":119}
+{"type":"synthesis","delta":"d economies,","seq":120}
+{"type":"synthesis","delta":" though","seq":121}
+{"type":"synthesis","delta":" effects","seq":122}
+{"type":"synthesis","delta":" vary","seq":123}
+{"type":"synthesis","delta":" by","seq":124}
+{"type":"synthesis","delta":" labor","seq":125}
+{"type":"synthesis","delta":" market concentration","seq":126}
+{"type":"synthesis","delta":",","seq":127}
+{"type":"synthesis","delta":" sector","seq":128}
+{"type":"synthesis","delta":", and enforcement","seq":129}
+{"type":"synthesis","delta":" context","seq":130}
+{"type":"synthesis","delta":".","seq":131}
+{"type":"synthesis","delta":" Developing","seq":132}
+{"type":"synthesis","delta":"-","seq":133}
+{"type":"synthesis","delta":"country","seq":134}
+{"type":"synthesis","delta":" evidence is","seq":135}
+{"type":"synthesis","delta":" th","seq":136}
+{"type":"synthesis","delta":"inner but","seq":137}
+{"type":"synthesis","delta":" growing, with Brazil","seq":138}
+{"type":"synthesis","delta":" an","seq":139}
+{"type":"synthesis","delta":"d Turkey","seq":140}
+{"type":"synthesis","delta":" studies","seq":141}
+{"type":"synthesis","delta":" showing heter","seq":142}
+{"type":"synthesis","delta":"ogeneous effects by","seq":143}
+{"type":"synthesis","delta":" inform","seq":144}
+{"type":"synthesis","delta":"ality an","seq":145}
+{"type":"synthesis","delta":"d age","seq":146}
+{"type":"synthesis","delta":"-","seq":147}
+{"type":"synthesis","delta":"specific wage","seq":148}
+{"type":"synthesis","delta":" rules","seq":149}
+{"type":"synthesis","delta":".\n\n---","seq":150}
+{"type":"synthesis","delta":"\n\n## Key","seq":151}
+{"type":"synthesis","delta":" Papers","seq":152}
+{"type":"synthesis","delta":"\n\n-","seq":153}
+{"type":"synthesis","delta":" **[","seq":154}
+{"type":"synthesis","delta":"C","seq":155}
+{"type":"synthesis","delta":"eng","seq":156}
+{"type":"synthesis","delta":"iz et","seq":157}
+{"type":"synthesis","delta":" al. ","seq":158}
+{"type":"synthesis","delta":"2019","seq":159}
+{"type":"synthesis","delta":"](","seq":160}
+{"type":"synthesis","delta":"http","seq":161}
+{"type":"synthesis","delta":"://h","seq":162}
+{"type":"synthesis","delta":"dl.handle.net/10.","seq":163}
+{"type":"synthesis","delta":"1","seq":164}
+{"type":"synthesis","delta":"093","seq":165}
+{"type":"synthesis","delta":"/q","seq":166}
+{"type":"synthesis","delta":"je/qjz014","seq":167}
+{"type":"synthesis","delta":")**","seq":168}
+{"type":"synthesis","delta":" —","seq":169}
+{"type":"synthesis","delta":" Using","seq":170}
+{"type":"synthesis","delta":" ","seq":171}
+{"type":"synthesis","delta":"138","seq":172}
+{"type":"synthesis","delta":" state","seq":173}
+{"type":"synthesis","delta":" minimum","seq":174}
+{"type":"synthesis","delta":" wage changes (","seq":175}
+{"type":"synthesis","delta":"1","seq":176}
+{"type":"synthesis","delta":"979","seq":177}
+{"type":"synthesis","delta":"–","seq":178}
+{"type":"synthesis","delta":"2016","seq":179}
+{"type":"synthesis","delta":") an","seq":180}
+{"type":"synthesis","delta":"d a","seq":181}
+{"type":"synthesis","delta":" bun","seq":182}
+{"type":"synthesis","delta":"ching estim","seq":183}
+{"type":"synthesis","delta":"ator, finds","seq":184}
+{"type":"synthesis","delta":" that","seq":185}
+{"type":"synthesis","delta":" low","seq":186}
+{"type":"synthesis","delta":"-wage jobs","seq":187}
+{"type":"synthesis","delta":" remaine","seq":188}
+{"type":"synthesis","delta":"d essentially","seq":189}
+{"type":"synthesis","delta":" unchanged over","seq":190}
+{"type":"synthesis","delta":" five","seq":191}
+{"type":"synthesis","delta":" years post","seq":192}
+{"type":"synthesis","delta":"-increase","seq":193}
+{"type":"synthesis","delta":",","seq":194}
+{"type":"synthesis","delta":" with","seq":195}
+{"type":"synthesis","delta":" wage","seq":196}
+{"type":"synthesis","delta":" spill","seq":197}
+{"type":"synthesis","delta":"overs but","seq":198}
+{"type":"synthesis","delta":" no labor","seq":199}
+{"type":"synthesis","delta":"-","seq":200}
+{"type":"synthesis","delta":"labor","seq":201}
+{"type":"synthesis","delta":" substit","seq":202}
+{"type":"synthesis","delta":"ution at","seq":203}
+{"type":"synthesis","delta":" the bottom","seq":204}
+{"type":"synthesis","delta":".","seq":205}
+{"type":"synthesis","delta":" Foun","seq":206}
+{"type":"synthesis","delta":"dational for","seq":207}
+{"type":"synthesis","delta":" the \"","seq":208}
+{"type":"synthesis","delta":"near","seq":209}
+{"type":"synthesis","delta":"-zero employment","seq":210}
+{"type":"synthesis","delta":" effect","seq":211}
+{"type":"synthesis","delta":"\" consensus","seq":212}
+{"type":"synthesis","delta":".\n\n- **[Dust","seq":213}
+{"type":"synthesis","delta":"mann et al. 2022","seq":214}
+{"type":"synthesis","delta":"](http://hdl.handle.","seq":215}
+{"type":"synthesis","delta":"net/10.1093/q","seq":216}
+{"type":"synthesis","delta":"je/qjab","seq":217}
+{"type":"synthesis","delta":"028","seq":218}
+{"type":"synthesis","delta":")** — Explo","seq":219}
+{"type":"synthesis","delta":"its Germany","seq":220}
+{"type":"synthesis","delta":"'s 2015","seq":221}
+{"type":"synthesis","delta":" minimum wage introduction","seq":222}
+{"type":"synthesis","delta":";","seq":223}
+{"type":"synthesis","delta":" finds employment unchange","seq":224}
+{"type":"synthesis","delta":"d but","seq":225}
+{"type":"synthesis","delta":" substantial","seq":226}
+{"type":"synthesis","delta":" re","seq":227}
+{"type":"synthesis","delta":"all","seq":228}
+{"type":"synthesis","delta":"ocation of low","seq":229}
+{"type":"synthesis","delta":"-wage workers from","seq":230}
+{"type":"synthesis","delta":" small","seq":231}
+{"type":"synthesis","delta":" to large,","seq":232}
+{"type":"synthesis","delta":" low","seq":233}
+{"type":"synthesis","delta":"-","seq":234}
+{"type":"synthesis","delta":" to high-paying","seq":235}
+{"type":"synthesis","delta":",","seq":236}
+{"type":"synthesis","delta":" and less","seq":237}
+{"type":"synthesis","delta":" to","seq":238}
+{"type":"synthesis","delta":" more productive","seq":239}
+{"type":"synthesis","delta":" firms","seq":240}
+{"type":"synthesis","delta":". Worker","seq":241}
+{"type":"synthesis","delta":" upgra","seq":242}
+{"type":"synthesis","delta":"ding accounts","seq":243}
+{"type":"synthesis","delta":" for 17","seq":244}
+{"type":"synthesis","delta":"% of wage","seq":245}
+{"type":"synthesis","delta":" gains","seq":246}
+{"type":"synthesis","delta":".\n\n- **[","seq":247}
+{"type":"synthesis","delta":"Azar","seq":248}
+{"type":"synthesis","delta":" et al. 2024","seq":249}
+{"type":"synthesis","delta":"](http://hdl.handle.","seq":250}
+{"type":"synthesis","delta":"net/10.1093/rest","seq":251}
+{"type":"synthesis","delta":"ud/r","seq":252}
+{"type":"synthesis","delta":"da","seq":253}
+{"type":"synthesis","delta":"d091","seq":254}
+{"type":"synthesis","delta":")** — Shows","seq":255}
+{"type":"synthesis","delta":" that","seq":256}
+{"type":"synthesis","delta":" employment","seq":257}
+{"type":"synthesis","delta":" effects of","seq":258}
+{"type":"synthesis","delta":" minimum wages","seq":259}
+{"type":"synthesis","delta":" depen","seq":260}
+{"type":"synthesis","delta":"d critically","seq":261}
+{"type":"synthesis","delta":" on labor","seq":262}
+{"type":"synthesis","delta":" market concentration:","seq":263}
+{"type":"synthesis","delta":" in highly concentrated markets","seq":264}
+{"type":"synthesis","delta":", employment","seq":265}
+{"type":"synthesis","delta":" rises","seq":266}
+{"type":"synthesis","delta":" following","seq":267}
+{"type":"synthesis","delta":" increases","seq":268}
+{"type":"synthesis","delta":".","seq":269}
+{"type":"synthesis","delta":" Provides evidence for","seq":270}
+{"type":"synthesis","delta":" mon","seq":271}
+{"type":"synthesis","delta":"ops","seq":272}
+{"type":"synthesis","delta":"ony models","seq":273}
+{"type":"synthesis","delta":" with","seq":274}
+{"type":"synthesis","delta":" search","seq":275}
+{"type":"synthesis","delta":" frictions.\n\n- **[","seq":276}
+{"type":"synthesis","delta":"Gop","seq":277}
+{"type":"synthesis","delta":"alan","seq":278}
+{"type":"synthesis","delta":" et al. 2021","seq":279}
+{"type":"synthesis","delta":"](http://dx","seq":280}
+{"type":"synthesis","delta":".doi.org/10.1","seq":281}
+{"type":"synthesis","delta":"086","seq":282}
+{"type":"synthesis","delta":"/711","seq":283}
+{"type":"synthesis","delta":"355","seq":284}
+{"type":"synthesis","delta":")** — Using","seq":285}
+{"type":"synthesis","delta":" administrative","seq":286}
+{"type":"synthesis","delta":" pay","seq":287}
+{"type":"synthesis","delta":"roll data, finds firms","seq":288}
+{"type":"synthesis","delta":" reduce","seq":289}
+{"type":"synthesis","delta":" employment","seq":290}
+{"type":"synthesis","delta":" primarily","seq":291}
+{"type":"synthesis","delta":" through hiring","seq":292}
+{"type":"synthesis","delta":" (","seq":293}
+{"type":"synthesis","delta":"not incumbent","seq":294}
+{"type":"synthesis","delta":" separ","seq":295}
+{"type":"synthesis","delta":"ations),","seq":296}
+{"type":"synthesis","delta":" with heter","seq":297}
+{"type":"synthesis","delta":"ogeneous effects across","seq":298}
+{"type":"synthesis","delta":" tra","seq":299}
+{"type":"synthesis","delta":"dable","seq":300}
+{"type":"synthesis","delta":"/","seq":301}
+{"type":"synthesis","delta":"n","seq":302}
+{"type":"synthesis","delta":"ontradable sectors and modest","seq":303}
+{"type":"synthesis","delta":" wage","seq":304}
+{"type":"synthesis","delta":" spill","seq":305}
+{"type":"synthesis","delta":"overs extending","seq":306}
+{"type":"synthesis","delta":" $","seq":307}
+{"type":"synthesis","delta":"2","seq":308}
+{"type":"synthesis","delta":".","seq":309}
+{"type":"synthesis","delta":"50","seq":310}
+{"type":"synthesis","delta":" above","seq":311}
+{"type":"synthesis","delta":" the","seq":312}
+{"type":"synthesis","delta":" minimum.\n\n- **[Meer","seq":313}
+{"type":"synthesis","delta":" &","seq":314}
+{"type":"synthesis","delta":" West","seq":315}
+{"type":"synthesis","delta":" 2016","seq":316}
+{"type":"synthesis","delta":"](http://j","seq":317}
+{"type":"synthesis","delta":"hr","seq":318}
+{"type":"synthesis","delta":".uwpress","seq":319}
+{"type":"synthesis","delta":".org/c","seq":320}
+{"type":"synthesis","delta":"gi/re","seq":321}
+{"type":"synthesis","delta":"print/51","seq":322}
+{"type":"synthesis","delta":"/2","seq":323}
+{"type":"synthesis","delta":"/500","seq":324}
+{"type":"synthesis","delta":")** — Demonstrates","seq":325}
+{"type":"synthesis","delta":" that minimum wage effects","seq":326}
+{"type":"synthesis","delta":" operate","seq":327}
+{"type":"synthesis","delta":" through reduce","seq":328}
+{"type":"synthesis","delta":"d *","seq":329}
+{"type":"synthesis","delta":"job","seq":330}
+{"type":"synthesis","delta":" growth","seq":331}
+{"type":"synthesis","delta":"* over","seq":332}
+{"type":"synthesis","delta":" time rather","seq":333}
+{"type":"synthesis","delta":" than immediate","seq":334}
+{"type":"synthesis","delta":" employment drops","seq":335}
+{"type":"synthesis","delta":";","seq":336}
+{"type":"synthesis","delta":" state","seq":337}
+{"type":"synthesis","delta":"-specific","seq":338}
+{"type":"synthesis","delta":" time","seq":339}
+{"type":"synthesis","delta":" trends","seq":340}
+{"type":"synthesis","delta":" mask","seq":341}
+{"type":"synthesis","delta":" these","seq":342}
+{"type":"synthesis","delta":" dynamic","seq":343}
+{"type":"synthesis","delta":" effects.\n\n- **[Kre","seq":344}
+{"type":"synthesis","delta":"iner et","seq":345}
+{"type":"synthesis","delta":" al. 2020","seq":346}
+{"type":"synthesis","delta":"](http://e","seq":347}
+{"type":"synthesis","delta":"pr","seq":348}
+{"type":"synthesis","delta":"ints.l","seq":349}
+{"type":"synthesis","delta":"se.ac.uk/100","seq":350}
+{"type":"synthesis","delta":"800","seq":351}
+{"type":"synthesis","delta":"/)** — Explo","seq":352}
+{"type":"synthesis","delta":"its a","seq":353}
+{"type":"synthesis","delta":" sharp","seq":354}
+{"type":"synthesis","delta":" discontin","seq":355}
+{"type":"synthesis","delta":"uity in Danish","seq":356}
+{"type":"synthesis","delta":" minimum wages","seq":357}
+{"type":"synthesis","delta":" at","seq":358}
+{"type":"synthesis","delta":" age","seq":359}
+{"type":"synthesis","delta":" 18","seq":360}
+{"type":"synthesis","delta":" ","seq":361}
+{"type":"synthesis","delta":"(40","seq":362}
+{"type":"synthesis","delta":"% jump","seq":363}
+{"type":"synthesis","delta":");","seq":364}
+{"type":"synthesis","delta":" finds employment falls","seq":365}
+{"type":"synthesis","delta":" ","seq":366}
+{"type":"synthesis","delta":"33","seq":367}
+{"type":"synthesis","delta":"% an","seq":368}
+{"type":"synthesis","delta":"d hours","seq":369}
+{"type":"synthesis","delta":" drop","seq":370}
+{"type":"synthesis","delta":" 45","seq":371}
+{"type":"synthesis","delta":"%,","seq":372}
+{"type":"synthesis","delta":" impl","seq":373}
+{"type":"synthesis","delta":"ying youth","seq":374}
+{"type":"synthesis","delta":" employment","seq":375}
+{"type":"synthesis","delta":" elast","seq":376}
+{"type":"synthesis","delta":"icity of ","seq":377}
+{"type":"synthesis","delta":"0.6–","seq":378}
+{"type":"synthesis","delta":"1","seq":379}
+{"type":"synthesis","delta":".1","seq":380}
+{"type":"synthesis","delta":".","seq":381}
+{"type":"synthesis","delta":" Direct","seq":382}
+{"type":"synthesis","delta":" evidence that","seq":383}
+{"type":"synthesis","delta":" youth","seq":384}
+{"type":"synthesis","delta":" are","seq":385}
+{"type":"synthesis","delta":" more","seq":386}
+{"type":"synthesis","delta":" sensitive","seq":387}
+{"type":"synthesis","delta":" than","seq":388}
+{"type":"synthesis","delta":" aggregate","seq":389}
+{"type":"synthesis","delta":" studies","seq":390}
+{"type":"synthesis","delta":" suggest.\n\n- **[Eng","seq":391}
+{"type":"synthesis","delta":"b","seq":392}
+{"type":"synthesis","delta":"om","seq":393}
+{"type":"synthesis","delta":" &","seq":394}
+{"type":"synthesis","delta":" Mo","seq":395}
+{"type":"synthesis","delta":"ser 2022","seq":396}
+{"type":"synthesis","delta":"](https","seq":397}
+{"type":"synthesis","delta":"://www.","seq":398}
+{"type":"synthesis","delta":"aeaweb.org/doi","seq":399}
+{"type":"synthesis","delta":"/10.1257/aer","seq":400}
+{"type":"synthesis","delta":".20181","seq":401}
+{"type":"synthesis","delta":"506","seq":402}
+{"type":"synthesis","delta":")** — Brazil","seq":403}
+{"type":"synthesis","delta":"'s ","seq":404}
+{"type":"synthesis","delta":"128","seq":405}
+{"type":"synthesis","delta":"%","seq":406}
+{"type":"synthesis","delta":" real","seq":407}
+{"type":"synthesis","delta":" minimum wage increase (1","seq":408}
+{"type":"synthesis","delta":"996","seq":409}
+{"type":"synthesis","delta":"–2018","seq":410}
+{"type":"synthesis","delta":") reduce","seq":411}
+{"type":"synthesis","delta":"d earnings","seq":412}
+{"type":"synthesis","delta":" inequality","seq":413}
+{"type":"synthesis","delta":" substantially","seq":414}
+{"type":"synthesis","delta":" (","seq":415}
+{"type":"synthesis","delta":"45","seq":416}
+{"type":"synthesis","delta":"% of","seq":417}
+{"type":"synthesis","delta":" total","seq":418}
+{"type":"synthesis","delta":" decline","seq":419}
+{"type":"synthesis","delta":")","seq":420}
+{"type":"synthesis","delta":" with","seq":421}
+{"type":"synthesis","delta":" m","seq":422}
+{"type":"synthesis","delta":"ute","seq":423}
+{}
+{"type":"synthesis","delta":"d employment effects due","seq":424}
+{"type":"synthesis","delta":" to worker","seq":425}
+{"type":"synthesis","delta":" reallocation towar","seq":426}
+{"type":"synthesis","delta":"d more","seq":427}
+{"type":"synthesis","delta":" productive firms.\n\n- **[","seq":428}
+{"type":"synthesis","delta":"Haanwinckel &","seq":429}
+{"type":"synthesis","delta":" So","seq":430}
+{"type":"synthesis","delta":"ares","seq":431}
+{"type":"synthesis","delta":" 2021","seq":432}
+{"type":"synthesis","delta":"](http://h","seq":433}
+{"type":"synthesis","delta":"dl.handle.net/10.","seq":434}
+{"type":"synthesis","delta":"1093/restud/r","seq":435}
+{"type":"synthesis","delta":"dab","seq":436}
+{"type":"synthesis","delta":"017","seq":437}
+{"type":"synthesis","delta":")** — Develops","seq":438}
+{"type":"synthesis","delta":" a search","seq":439}
+{"type":"synthesis","delta":" model of informal","seq":440}
+{"type":"synthesis","delta":" labor","seq":441}
+{"type":"synthesis","delta":" markets with","seq":442}
+{"type":"synthesis","delta":" minimum","seq":443}
+{"type":"synthesis","delta":" wage;","seq":444}
+{"type":"synthesis","delta":" estimates","seq":445}
+{"type":"synthesis","delta":" using","seq":446}
+{"type":"synthesis","delta":" Brazil","seq":447}
+{"type":"synthesis","delta":" data","seq":448}
+{"type":"synthesis","delta":" show","seq":449}
+{"type":"synthesis","delta":" that","seq":450}
+{"type":"synthesis","delta":" workforce","seq":451}
+{"type":"synthesis","delta":" composition","seq":452}
+{"type":"synthesis","delta":" changes (","seq":453}
+{"type":"synthesis","delta":"rising","seq":454}
+{"type":"synthesis","delta":" education","seq":455}
+{"type":"synthesis","delta":")","seq":456}
+{"type":"synthesis","delta":" drove","seq":457}
+{"type":"synthesis","delta":" inform","seq":458}
+{"type":"synthesis","delta":"ality reduction","seq":459}
+{"type":"synthesis","delta":" more","seq":460}
+{"type":"synthesis","delta":" than policy","seq":461}
+{"type":"synthesis","delta":" alone","seq":462}
+{"type":"synthesis","delta":".\n\n- **[Giul","seq":463}
+{"type":"synthesis","delta":"iano ","seq":464}
+{"type":"synthesis","delta":"2013","seq":465}
+{"type":"synthesis","delta":"](http://dx","seq":466}
+{"type":"synthesis","delta":".doi.org/10.1","seq":467}
+{"type":"synthesis","delta":"086","seq":468}
+{"type":"synthesis","delta":"/666","seq":469}
+{"type":"synthesis","delta":"921","seq":470}
+{"type":"synthesis","delta":")** — Using","seq":471}
+{"type":"synthesis","delta":" personnel","seq":472}
+{"type":"synthesis","delta":" data","seq":473}
+{"type":"synthesis","delta":" from","seq":474}
+{"type":"synthesis","delta":" a","seq":475}
+{"type":"synthesis","delta":" large","seq":476}
+{"type":"synthesis","delta":" US","seq":477}
+{"type":"synthesis","delta":" retail","seq":478}
+{"type":"synthesis","delta":"er, finds that","seq":479}
+{"type":"synthesis","delta":" the","seq":480}
+{"type":"synthesis","delta":" 1996","seq":481}
+{"type":"synthesis","delta":" federal","seq":482}
+{"type":"synthesis","delta":" minimum wage increase raise","seq":483}
+{"type":"synthesis","delta":"d teenage","seq":484}
+{"type":"synthesis","delta":" relative","seq":485}
+{"type":"synthesis","delta":" employment","seq":486}
+{"type":"synthesis","delta":" (","seq":487}
+{"type":"synthesis","delta":"especially","seq":488}
+{"type":"synthesis","delta":" younger","seq":489}
+{"type":"synthesis","delta":",","seq":490}
+{"type":"synthesis","delta":" more","seq":491}
+{"type":"synthesis","delta":" afflu","seq":492}
+{"type":"synthesis","delta":"ent teens","seq":493}
+{"type":"synthesis","delta":") where","seq":494}
+{"type":"synthesis","delta":" it was moder","seq":495}
+{"type":"synthesis","delta":"ately binding","seq":496}
+{"type":"synthesis","delta":", consistent","seq":497}
+{"type":"synthesis","delta":" with non","seq":498}
+{"type":"synthesis","delta":"comp","seq":499}
+{"type":"synthesis","delta":"et","seq":500}
+{"type":"synthesis","delta":"itive models","seq":501}
+{"type":"synthesis","delta":".\n\n- **[D","seq":502}
+{"type":"synthesis","delta":"ube & L","seq":503}
+{"type":"synthesis","delta":"ester","seq":504}
+{"type":"synthesis","delta":" &","seq":505}
+{"type":"synthesis","delta":" Reich","seq":506}
+{"type":"synthesis","delta":" 2016","seq":507}
+{"type":"synthesis","delta":"](http://dx","seq":508}
+{"type":"synthesis","delta":".doi.org/10.1","seq":509}
+{"type":"synthesis","delta":"086","seq":510}
+{"type":"synthesis","delta":"/685","seq":511}
+{"type":"synthesis","delta":"449","seq":512}
+{"type":"synthesis","delta":")** — First","seq":513}
+{"type":"synthesis","delta":" estimates","seq":514}
+{"type":"synthesis","delta":" of","seq":515}
+{"type":"synthesis","delta":" minimum wage effects on employment","seq":516}
+{"type":"synthesis","delta":" *","seq":517}
+{"type":"synthesis","delta":"flows","seq":518}
+{"type":"synthesis","delta":"* (","seq":519}
+{"type":"synthesis","delta":"not stocks","seq":520}
+{"type":"synthesis","delta":") using state","seq":521}
+{"type":"synthesis","delta":"-border","seq":522}
+{"type":"synthesis","delta":" discontin","seq":523}
+{"type":"synthesis","delta":"uities; finds s","seq":524}
+{"type":"synthesis","delta":"izable negative","seq":525}
+{"type":"synthesis","delta":" effects on acc","seq":526}
+{"type":"synthesis","delta":"essions","seq":527}
+{"type":"synthesis","delta":" an","seq":528}
+{"type":"synthesis","delta":"d separ","seq":529}
+{"type":"synthesis","delta":"ations among","seq":530}
+{"type":"synthesis","delta":" low","seq":531}
+{"type":"synthesis","delta":"-tenure","seq":532}
+{"type":"synthesis","delta":" workers,","seq":533}
+{"type":"synthesis","delta":" consistent","seq":534}
+{"type":"synthesis","delta":" with search models","seq":535}
+{"type":"synthesis","delta":".\n\n- **[Day","seq":536}
+{"type":"synthesis","delta":"ioglu et","seq":537}
+{"type":"synthesis","delta":" al. 2020","seq":538}
+{"type":"synthesis","delta":"](https","seq":539}
+{"type":"synthesis","delta":"://docs","seq":540}
+{"type":"synthesis","delta":".","seq":541}
+{"type":"synthesis","delta":"iza","seq":542}
+{"type":"synthesis","delta":".org/dp13","seq":543}
+{"type":"synthesis","delta":"982","seq":544}
+{"type":"synthesis","delta":".pdf)** — Explo","seq":545}
+{"type":"synthesis","delta":"its Turkey","seq":546}
+{"type":"synthesis","delta":"'s age","seq":547}
+{"type":"synthesis","delta":"-specific minimum wage rule","seq":548}
+{"type":"synthesis","delta":" (lower","seq":549}
+{"type":"synthesis","delta":" for age","seq":550}
+{"type":"synthesis","delta":" 15","seq":551}
+{"type":"synthesis","delta":" vs","seq":552}
+{"type":"synthesis","delta":".","seq":553}
+{"type":"synthesis","delta":" 16","seq":554}
+{"type":"synthesis","delta":"+","seq":555}
+{"type":"synthesis","delta":")","seq":556}
+{"type":"synthesis","delta":" and its","seq":557}
+{"type":"synthesis","delta":" abol","seq":558}
+{"type":"synthesis","delta":"ition;","seq":559}
+{"type":"synthesis","delta":" finds employment probability","seq":560}
+{"type":"synthesis","delta":" dec","seq":561}
+{"type":"synthesis","delta":"lines ","seq":562}
+{"type":"synthesis","delta":"2","seq":563}
+{"type":"synthesis","delta":".5–","seq":564}
+{"type":"synthesis","delta":"3.1","seq":565}
+{"type":"synthesis","delta":" percentage points for","seq":566}
+{"type":"synthesis","delta":" young males","seq":567}
+{"type":"synthesis","delta":", with trans","seq":568}
+{"type":"synthesis","delta":"itory","seq":569}
+{"type":"synthesis","delta":" N","seq":570}
+{"type":"synthesis","delta":"EET effects absorbe","seq":571}
+{"type":"synthesis","delta":"d by school","seq":572}
+{"type":"synthesis","delta":" enrollment over","seq":573}
+{"type":"synthesis","delta":" time.\n\n- **[D","seq":574}
+{"type":"synthesis","delta":"ube &","seq":575}
+{"type":"synthesis","delta":" Lindner 2024](http","seq":576}
+{"type":"synthesis","delta":"://www","seq":577}
+{"type":"synthesis","delta":".n","seq":578}
+{"type":"synthesis","delta":"ber.org/papers/w","seq":579}
+{"type":"synthesis","delta":"32","seq":580}
+{"type":"synthesis","delta":"878","seq":581}
+{"type":"synthesis","delta":".","seq":582}
+{"type":"synthesis","delta":"pdf)** — Recent","seq":583}
+{"type":"synthesis","delta":" comprehensive","seq":584}
+{"type":"synthesis","delta":" survey","seq":585}
+{"type":"synthesis","delta":" of ","seq":586}
+{"type":"synthesis","delta":"21st","seq":587}
+{"type":"synthesis","delta":"-century minimum wage literature","seq":588}
+{"type":"synthesis","delta":"; emphas","seq":589}
+{"type":"synthesis","delta":"izes heterog","seq":590}
+{"type":"synthesis","delta":"eneity by","seq":591}
+{"type":"synthesis","delta":" labor market concentration, inform","seq":592}
+{"type":"synthesis","delta":"ality, enforcement","seq":593}
+{"type":"synthesis","delta":", and development","seq":594}
+{"type":"synthesis","delta":" level","seq":595}
+{"type":"synthesis","delta":"; documents","seq":596}
+{"type":"synthesis","delta":" emerging","seq":597}
+{"type":"synthesis","delta":" evidence","seq":598}
+{"type":"synthesis","delta":" on","seq":599}
+{"type":"synthesis","delta":" firm","seq":600}
+{"type":"synthesis","delta":" exit","seq":601}
+{"type":"synthesis","delta":",","seq":602}
+{"type":"synthesis","delta":" productivity","seq":603}
+{"type":"synthesis","delta":", and price","seq":604}
+{"type":"synthesis","delta":" pass","seq":605}
+{"type":"synthesis","delta":"-through.\n\n---","seq":606}
+{"type":"synthesis","delta":"\n\n## Implications","seq":607}
+{"type":"synthesis","delta":"\n\nThe literature reveals","seq":608}
+{"type":"synthesis","delta":" a","seq":609}
+{"type":"synthesis","delta":" nuanced picture:","seq":610}
+{"type":"synthesis","delta":" **","seq":611}
+{"type":"synthesis","delta":"aggregate","seq":612}
+{"type":"synthesis","delta":" employment effects in","seq":613}
+{"type":"synthesis","delta":" developed economies are small","seq":614}
+{"type":"synthesis","delta":" or","seq":615}
+{"type":"synthesis","delta":" zero**, but","seq":616}
+{"type":"synthesis","delta":" this","seq":617}
+{"type":"synthesis","delta":" masks substantial","seq":618}
+{"type":"synthesis","delta":" re","seq":619}
+{"type":"synthesis","delta":"allocation an","seq":620}
+{"type":"synthesis","delta":"d heterogeneity. Youth","seq":621}
+{"type":"synthesis","delta":" are","seq":622}
+{"type":"synthesis","delta":" more vulnerable","seq":623}
+{"type":"synthesis","delta":" than","seq":624}
+{"type":"synthesis","delta":" older","seq":625}
+{"type":"synthesis","delta":" workers—","seq":626}
+{"type":"synthesis","delta":"[","seq":627}
+{"type":"synthesis","delta":"Kre","seq":628}
+{"type":"synthesis","delta":"iner et al.","seq":629}
+{"type":"synthesis","delta":"](http://eprints.l","seq":630}
+{"type":"synthesis","delta":"se.ac.uk/100800","seq":631}
+{"type":"synthesis","delta":"/) an","seq":632}
+{"type":"synthesis","delta":"d [Day","seq":633}
+{"type":"synthesis","delta":"ioglu et al.](https","seq":634}
+{"type":"synthesis","delta":"://docs.iza.org/","seq":635}
+{"type":"synthesis","delta":"dp13982.pdf) show elast","seq":636}
+{"type":"synthesis","delta":"icities of 0.6–","seq":637}
+{"type":"synthesis","delta":"1.1 for youth","seq":638}
+{"type":"synthesis","delta":",","seq":639}
+{"type":"synthesis","delta":" compare","seq":640}
+{"type":"synthesis","delta":"d to near","seq":641}
+{"type":"synthesis","delta":"-zero for the","seq":642}
+{"type":"synthesis","delta":" overall","seq":643}
+{"type":"synthesis","delta":" workforce","seq":644}
+{"type":"synthesis","delta":". **","seq":645}
+{"type":"synthesis","delta":"In","seq":646}
+{"type":"synthesis","delta":" low","seq":647}
+{"type":"synthesis","delta":"-income","seq":648}
+{"type":"synthesis","delta":" labor","seq":649}
+{"type":"synthesis","delta":" markets**,","seq":650}
+{"type":"synthesis","delta":" effects","seq":651}
+{"type":"synthesis","delta":" depen","seq":652}
+{"type":"synthesis","delta":"d critically","seq":653}
+{"type":"synthesis","delta":" on enforcement","seq":654}
+{"type":"synthesis","delta":" and inform","seq":655}
+{"type":"synthesis","delta":"ality:","seq":656}
+{"type":"synthesis","delta":" [Ha","seq":657}
+{"type":"synthesis","delta":"anwinckel & Soares","seq":658}
+{"type":"synthesis","delta":"](http://hdl.handle.","seq":659}
+{"type":"synthesis","delta":"net/10.1093/rest","seq":660}
+{"type":"synthesis","delta":"ud/rdab017) an","seq":661}
+{"type":"synthesis","delta":"d [Eng","seq":662}
+{"type":"synthesis","delta":"bom & Moser](https","seq":663}
+{"type":"synthesis","delta":"://www.aeaweb.","seq":664}
+{"type":"synthesis","delta":"org/doi/10.1257","seq":665}
+{"type":"synthesis","delta":"/aer.20181506)","seq":666}
+{"type":"synthesis","delta":" show that weak","seq":667}
+{"type":"synthesis","delta":" compliance","seq":668}
+{"type":"synthesis","delta":" an","seq":669}
+{"type":"synthesis","delta":"d worker reallocation can","seq":670}
+{"type":"synthesis","delta":" offset direct","seq":671}
+{"type":"synthesis","delta":" dis","seq":672}
+{"type":"synthesis","delta":"employment.","seq":673}
+{"type":"synthesis","delta":" **Labor","seq":674}
+{"type":"synthesis","delta":" market structure","seq":675}
+{"type":"synthesis","delta":" matters**: [","seq":676}
+{"type":"synthesis","delta":"Azar et al.](http://h","seq":677}
+{"type":"synthesis","delta":"dl.handle.net/10.","seq":678}
+{"type":"synthesis","delta":"1093/restud/rda","seq":679}
+{"type":"synthesis","delta":"d091) demonstrate","seq":680}
+{"type":"synthesis","delta":" that mon","seq":681}
+{"type":"synthesis","delta":"op","seq":682}
+{"type":"synthesis","delta":"sonistic concentration","seq":683}
+{"type":"synthesis","delta":" rever","seq":684}
+{"type":"synthesis","delta":"ses employment losses","seq":685}
+{"type":"synthesis","delta":".","seq":686}
+{"type":"synthesis","delta":" Open","seq":687}
+{"type":"synthesis","delta":" questions remain","seq":688}
+{"type":"synthesis","delta":" on","seq":689}
+{"type":"synthesis","delta":" long","seq":690}
+{"type":"synthesis","delta":"-run","seq":691}
+{"type":"synthesis","delta":" effects, the","seq":692}
+{"type":"synthesis","delta":" role of firm","seq":693}
+{"type":"synthesis","delta":" exit","seq":694}
+{"type":"synthesis","delta":" an","seq":695}
+{"type":"synthesis","delta":"d capital","seq":696}
+{"type":"synthesis","delta":" adjustment","seq":697}
+{"type":"synthesis","delta":", and whether","seq":698}
+{"type":"synthesis","delta":" youth","seq":699}
+{"type":"synthesis","delta":" employment losses","seq":700}
+{"type":"synthesis","delta":" in","seq":701}
+{"type":"synthesis","delta":" low","seq":702}
+{"type":"synthesis","delta":"-income settings reflect","seq":703}
+{"type":"synthesis","delta":" deman","seq":704}
+{"type":"synthesis","delta":"d-side constraints","seq":705}
+{"type":"synthesis","delta":" or supply-side transitions","seq":706}
+{"type":"synthesis","delta":" into","seq":707}
+{"type":"synthesis","delta":" education","seq":708}
+{"type":"synthesis","delta":".","seq":709}
+{"type":"stage","stage":"synthesize","state":"exit","ms":18420,"seq":710}
+{"type":"done","ms_total":41200,"seq":711}

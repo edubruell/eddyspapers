@@ -75,9 +75,9 @@ These ship as identical (or near-identical) React components in `agentic_fronten
 - **`Pill`** — the category chip in both on/off states. Reused **as-is** for the journal-category filter, which still acts as a hard database restriction the agent must honour (the model receives the selected categories as part of the brief context, not as a section pill it draws itself). **Mode pills are dropped** — the search mode for each section is inferred from the brief and shown only as a small label inside `SectionCard`'s header, not as a separate primitive.
 
 - **`PrimaryButton`** — navy-blue Search button. Reused as "Run" on the agentic landing and "New search" in the sidebar.
-- **`GhostButton`** — outlined "Export" / "Share" / "BibTeX" / "More" style. Reused for "Copy BibTeX", "Download PDF", "Show script".
+- **`GhostButton`** — outlined "Export" / "Share" / "BibTeX" / "More" style. Reused for "Copy BibTeX", "Download PDF".
 - **`SimilarityBar`** — the 4–6px coloured strip on the left of result cards. Reused for `PaperRow` and inside `SectionCard`'s individual paper rows.
-- **`AdvancedDisclosure`** — the "▶ Show advanced filters" collapsible row. Reused for "▶ Show R script" and "▶ Show SQL".
+- **`AdvancedDisclosure`** — the "▶ Show advanced filters" collapsible row. Reused for "▶ Show SQL" and other audit-trail reveals. **Not** used for the R script — the script is never surfaced to the user (see §3.2, decided 2026-06-05).
 - **`DatabaseFooter`** — "Database last updated on YYYY-MM-DD · FAQ / Imprint". Reused verbatim; same snapshot date logic.
 
 A user who already uses Eddy's Papers should immediately recognise the agentic app as the same family.
@@ -168,8 +168,9 @@ Differences from the existing landing:
 │ AGENTIC SEARCH  │ │  Semantic search: 'bureaucratic quality' …        │
 │                 │ │  ↳ 15 results in 1.8s                             │
 │ TASK            │ │                                                   │
-│ [textarea]      │ │ ▶ Show database search script                     │
-│                 │ │                                                   │
+│ [textarea]      │ │ ◆ Search strategy                                 │
+│                 │ │   Sweeping bureaucratic-quality work across       │
+│                 │ │   Top-5 + Field-A, then recent working papers.    │
 │ JOURNAL CATS    │ │ ┌───────────────────────────────────────────────┐ │
 │ (Top 5)(Gen…)   │ │ │ ▌ KEYWORD SWEEP                               │ │
 │ (AEJs)(Top A)   │ │ │   Bureaucratic quality — Top 5 + Field-A      │ │
@@ -197,7 +198,7 @@ The right pane is where the new primitives live:
 
 - **`StageStepper`** at the top, replacing what would have been a results count line. Five dots/labels horizontally; current stage is blue and spinning, prior stages are green checkmarks, future stages are muted. Uses the same `--primary` / `--similarity-hi` / `--muted` palette so it doesn't read as "new design system".
 - **`ProgressLine`** under the stepper — one-line "what's happening right now" with the same `--text-muted` colour as "Press ⌘+Enter…" cues.
-- **`ScriptPanel`** is an `AdvancedDisclosure` labelled **`▶ Show database search script`**, revealing the syntax-highlighted R code streaming in. Closed by default; users who don't care never see it.
+- **`StrategyPanel`** (replaces the old `ScriptPanel`; decided 2026-06-05) is a small always-visible block under the stepper, labelled **`◆ Search strategy`**, showing **one or two plain-language sentences** describing the search plan ("Sweeping bureaucratic-quality work across Top-5 + Field-A, then recent working papers"). It is **not** a disclosure and it never shows the R script. The script is an implementation detail the user does not need to see; the strategy is the right altitude of feedback — enough to convey "the agent thought about how to search" without a wall of code. The sentence comes from the writer's `strategy` output field (a sibling of `script` in the same structured generation; see `04_prompts.md` / backend `writeScript`). During the `write` stage the panel shows a muted "Planning the search…" placeholder; it fills in when the `strategy` event arrives.
 - **`SectionCard`** is a `Card` matching the result-card outline/shadow, with a small mode label in the header (`KEYWORD SWEEP`, `SEMANTIC SEARCH`, `JOURNAL SCAN`, `AUTHOR LOOKUP`, `WORKING PAPERS`) inferred from the script — not a separate pill primitive. **Collapsed by default**: each section is one summary line ("KEYWORD SWEEP — Bureaucratic quality (47 found, 25 shown) ▶") that expands on click into the list of `PaperRow`s. Reasoning: the synthesis is what the user came for; raw sections are an audit trail beneath it, not the headline. See "Reading order" below.
 - **`PaperCard`** (expanded `PaperRow`) is **visually identical** to the current `ResultCard`: title, authors, journal+year, abstract, BibTeX + More buttons. This is the single biggest "this feels like the same app" win — users already know how to read this card.
 - **`SynthesisPanel`** sits **above the (collapsed) sections** — it is the deliverable; sections are evidence beneath it. It streams markdown via `react-markdown` + `remark-gfm` into the `--text-strong` body type at the same size as existing result abstracts. Two link styles are rendered:
@@ -210,7 +211,7 @@ The right pane is where the new primitives live:
 **Reading order (right pane, top → bottom):**
 
 1. `StageStepper` + `ProgressLine` (during run; collapse to a small "Took 34s ✓" line afterwards).
-2. `ScriptPanel` disclosure (closed by default, even when validated).
+2. `StrategyPanel` — one/two-sentence plain-language plan. Always visible, never the R script.
 3. `SynthesisPanel` — the primary deliverable. Always full width, never collapsed.
 4. `ArtifactsToolbar` — download buttons.
 5. **Evidence sections**: a `SectionLabel "EVIDENCE"` divider, then the collapsed `SectionCard` list. Each opens on click; handle anchors from the synthesis open and scroll into the appropriate card.
@@ -279,7 +280,7 @@ Voice should match the existing app — minimal, slightly playful where the logo
 | Primary button | `Run search` |
 | Stepper labels | `clarify · write · validate · execute · synthesize` (lowercase, casual) |
 | Progress line examples | `Reading the brief…` · `Writing search script…` · `Running keyword sweep for "X"…` · `15 results in 1.8s` · `Synthesising review…` |
-| Script panel header | `R script` (closed) / `R script (validated ✓)` (open after validate) |
+| Strategy panel | label `Search strategy`; placeholder during write `Planning the search…` (R script is never shown) |
 | Validation failure | `Script needed adjustment — retrying.` (muted, never alarming) |
 | Section mode labels (inferred, in header) | `KEYWORD SWEEP` · `SEMANTIC SEARCH` · `JOURNAL SCAN` · `AUTHOR LOOKUP` · `WORKING PAPERS` · `EDITOR TARGETS` |
 | Empty PaperRow expand | `Expand for abstract, BibTeX, and citations.` |
@@ -305,7 +306,7 @@ The current app degrades gracefully to a single-column on narrow viewports; the 
 
 - Sidebar becomes a collapsed top header with the logo, brief textarea, and a "Refine" expand button revealing category pills + advanced filters.
 - Stepper goes vertical, sections stack full-width.
-- ScriptPanel collapsed by default (it already is on desktop; on mobile it stays collapsed even after open-by-default would have applied).
+- StrategyPanel renders as a one/two-line block above the synthesis (same on mobile; nothing to collapse).
 - Synthesis panel always full-width.
 
 No special mobile design is needed — the same primitives at narrower sizes work.
@@ -369,7 +370,7 @@ agentic_frontend/src/components/
 │   ├── AdvancedFilters.jsx
 │   ├── StageStepper.jsx
 │   ├── ProgressLine.jsx
-│   ├── ScriptPanel.jsx
+│   ├── StrategyPanel.jsx       # plain-language plan; never the R script (2026-06-05)
 │   ├── ClarifierBubble.jsx    # inline "Quick question:" prompt
 │   ├── SectionCard.jsx
 │   ├── PaperRow.jsx

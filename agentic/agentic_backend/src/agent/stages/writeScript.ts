@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { generateStructured, type UsageSummary } from "../../llm/structured.js";
 import { models, modelIds } from "../models.js";
+import { or } from "../../llm/client.js";
 import { writerSystemMessage } from "../../prompts/assemble.js";
 import { checkScript } from "../../sandbox/checkScript.js";
 import { writeFile, unlink } from "fs/promises";
@@ -13,14 +14,27 @@ export type WriteScriptOpts = {
   minYear?: number;
   mustInclude?: string[];
   dbDate: string;
+  modelOverride?: string;
 };
 
 export type WriteScriptResult =
-  | { ok: true; script: string; attempts: number; usage: UsageSummary }
+  | { ok: true; script: string; strategy: string; attempts: number; usage: UsageSummary }
   | { ok: false; reason: string; attempts: number }
   | { ok: false; rejected: true; reason: string; attempts: 0 };
 
-const scriptSchema = z.object({ script: z.string() });
+const scriptSchema = z.object({
+  strategy: z
+    .string()
+    .describe(
+      "At most two short plain-language sentences (~45 words) describing the search plan for a " +
+        "non-technical reader: the topics/angles you will sweep and the prestige or recency cuts you " +
+        "apply (e.g. 'I'll search for work on optimal monetary policy in commodity-exporting economies, " +
+        "favouring the most-cited Top-5 papers, then add recent working papers'). Describe WHAT you look " +
+        "for, not HOW the script works — no R, no code, no function names, and no internal mechanics " +
+        "(do not mention embeddings, mock abstracts, deduplication, or BibTeX). Shown to the user in place of the script.",
+    ),
+  script: z.string(),
+});
 
 export function preflight(brief: string): { ok: true } | { ok: false; reason: string } {
   const trimmed = brief.trim();
@@ -85,7 +99,7 @@ async function checkAndGetRejection(script: string): Promise<
 }
 
 export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptResult> {
-  const { brief, categories, minYear, mustInclude, dbDate } = opts;
+  const { brief, categories, minYear, mustInclude, dbDate, modelOverride } = opts;
 
   const check = preflight(brief);
   if (!check.ok) return { ok: false, rejected: true, reason: check.reason, attempts: 0 };
@@ -95,8 +109,10 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
   let totalUsage: UsageSummary = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 };
 
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const model = attempt <= 2 ? models.writer : models.writerRetry;
-    const modelId = attempt <= 2 ? modelIds.writer : modelIds.writerRetry;
+    const baseModel = attempt <= 2 ? models.writer : models.writerRetry;
+    const baseModelId = attempt <= 2 ? modelIds.writer : modelIds.writerRetry;
+    const model = modelOverride ? or(modelOverride) : baseModel;
+    const modelId = modelOverride ?? baseModelId;
 
     const userPrompt = buildUserMessage(
       brief,
@@ -108,7 +124,7 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
       lastRejection
     );
 
-    let object: { script: string };
+    let object: { strategy: string; script: string };
     let usage: UsageSummary;
     try {
       ({ object, usage } = await generateStructured({
@@ -130,10 +146,11 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
     };
 
     const script = object.script;
+    const strategy = object.strategy;
     const check = await checkAndGetRejection(script);
 
     if (check.ok) {
-      return { ok: true, script, attempts: attempt, usage: totalUsage };
+      return { ok: true, script, strategy, attempts: attempt, usage: totalUsage };
     }
 
     lastScript = script;

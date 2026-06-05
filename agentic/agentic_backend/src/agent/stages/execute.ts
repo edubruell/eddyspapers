@@ -85,8 +85,13 @@ export async function executeScript(
         }
 
         case "note":
-          // emit as progress for now — note events don't have a dedicated StreamEvent type in phase 6
-          onEvent({ type: "progress", label: raw.markdown });
+          // Notes before any section are opening strategy restatements — the
+          // plain-language `strategy` field already covers that, and surfacing
+          // the script's wording leaks internal mechanics. Only genuine
+          // end-of-run caveats (which arrive after sections) are shown.
+          if (sections.length > 0) {
+            onEvent({ type: "progress", label: raw.markdown });
+          }
           break;
 
         case "error":

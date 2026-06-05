@@ -11,8 +11,6 @@ Find papers on the employment effects of minimum wages, focusing on high-quality
 work from top journals and recent working papers.
 
 \`\`\`r
-emit_note("Strategy: keyword sweep over top journals, two semantic sections with varied mock abstracts (mechanism vs. identification), WP scan.")
-
 all_handles <- character(0)
 
 # --- Section 1: keyword sweep over top and field journals ---
@@ -74,8 +72,6 @@ I want to find recent papers by the main researchers working on immigration and 
 and identify which journals and editors are most active in this area.
 
 \`\`\`r
-emit_note("Strategy: SQL author chains for known researchers, semantic section on mechanisms, citation network for discovery, recent WPs.")
-
 all_handles <- character(0)
 
 # --- Section 1: papers by known researchers ---
@@ -138,8 +134,6 @@ Do an exhaustive search of the Journal of Labor Economics for papers on job sear
 matching models, both theoretical and empirical.
 
 \`\`\`r
-emit_note("Strategy: JOLE-focused semantic search with varied mock abstracts (theory vs. empirics), then keyword sweep for remaining coverage.")
-
 all_handles <- character(0)
 
 # --- Section 1: JOLE semantic — job search theory (theory framing) ---

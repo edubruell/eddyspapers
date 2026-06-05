@@ -1,0 +1,76 @@
+$ tsx --env-file=.env scripts/benchmark.ts
+[1m
+═══ PHASE-5 MINI BENCHMARK ═══
+[0m
+Models:  deepseek-v4-flash, qwen3.6-35b-a3b, claude-haiku-4-5, gemini-3.5-flash
+Briefs:  b01, b02, b03, b04, b05, b06, b07, b08, b09, b10
+Sandbox: [32menabled[0m
+DB:      /Users/ebr/eddyspapers/db/articles.duckdb
+
+[1m
+── b01 (context_paste) ─────────────────────────────[0m
+[2m   "I'm looking for related work for a paper I'm writing. Our central question is ho…"[0m
+  [36mdeepseek-v4-flash                       [0m [llm] write:attempt1 | cached=0/6171 prompt | 1041 completion
+[32m✓ attempt 1[0m 46p[2m 39413ms $0.00091[0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6312 prompt | 2157 completion
+[32m✓ attempt 1[0m 41p[2m 49141ms $0.00310[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7287 prompt | 1445 completion
+[32m✓ attempt 1[0m 25p[2m 12039ms $0.01451[0m
+  [36mgemini-3.5-flash                        [0m [llm] write:attempt1 | cached=0/6282 prompt | 2153 completion
+[32m✓ attempt 1[0m 45p[2m 11387ms $0.02880[0m
+[1m
+── b02 (detailed_mechanism) ─────────────────────────────[0m
+[2m   "What are the key papers studying the role of job search frictions and directed s…"[0m
+  [36mdeepseek-v4-flash                       [0m [llm] write:attempt1 | cached=0/6129 prompt | 1080 completion
+[32m✓ attempt 1[0m 9p[2m 49242ms $0.00091[0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6269 prompt | 1376 completion
+[32m✓ attempt 1[0m 6p[2m 29999ms $0.00232[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7248 prompt | 1265 completion
+[32m✓ attempt 1[0m 7p[2m 11424ms $0.01357[0m
+  [36mgemini-3.5-flash                        [0m [llm] write:attempt1 | cached=0/6236 prompt | 1675 completion
+[32m✓ attempt 1[0m 1p[2m 9902ms $0.02443[0m
+[1m
+── b03 (very_broad) ─────────────────────────────[0m
+[2m   "inequality and intergenerational mobility"[0m
+  [36mdeepseek-v4-flash                       [0m [llm] write:attempt1 | cached=0/6088 prompt | 1440 completion
+[llm] write:attempt2 | cached=0/7566 prompt | 1430 completion
+[llm] write:attempt3 | cached=0/7556 prompt | 1430 completion
+[31m✗ Syntax error: <text>:92:23: Unerwartete(s) ';'
+91:[0m[2m [3 attempts][0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6228 prompt | 1572 completion
+[32m✓ attempt 1[0m 64p[2m 33162ms $0.00251[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7203 prompt | 1206 completion
+[32m✓ attempt 1[0m 79p[2m 11820ms $0.01323[0m
+  [36mgemini-3.5-flash                        [0m [llm] write:attempt1 | cached=0/6195 prompt | 2747 completion
+[32m✓ attempt 1[0m 45p[2m 12741ms $0.03402[0m
+[1m
+── b04 (targeted_pills) ─────────────────────────────[0m
+[2m   "climate change adaptation and labour market outcomes — worker mobility, local la…"[0m
+  [36mdeepseek-v4-flash                       [0m [llm] write:attempt1 | cached=0/6115 prompt | 1253 completion
+[32m✓ attempt 1[0m 0p[2m 50735ms $0.00095[0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6255 prompt | 1626 completion
+[32m✓ attempt 1[0m 55p[2m 42462ms $0.00256[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7230 prompt | 1218 completion
+[32m✓ attempt 1[0m 53p[2m 11133ms $0.01332[0m
+  [36mgemini-3.5-flash                        [0m [llm] write:attempt1 | cached=0/6224 prompt | 2662 completion
+[32m✓ attempt 1[0m 54p[2m 13201ms $0.03329[0m
+[1m
+── b05 (author_focus) ─────────────────────────────[0m
+[2m   "David Autor's papers and papers that build directly on his work — I want to unde…"[0m
+  [36mdeepseek-v4-flash                       [0m [llm] write:attempt1 | cached=0/6126 prompt | 1677 completion
+[llm] write:attempt2 | cached=0/7852 prompt | 1635 completion
+[llm] write:attempt3 | cached=0/7816 prompt | 1635 completion
+[31m✗ Syntax error: <text>:77:27: Unerwartete(s) ';'
+76:[0m[2m [3 attempts][0m
+  [36mqwen3.6-35b-a3b                         [0m [llm] write:attempt1 | cached=0/6266 prompt | 2239 completion
+[32m✓ attempt 1[0m 77p[2m 34979ms $0.00318[0m
+  [36mclaude-haiku-4-5                        [0m [llm] write:attempt1 | cached=0/7242 prompt | 1361 completion
+[32m✓ attempt 1[0m 75p[2m 12523ms $0.01405[0m
+  [36mgemini-3.5-flash                        [0m [llm] write:attempt1 | cached=0/6234 prompt | 3666 completion
+[32m✓ attempt 1[0m 0p[2m 17069ms $0.04235[0m
+[1m
+── b06 (journal_prestige) ─────────────────────────────[0m
+[2m   "which labour economics papers were published in the top five general-interest ec…"[0m
+  [36mdeepseek-v4-flash                       [0m [llm] write:attempt1 | cached=0/6142 prompt | 1569 completion
+[32m✓ attempt 1[0m 0p[2m 70918ms $0.00102[0m
+  [36mqwen3.6-35b-a3b                         [0m [ELIFECYCLE] Command failed with exit code 143.

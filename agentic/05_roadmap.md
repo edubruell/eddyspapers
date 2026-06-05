@@ -236,9 +236,11 @@ Per `02 §2.2` and `01 §4`.
 
 ---
 
-## Phase 7 — Web frontend (`agentic_frontend/`) 🟡 ⏱ 4–5 days
+## Phase 7 — Web frontend (`agentic_frontend/`) 🟡 ⏱ 4–5 days · 🟢 MVP RUNNING LOCALLY
 
 Per `03_interface.md` end-to-end. **Can start in parallel with Phase 6** as soon as the event fixture from §6.3 exists.
+
+**MVP status (2026-06-05):** a working Astro/React app consumes the live SSE stream and renders the full run (stepper → strategy → synthesis → evidence sections → papers). Verified end-to-end against the live 12 GB DuckDB + R sandbox on this laptop (`pnpm dev` → backend `:8001` + frontend `:4321`), and a hermetic Playwright e2e (`pnpm --filter agentic_frontend test:e2e`) replays a recorded SSE fixture through the real UI. The script panel was **replaced by a plain-language `StrategyPanel`** (`03 §3.2`); the R script is never surfaced. Remaining items below (zod-validated stream, `/c/[id]` permalink page, DatabaseFooter, BibtexDrawer/ErrorToast as separate primitives, server-rendered artifacts) are unchecked polish.
 
 ### 7.1 Palette + primitives (`03 §1`)
 
@@ -258,11 +260,11 @@ Per `03_interface.md` end-to-end. **Can start in parallel with Phase 6** as soon
 
 - [ ] Landing state: centered logo + `TASK` panel + category pills + advanced disclosure + `Run` button + DB footer.
 - [ ] Working/results state: collapsed sidebar with logo + TASK textarea (frozen during run) + category pills + advanced + `Run` + DB footer + `← Semantic mode` link.
-- [ ] Right pane reading order (`03 §3.2`): `StageStepper` → `ProgressLine` → `ScriptPanel` (collapsed, labelled "Show database search script") → `ClarifierBubble` (inline if needed) → `SynthesisPanel` → `ArtifactsToolbar` → `EVIDENCE` divider → collapsed `SectionCard` list.
+- [ ] Right pane reading order (`03 §3.2`): `StageStepper` → `ProgressLine` → `StrategyPanel` (plain-language plan, never the R script — decided 2026-06-05) → `ClarifierBubble` (inline if needed) → `SynthesisPanel` → `ArtifactsToolbar` → `EVIDENCE` divider → collapsed `SectionCard` list.
 
 ### 7.4 Components (`03 §11`)
 
-- [ ] `chat/StageStepper.jsx`, `ProgressLine.jsx`, `ScriptPanel.jsx`, `ClarifierBubble.jsx`.
+- [ ] `chat/StageStepper.jsx`, `ProgressLine.jsx`, `StrategyPanel.jsx`, `ClarifierBubble.jsx`.
 - [ ] `chat/SectionCard.jsx` — collapsed by default, click-to-expand.
 - [ ] `chat/PaperRow.jsx` + `chat/PaperCard.jsx` — `PaperCard` visually identical to existing `ResultCard`.
 - [ ] `chat/SynthesisPanel.jsx` — markdown streaming, handle linkify, external new-tab links.

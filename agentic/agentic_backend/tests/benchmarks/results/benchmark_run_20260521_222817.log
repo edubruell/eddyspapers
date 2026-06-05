@@ -1,0 +1,19 @@
+$ tsx --env-file=.env scripts/benchmark.ts
+[1m
+═══ PHASE-5 MINI BENCHMARK ═══
+[0m
+Models:  qwen3-coder-30b-a3b-instruct, devstral-small, deepseek-v4-flash, qwen3.6-35b-a3b, deepseek-v3.2, claude-haiku-4-5
+Briefs:  b01, b02, b03, b04, b05, b06, b07, b08, b09, b10
+Sandbox: [32menabled[0m
+DB:      /Users/ebr/eddyspapers/db/articles.duckdb
+
+[1m
+── b01 (context_paste) ─────────────────────────────[0m
+[2m   "I'm looking for related work for a paper I'm writing. Our central question is ho…"[0m
+  [36mqwen3-coder-30b-a3b-instruct            [0m [llm] write:attempt1 | cached=0/6072 prompt | 961 completion
+[32m✓ attempt 1[0m 44p[2m 10230ms $0.00068[0m
+  [36mdevstral-small                          [0m [llm] write:attempt1 | cached=0/6046 prompt | 642 completion
+[32m✓ attempt 1[0m 33p[2m 3710ms $0.00080[0m
+  [36mdeepseek-v4-flash                       [0m [llm] write:attempt1 | cached=0/6170 prompt | 1436 completion
+[32m✓ attempt 1[0m 0p[2m 43039ms $0.00099[0m
+  [36mqwen3.6-35b-a3b                         [0m [ELIFECYCLE] Command failed with exit code 143.

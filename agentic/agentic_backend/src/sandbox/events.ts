@@ -7,16 +7,21 @@ const rawProgressEventSchema = z.object({
   total: z.number().optional(),
 });
 
+// R emits explicit `null` (not absent) for missing fields — e.g. keyword/SQL
+// papers carry `similarity: null`, and some articles have null authors/abstract.
+// `.optional()` alone rejects null, which silently dropped whole papers (keyword
+// sections rendered with no cards). Accept null and coerce to safe defaults so a
+// paper is never discarded over a missing optional field.
 const rawPaperEventSchema = z.object({
   type: z.literal("paper"),
   handle: z.string(),
-  title: z.string(),
-  year: z.number(),
-  authors: z.string(),
-  journal: z.string(),
-  category: z.string(),
+  title: z.string().nullable().optional().transform((v) => v ?? ""),
+  year: z.number().nullable().optional().transform((v) => v ?? 0),
+  authors: z.string().nullable().optional().transform((v) => v ?? ""),
+  journal: z.string().nullable().optional().transform((v) => v ?? ""),
+  category: z.string().nullable().optional().transform((v) => v ?? ""),
   url: z.string(),
-  similarity: z.number().optional(),
+  similarity: z.number().nullable().optional(),
   abstract: z.string().nullable().optional(),
 });
 

@@ -49,6 +49,7 @@ export interface Paper {
 export type StreamEvent =
   | { type: "stage"; seq: number; stage: Stage; state: "enter" | "exit"; ms?: number }
   | { type: "assistant"; seq: number; stage: Stage; delta: string }
+  | { type: "strategy"; seq: number; strategy: string }
   | { type: "script"; seq: number; delta: string }
   | { type: "validate"; seq: number; ok: boolean; reason?: string; offending?: string }
   | { type: "progress"; seq: number; label: string; current?: number; total?: number }
