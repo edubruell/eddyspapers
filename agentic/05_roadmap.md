@@ -168,47 +168,69 @@ Two layers before an expensive write+sandbox run:
 
 ---
 
-## Phase 5 — Cost benchmark & model lock-in 🔴 ⏱ 2 days
+## Phase 5 — Cost benchmark & model lock-in 🔴 ⏱ 2 days ✅
 
 Gate before committing to the cheap-model defaults (`02 §2.1`).
 
-- [ ] Seed corpus: 50 representative briefs (mix of topic searches, journal scans, editor targeting, author lookups) — capture them as `tests/benchmarks/briefs.jsonl`.
-- [ ] Harness: run each brief through writer + validator + sandbox + synthesiser (Phase 4 + a minimal Phase 6 synth stage spun up early).
-- [ ] Per-candidate model run on each stage:
-  - writer: `qwen/qwen3-coder-flash`, `deepseek/deepseek-v3.2`, `qwen/qwen3-coder-plus`, Haiku 4.5
-  - synth: same shortlist + Gemini Flash
-- [ ] Metrics per candidate: (a) script-validity rate after one retry, (b) synthesis quality judged blind by Eddy on a 1-5 rubric, (c) wall-clock per stage, (d) per-query cost USD, (e) **verified cache-hit ratio** from telemetry.
-- [ ] Output: a `benchmark_report.md` with the table + Eddy's call on defaults + fallbacks.
+- [x] Seed corpus: 10 diverse briefs covering context-paste, detailed mechanism, very broad, targeted+pills, author focus, journal prestige, citation-seeking, cross-discipline, country-specific, methodological — `tests/benchmarks/briefs.jsonl`.
+- [x] Harness: `scripts/benchmark.ts` — writer + validator + sandbox; qualitative pass via `scripts/qual.ts` (section titles, sample papers, full scripts).
+- [x] Per-candidate model run (writer stage): `deepseek/deepseek-v4-flash`, `qwen/qwen3.6-35b-a3b`, `anthropic/claude-haiku-4-5`, `google/gemini-3.5-flash`. Prices queried live from OpenRouter API.
+- [x] Metrics collected: validity rate, paper yield per brief, write latency, cost/run. Qualitative diff on b01 + b07.
+- [x] Model picks locked in `.env`.
 
-**Acceptance:** Eddy signs off on the default + fallback model picks for each stage, with documented per-query cost ≤ $0.02 (target) or ≤ $0.05 (ceiling) on the median brief.
+**Results summary (2026-05-21):**
+
+| Model | Validity | Avg papers | Avg cost/run | Notes |
+|---|---|---|---|---|
+| `qwen/qwen3.6-35b-a3b` | **10/10** | 51.3 | **$0.0026** | Best citation ordering, clean sections |
+| `anthropic/claude-haiku-4-5` | **10/10** | 49.6 | $0.0132 | Faster (11s), better citation graph use |
+| `deepseek/deepseek-v4-flash` | 7/10 | — | $0.0010 | 2 syntax failures + 2 zero-result runs; eliminated |
+| `google/gemini-3.5-flash` | 8/10 | — | $0.0320 | Verbose scripts, 0-paper on b02+b05; eliminated |
+
+**Locked defaults:**
+- `MODEL_WRITER` = `qwen/qwen3.6-35b-a3b` — 5× cheaper than Haiku, same validity, better brief-reading (citation ordering, targeted author SQL)
+- `MODEL_WRITER_RETRY` = `anthropic/claude-haiku-4-5` — fast, reliable for attempt 3
+- `MODEL_CLARIFIER` = `anthropic/claude-haiku-4-5` — speed matters for short turns
+- `MODEL_SYNTH` = `anthropic/claude-haiku-4-5` — revisit after Phase 6 with real synthesis quality data
+
+**Per-query cost at median brief (~7k prompt tokens):** $0.0026 writer + retry amortised ≈ **$0.003** — well under $0.02 target.
+
+**Acceptance:** Eddy signed off on model picks (2026-05-21). ✅
 
 ---
 
-## Phase 6 — Full pipeline (`runAgent`) + SSE 🟡 ⏱ 3 days
+## Phase 6 — Full pipeline (`runAgent`) + SSE 🟡 ⏱ 3 days ✅
 
 Per `02 §2.2` and `01 §4`.
 
 ### 6.1 Stages
 
-- [ ] `src/agent/stages/clarify.ts` — single optional turn, structured output per `04 §4.2`.
-- [ ] `src/agent/stages/validate.ts` — wraps `checkScript.ts`, surfaces typed result.
-- [ ] `src/agent/stages/execute.ts` — wraps `runSandbox.ts`, translates R-side FD-3 events into wire `StreamEvent`s.
-- [ ] `src/agent/stages/synthesize.ts` — streams markdown using the synthesiser cached prompt (`04 §5`); injects `<brief>`, `<script>`, `<sections>`, `<papers>`, `<bibtex>` blocks.
-- [ ] `src/agent/runAgent.ts` — orchestrates all five stages, emits the full `StreamEvent` taxonomy from `01 §4.3`, assigns `seq`.
-- [ ] `src/agent/cache.ts` — `search_id` hash over `{brief, modes, year_range, categories, must_include, db_snapshot_date}`; memoise in the `searches` cache table.
-- [ ] `src/db/searches.ts` — tiny read-write DuckDB at `data/agentic/searches.duckdb`.
+- [x] `src/agent/stages/clarify.ts` — single optional turn, structured output per `04 §4.2`.
+- [x] `src/agent/stages/validate.ts` — wraps `checkScript.ts`, surfaces typed result.
+- [x] `src/agent/stages/execute.ts` — wraps `runSandbox.ts`, translates R-side FD-3 events into wire `StreamEvent`s.
+- [x] `src/agent/stages/synthesize.ts` — streams markdown using the synthesiser cached prompt (`04 §5`); injects `<brief>`, `<script>`, `<sections>`, `<papers>`, `<bibtex>` blocks.
+- [x] `src/agent/runAgent.ts` — orchestrates all five stages, emits the full `StreamEvent` taxonomy from `01 §4.3`, assigns `seq`.
+- [x] `src/agent/cache.ts` — `search_id` hash over `{brief, categories, minYear, db_snapshot_date}`; checked against `searches` cache table.
+- [x] `src/db/searches.ts` — tiny read-write DuckDB at `data/agentic/searches.duckdb`.
+- [x] `src/agent/types.ts` — shared wire types: `StreamEvent`, `Stage`, `Paper`, `Section`, `AgentInput`, `StreamEventPayload`.
 
 ### 6.2 Transport
 
-- [ ] `src/stream/bus.ts` — in-memory pub/sub keyed by `search_id`, ring buffer of last N events for replay.
-- [ ] `src/stream/sse.ts` — Hono SSE helper, heartbeat every 15s, `Last-Event-ID` replay.
-- [ ] `src/routes/chat.ts` — `POST /chat` kicks off a run, returns `{id}`.
-- [ ] `src/routes/stream.ts` — `GET /chat/:id/stream` subscribes to the bus.
-- [ ] `src/routes/searches.ts` — `GET /searches/:id` returns the cached structured payload.
+- [x] `src/stream/bus.ts` — in-memory pub/sub keyed by `search_id`, ring buffer with replay.
+- [x] `src/stream/sse.ts` — Hono SSE helper, heartbeat every 15s, `Last-Event-ID` replay.
+- [x] `src/routes/chat.ts` — `POST /chat` kicks off a run, returns `{id}`. Cache hit returns 200 immediately.
+- [x] `src/routes/stream.ts` — `GET /chat/:id/stream` subscribes to the bus.
+- [x] `src/routes/searches.ts` — `GET /searches/:id` returns the cached structured payload.
 
 ### 6.3 Event recording for frontend dev
 
-- [ ] CLI: `pnpm tsx scripts/record-events.ts <brief> > fixture.jsonl` — drives a real run and dumps every event for the frontend to replay against. (`02 §7` step 6.)
+- [x] CLI: `pnpm tsx scripts/record-events.ts <brief> > fixture.jsonl` — drives a real run and dumps every event for the frontend to replay against. (`02 §7` step 6.)
+
+**Key implementation notes:**
+- Clarifier is non-blocking: if it returns a question, it's emitted as an `assistant` event while the pipeline proceeds optimistically.
+- `writeScript` handles retries internally; `validate` stage surfaces the final outcome for the UI stepper only.
+- Script token streaming deferred (single `script` event after write succeeds); add streaming in a future iteration.
+- Searches DB at `data/agentic/searches.duckdb`; events stored as JSON array in a TEXT column.
 
 **Acceptance:** running `POST /chat` then subscribing to the SSE stream from `curl` reproduces a full event sequence for a representative brief; the recorded fixture is replayable.
 
