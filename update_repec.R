@@ -5,6 +5,16 @@ config <- get_folder_config()
 ensure_folders(config)
 create_log_file(config)
 
+# Optional server deploy after the run. Off by default; enable with EDDY_DEPLOY=1.
+deploy_after <- Sys.getenv("EDDY_DEPLOY", "0") == "1"
+
+deploy_script <- Sys.getenv("EDDY_DEPLOY_SCRIPT", "")
+if (deploy_script == "") {
+  file_arg <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
+  base_dir <- if (length(file_arg) == 1) dirname(normalizePath(file_arg)) else getwd()
+  deploy_script <- file.path(base_dir, "deploy_diffs.sh")
+}
+
 
 info("==== RePEc Update Script ====")
 info("Started at: ", Sys.time())
@@ -158,4 +168,25 @@ diff_files <- compute_parquet_diffs(
 info("\n[3] Diff files created:")
 for (tbl in names(diff_files)) {
   info("  ", tbl, ": ", diff_files[[tbl]])
+}
+
+
+info("\n==== Deploy diffs to server ====")
+if (deploy_after) {
+  tryCatch({
+    if (!file.exists(deploy_script)) {
+      stop("deploy script not found: ", deploy_script)
+    }
+    info("Running ", deploy_script)
+    status <- system2("bash", args = shQuote(deploy_script))
+    if (status != 0) {
+      stop("deploy_diffs.sh exited with status ", status)
+    }
+    info("✓ Server deploy completed")
+  }, error = function(e) {
+    info("⚠ Server deploy failed (non-fatal): ", e$message)
+  })
+} else {
+  info("Skipping server deploy (set EDDY_DEPLOY=1 to enable).")
+  info("Deploy manually with: bash ", deploy_script)
 }
