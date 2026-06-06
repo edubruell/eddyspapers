@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { chatRoute } from "./routes/chat.js";
 import { streamRoute } from "./routes/stream.js";
 import { searchesRoute } from "./routes/searches.js";
+import { statsRoute } from "./routes/stats.js";
 
 const app = new Hono();
 
@@ -18,6 +19,7 @@ app.get("/healthz", (c) => c.json({ status: "ok", service: "agentic_backend" }))
 app.route("/chat", chatRoute);
 app.route("/chat", streamRoute);
 app.route("/searches", searchesRoute);
+app.route("/stats", statsRoute);
 
 serve({ fetch: app.fetch, port: 8001 }, (info) => {
   console.log(`agentic_backend listening on http://localhost:${info.port}`);

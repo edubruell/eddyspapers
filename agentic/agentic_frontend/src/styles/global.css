@@ -2,16 +2,18 @@
 
 :root {
   /* Inherited from the semantic-search app so the two feel like siblings.
-     The only deliberate shift is --primary (indigo-leaning navy) so the
-     two tabs are distinguishable side-by-side (03_interface.md §2). */
+     The deliberate shift is the purple accent (--primary / --accent-purple) so
+     the agentic tab is distinguishable side-by-side (03_interface.md §2). */
   --bg-page: #eee7da;
   --bg-card: #faf7f0;
   --bg-card-2: #f4efe5;
   --border-soft: #e2dacb;
   --text-strong: #1f2937;
   --text-muted: #6b7280;
-  --primary: #2d3fa0;
-  --primary-hover: #233291;
+  --primary: #7c3aed;
+  --primary-hover: #6d28d9;
+  --primary-disabled: #c3b2e6;
+  --accent-purple: #7c3aed;
   --accent-orange: #d4602a;
   --accent-sky: #5fa8c9;
   --sim-hi: #2f9e5c;

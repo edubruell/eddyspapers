@@ -49,6 +49,7 @@ export interface Paper {
 export type StreamEvent =
   | { type: "stage"; seq: number; stage: Stage; state: "enter" | "exit"; ms?: number }
   | { type: "assistant"; seq: number; stage: Stage; delta: string }
+  | { type: "clarify"; seq: number; question: string; options: string[]; required: boolean }
   | { type: "strategy"; seq: number; strategy: string }
   | { type: "script"; seq: number; delta: string }
   | { type: "validate"; seq: number; ok: boolean; reason?: string; offending?: string }
@@ -65,6 +66,13 @@ export interface AgentInput {
   categories?: string[];
   minYear?: number;
   mustInclude?: string[];
+  // When true the clarify stage never blocks/asks (MCP default, web opt-in via the
+  // "one-shot" checkbox). A `question` result is treated as `proceed`.
+  skipClarify?: boolean;
+  // Set on the resume (Phase B) pass: the question that was asked and the user's
+  // answer, folded into the writer's user message as a <clarification> block.
+  clarifyQuestion?: string;
+  clarifyAnswer?: string;
 }
 
 // Distributive Omit — preserves the discriminated union when removing a shared key

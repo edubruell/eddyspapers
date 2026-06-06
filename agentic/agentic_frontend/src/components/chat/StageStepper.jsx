@@ -30,6 +30,18 @@ function Dot({ status }) {
       </span>
     );
   }
+  if (status === "waiting") {
+    // Paused, awaiting the user's clarifier reply — steady (not spinning) purple ring.
+    return (
+      <span
+        className={base + " text-white"}
+        style={{ background: "var(--accent-purple)", borderColor: "transparent" }}
+        title="Waiting for your answer"
+      >
+        ?
+      </span>
+    );
+  }
   if (status === "failed") {
     return (
       <span
@@ -54,9 +66,11 @@ export default function StageStepper({ stages }) {
               "text-xs " +
               (stages[s] === "active"
                 ? "font-semibold text-stone-800"
-                : stages[s] === "done"
-                  ? "text-stone-600"
-                  : "text-stone-400")
+                : stages[s] === "waiting"
+                  ? "font-semibold text-[var(--accent-purple)]"
+                  : stages[s] === "done"
+                    ? "text-stone-600"
+                    : "text-stone-400")
             }
           >
             {LABELS[s]}

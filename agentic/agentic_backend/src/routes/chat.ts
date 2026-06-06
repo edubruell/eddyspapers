@@ -2,18 +2,64 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { resolveSnapshot } from "../sandbox/snapshot.js";
 import { computeSearchId } from "../agent/cache.js";
-import { runAgent } from "../agent/runAgent.js";
+import { runAgent, type RunOpts } from "../agent/runAgent.js";
 import { bus } from "../stream/bus.js";
 import { getSearchDb } from "../db/singleton.js";
+import type { SearchDb } from "../db/searches.js";
+import type { AgentInput, StreamEvent } from "../agent/types.js";
 
 const chatBodySchema = z.object({
   brief: z.string().min(1).max(2000),
+  skipClarify: z.boolean().optional(),
   categories: z.array(z.string()).optional(),
   minYear: z.number().int().optional(),
   mustInclude: z.array(z.string()).optional(),
 });
 
+const replyBodySchema = z.object({
+  answer: z.string().min(1).max(2000),
+});
+
 export const chatRoute = new Hono();
+
+// Drives one pass of runAgent (Phase A start or Phase B resume): mirrors events onto
+// the live bus, buffers them, then persists — either suspending on a clarifier pause or
+// finalizing the run. Fire-and-forget; the client follows the SSE stream.
+function runPhase(db: SearchDb, id: string, input: AgentInput, dbPath: string, opts: RunOpts): void {
+  const buffered: StreamEvent[] = [];
+  runAgent(
+    id,
+    input,
+    dbPath,
+    (e) => {
+      bus.publish(id, e);
+      buffered.push(e);
+    },
+    opts,
+  )
+    .then(async (result) => {
+      await db.appendEvents(id, buffered);
+      if (result.paused) {
+        const clar = buffered.find((e) => e.type === "clarify");
+        await db.setAwaitingClarification(id, clar && "question" in clar ? clar.question : "");
+        return;
+      }
+      const synthesis = buffered
+        .filter((e) => e.type === "synthesis")
+        .map((e) => ("delta" in e ? e.delta : ""))
+        .join("");
+      const hasDone = buffered.some((e) => e.type === "done");
+      const hasError = buffered.some((e) => e.type === "error" && !e.recoverable);
+      const status = hasError ? "error" : hasDone ? "done" : "error";
+      await db.finalizeSearch(id, status, synthesis);
+    })
+    .catch(async (err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[runAgent] uncaught error for ${id}: ${message}`);
+      await db.appendEvents(id, buffered).catch(() => undefined);
+      await db.finalizeSearch(id, "error", "").catch(() => undefined);
+    });
+}
 
 chatRoute.post("/", async (c) => {
   let body: unknown;
@@ -28,7 +74,7 @@ chatRoute.post("/", async (c) => {
     return c.json({ error: parsed.error.issues }, 400);
   }
 
-  const { brief, categories, minYear, mustInclude } = parsed.data;
+  const { brief, skipClarify, categories, minYear, mustInclude } = parsed.data;
   const snapshot = await resolveSnapshot();
 
   const dbSnapshotDate = snapshot.exists && snapshot.ageMs != null
@@ -45,32 +91,59 @@ chatRoute.post("/", async (c) => {
 
   await db.upsertSearch(id, { brief, categories, minYear, mustInclude, dbSnapshotDate });
 
-  const input = { brief, categories, minYear, mustInclude };
-  const dbPath = snapshot.path;
-
-  // Fire and forget — client subscribes via SSE
-  const buffered: Parameters<typeof bus.publish>[1][] = [];
-  runAgent(id, input, dbPath, (e) => {
-    bus.publish(id, e);
-    buffered.push(e);
-  })
-    .then(async () => {
-      const synthesis = buffered
-        .filter((e) => e.type === "synthesis")
-        .map((e) => ("delta" in e ? e.delta : ""))
-        .join("");
-      const hasDone = buffered.some((e) => e.type === "done");
-      const hasError = buffered.some((e) => e.type === "error" && !e.recoverable);
-      const status = hasError ? "error" : hasDone ? "done" : "error";
-      await db.appendEvents(id, buffered);
-      await db.finalizeSearch(id, status, synthesis);
-    })
-    .catch(async (err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[runAgent] uncaught error for ${id}: ${message}`);
-      await db.appendEvents(id, buffered).catch(() => undefined);
-      await db.finalizeSearch(id, "error", "").catch(() => undefined);
-    });
+  const input: AgentInput = { brief, categories, minYear, mustInclude, skipClarify };
+  runPhase(db, id, input, snapshot.path, { startSeq: 0, runClarify: true });
 
   return c.json({ id }, 201);
+});
+
+// Phase B — the human-in-the-loop reply to a blocking clarifier question. Validates the
+// run is paused, records the answer, and resumes write → … → done on the same bus.
+chatRoute.post("/:id/reply", async (c) => {
+  const id = c.req.param("id");
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const parsed = replyBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues }, 400);
+  }
+  const answer = parsed.data.answer.trim();
+  if (!answer) {
+    return c.json({ error: "Answer must not be empty" }, 400);
+  }
+
+  const db = await getSearchDb();
+  const search = await db.getSearch(id);
+  if (!search) {
+    return c.json({ error: "Search not found" }, 404);
+  }
+  if (search.status !== "awaiting_clarification") {
+    return c.json({ error: "Search is not awaiting clarification" }, 409);
+  }
+
+  // Atomic claim — guards against two concurrent replies both passing the check above.
+  const claimed = await db.recordClarifyAnswer(id, answer);
+  if (!claimed) {
+    return c.json({ error: "Search is not awaiting clarification" }, 409);
+  }
+
+  const snapshot = await resolveSnapshot();
+  const startSeq = search.events.length ? search.events[search.events.length - 1].seq + 1 : 0;
+
+  const input: AgentInput = {
+    brief: search.brief,
+    categories: search.categories ?? undefined,
+    minYear: search.minYear ?? undefined,
+    clarifyQuestion: search.clarifyQuestion ?? undefined,
+    clarifyAnswer: answer,
+  };
+  runPhase(db, id, input, snapshot.path, { startSeq, runClarify: false });
+
+  return c.json({ ok: true }, 200);
 });

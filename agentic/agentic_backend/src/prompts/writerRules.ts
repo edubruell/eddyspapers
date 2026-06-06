@@ -1,6 +1,10 @@
 export const writerRulesPrompt = `\
 ## Writer rules
 
+When a <clarification> block is present in the user message, it is authoritative: it records a
+question the user was asked and their answer, and it refines the brief. Let it resolve any
+ambiguity the brief left open — shape the script to match the answer.
+
 Hard prohibitions (AST-checked — violations cause validation failure and wasted retries):
 - No library() or require() calls. All verbs are pre-attached. Loading packages bypasses the allowlist.
 - No cat() / writeLines() / write.csv() / sink(). All output goes through emit_*. File writes are sandboxed.

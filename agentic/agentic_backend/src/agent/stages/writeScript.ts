@@ -15,6 +15,10 @@ export type WriteScriptOpts = {
   mustInclude?: string[];
   dbDate: string;
   modelOverride?: string;
+  // Folded into the user message as an authoritative <clarification> block when the
+  // blocking clarifier asked a question and the user answered (06_clarifier.md §5).
+  clarifyQuestion?: string;
+  clarifyAnswer?: string;
 };
 
 export type WriteScriptResult =
@@ -57,6 +61,7 @@ function buildUserMessage(
   minYear: number | undefined,
   mustInclude: string[] | undefined,
   dbDate: string,
+  clarification: { question: string; answer: string } | undefined,
   previousAttempt?: string,
   rejection?: { reason: string; offendingNode: string; hint: string }
 ): string {
@@ -70,6 +75,9 @@ function buildUserMessage(
 
   let msg =
     `<brief>\n${brief}\n</brief>\n\n` +
+    (clarification
+      ? `<clarification>\nQ: ${clarification.question}\nA: ${clarification.answer}\n</clarification>\n\n`
+      : "") +
     `<filters>\n${filterLines || "(none)"}\n</filters>\n\n` +
     `<db_snapshot>\n${dbDate}\n</db_snapshot>`;
 
@@ -100,6 +108,10 @@ async function checkAndGetRejection(script: string): Promise<
 
 export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptResult> {
   const { brief, categories, minYear, mustInclude, dbDate, modelOverride } = opts;
+  const clarification =
+    opts.clarifyQuestion && opts.clarifyAnswer
+      ? { question: opts.clarifyQuestion, answer: opts.clarifyAnswer }
+      : undefined;
 
   const check = preflight(brief);
   if (!check.ok) return { ok: false, rejected: true, reason: check.reason, attempts: 0 };
@@ -120,6 +132,7 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
       minYear,
       mustInclude,
       dbDate,
+      clarification,
       lastScript,
       lastRejection
     );

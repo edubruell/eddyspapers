@@ -8,12 +8,30 @@ import { writerRulesPrompt } from "./writerRules.js";
 import { clarifierPrompt } from "./clarifier.js";
 import { synthesizerPrompt } from "./synthesizer.js";
 
-// Three possible clarifier outputs: proceed, ask one question, or reject the brief
-export const clarifierOutputSchema = z.union([
-  z.object({ done: z.literal(true) }),
-  z.object({ done: z.literal(false), question: z.string().max(280) }),
-  z.object({ done: z.literal(false), reject: z.literal(true), reason: z.string().max(280) }),
-]);
+// Single-object clarifier output with an explicit `action` discriminator. A flat object
+// (rather than a union of {done:true} | {…}) stops the model defaulting to the cheapest
+// "proceed" branch — it must first assess the brief, then commit to proceed/ask/reject.
+// When asking, it offers 2–4 concrete answer options (Claude-Code style); the user can
+// always type their own, so options are suggestions, not an exhaustive set.
+export const clarifierOutputSchema = z.object({
+  assessment: z
+    .string()
+    .max(400)
+    .describe(
+      "One sentence: does the brief pin down a clear topic AND an implied mode/scope so that " +
+        "one obvious search script follows, or is a script-shaping choice (topic, framing, scope, " +
+        "prestige-vs-recency) still left open?",
+    ),
+  action: z.enum(["proceed", "ask", "reject"]),
+  question: z.string().max(280).optional().describe("Required when action is 'ask'."),
+  options: z
+    .array(z.string().max(120))
+    .min(2)
+    .max(4)
+    .optional()
+    .describe("2–4 short concrete answer choices. Required when action is 'ask'."),
+  reason: z.string().max(280).optional().describe("Required when action is 'reject'."),
+});
 export type ClarifierOutput = z.infer<typeof clarifierOutputSchema>;
 
 function cachedSystemMessage(text: string): CoreMessage {

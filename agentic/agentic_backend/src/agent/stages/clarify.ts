@@ -4,13 +4,19 @@ import { clarifierSystemMessage, clarifierOutputSchema } from "../../prompts/ass
 
 export type ClarifyResult =
   | { action: "proceed" }
-  | { action: "question"; question: string }
+  | { action: "question"; question: string; options: string[] }
   | { action: "reject"; reason: string };
 
 export async function clarify(brief: string): Promise<ClarifyResult> {
   const userPrompt = `<brief>\n${brief}\n</brief>`;
 
-  let object: { done: true } | { done: false; question?: string; reject?: true; reason?: string };
+  let object: {
+    assessment?: string;
+    action: "proceed" | "ask" | "reject";
+    question?: string;
+    options?: string[];
+    reason?: string;
+  };
   try {
     ({ object } = await generateStructured({
       model: models.clarifier,
@@ -24,8 +30,9 @@ export async function clarify(brief: string): Promise<ClarifyResult> {
     return { action: "proceed" };
   }
 
-  if (object.done) return { action: "proceed" };
-  if ("reject" in object && object.reject) return { action: "reject", reason: object.reason ?? "Brief rejected." };
-  if ("question" in object && object.question) return { action: "question", question: object.question };
+  if (object.action === "reject") return { action: "reject", reason: object.reason ?? "Brief rejected." };
+  if (object.action === "ask" && object.question) {
+    return { action: "question", question: object.question, options: object.options ?? [] };
+  }
   return { action: "proceed" };
 }

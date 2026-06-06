@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { startChat, getLastUpdated } from "../../lib/api.js";
+import { startChat, replyChat, getLastUpdated } from "../../lib/api.js";
 import { useAgentStream } from "../../lib/stream.js";
 import LogoAgentic from "../logo/LogoAgentic.jsx";
 import { SectionLabel } from "../primitives/index.jsx";
@@ -15,12 +15,15 @@ import ArtifactsToolbar from "./ArtifactsToolbar.jsx";
 export default function SearchChat() {
   const [brief, setBrief] = useState("");
   const [id, setId] = useState(null);
+  const [skipClarify, setSkipClarify] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [startError, setStartError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   const state = useAgentStream(id);
   const hasRun = id != null;
+  // While paused on a clarifier question the run isn't "done" but the task box should
+  // stay frozen — the user answers in the clarifier card, not the brief.
   const frozen = hasRun && !state.done && !state.error;
 
   useEffect(() => {
@@ -39,7 +42,7 @@ export default function SearchChat() {
     setSubmitting(true);
     setStartError(null);
     try {
-      const { id: newId } = await startChat({ brief: brief.trim() });
+      const { id: newId } = await startChat({ brief: brief.trim(), skipClarify });
       setId(newId);
     } catch (e) {
       setStartError(e.message);
@@ -51,6 +54,15 @@ export default function SearchChat() {
   function onNewSearch() {
     setId(null);
     setStartError(null);
+    setBrief("");
+  }
+
+  async function onReplyClarify(answer) {
+    try {
+      await replyChat(id, answer);
+    } catch (e) {
+      setStartError(e.message);
+    }
   }
 
   const sidebar = (
@@ -58,6 +70,9 @@ export default function SearchChat() {
       brief={brief}
       setBrief={setBrief}
       onRun={onRun}
+      onNewSearch={onNewSearch}
+      skipClarify={skipClarify}
+      setSkipClarify={setSkipClarify}
       submitting={submitting}
       frozen={frozen}
       compact={hasRun}
@@ -91,15 +106,8 @@ export default function SearchChat() {
     <div className="mx-auto flex max-w-[1180px] flex-col gap-4 md:flex-row">
       {/* sidebar */}
       <aside className="w-full md:w-[320px] md:shrink-0">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3">
           <LogoAgentic compact />
-          <button
-            type="button"
-            onClick={onNewSearch}
-            className="rounded border border-stone-300 px-2 py-1 text-xs text-stone-600 hover:bg-stone-100"
-          >
-            New search
-          </button>
         </div>
         <div className="rounded-[14px] border border-[var(--border-soft)] bg-[var(--bg-card)] p-4 shadow-sm">
           {sidebar}
@@ -121,7 +129,12 @@ export default function SearchChat() {
 
         <StrategyPanel strategy={state.strategy} pending={state.strategyPending} />
 
-        <ClarifierBubble question={state.clarifierQuestion} />
+        <ClarifierBubble
+          question={state.clarifierQuestion}
+          options={state.clarifierOptions}
+          awaiting={state.awaitingReply}
+          onReply={onReplyClarify}
+        />
 
         {state.error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

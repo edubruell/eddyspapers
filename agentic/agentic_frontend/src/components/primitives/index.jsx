@@ -34,7 +34,7 @@ export function PrimaryButton({ children, disabled, onClick, type = "button" }) 
       onClick={onClick}
       disabled={disabled}
       className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50"
-      style={{ background: disabled ? "#9aa3c4" : "var(--primary)" }}
+      style={{ background: disabled ? "var(--primary-disabled)" : "var(--primary)" }}
       onMouseDown={(e) => e.preventDefault()}
     >
       {children}

@@ -1,6 +1,22 @@
 # 06 — The blocking clarifier (design)
 
-**Status:** design only — no code yet. Decided 2026-06-06.
+**Status:** implemented 2026-06-06. A few decisions changed during the build — see the
+**Implementation deltas** box below; the affected sections are annotated inline.
+
+> **Implementation deltas (2026-06-06).**
+> 1. **Clarifier output is a flat `action` object, not a `{done}` union.** Haiku consistently
+>    took the cheapest `{done:true}` branch of the union and never asked, even on the exemplars.
+>    The schema is now `{ assessment, action: "proceed"|"ask"|"reject", question?, options?, reason? }`
+>    — the model writes a one-sentence assessment first, then commits to an action. This fixed
+>    the ask-rate immediately (vague briefs ask, self-contained ones proceed). Supersedes §6's
+>    three-way `{done}` schema.
+> 2. **The `clarify` event carries `options: string[]`** (2–4 concrete choices). The UI is
+>    Claude-Code style: selectable choice chips **plus** a free-text "write your own" field, not
+>    the single-line input sketched in §7.2.
+> 3. **The web control is a toggle switch labelled "Skip clarifying questions"** (not a checkbox
+>    "One-shot — …"). Default off (clarifier enabled). Supersedes §2/§7.1 wording.
+> 4. **The 24h expiry sweeper (§9 / build step 8) is not built yet** — deferred. Abandoned
+>    `awaiting_clarification` rows simply persist.
 
 **Scope note / precedence.** This is a *feature* design that spans system, prompt, and UX
 concerns. Where it touches system architecture (pipeline state machine, SSE protocol, wire

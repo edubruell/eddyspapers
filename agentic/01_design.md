@@ -648,6 +648,7 @@ Stdio transport (local) bypasses auth — the key is "you have shell on this mac
 - **Concurrent requests exhaust the box.** Mitigation: bounded job queue in the API; sandbox slice caps total memory; consider a small pool of long-lived R workers (callr) to amortise startup if cold-Rscript latency hurts.
 - **Abuse (scripted scraping of the corpus).** Mitigation: per-IP rate limit, optional auth, output size cap effectively blocks bulk export, snapshot DB means worst case is "yesterday's data."
 - **Model writes a custom `for` loop that allocates a 10 GB vector.** Mitigation: `MemoryMax=1G` kills it; `print`/`message` discarded so the loop has no exfil channel anyway.
+- **Synthesis stream stalls or runs out of tokens, leaving the spinner spinning forever.** The `ai` SDK's `textStream` swallows provider/abort errors (they go to `onError`, not the iterator), so a naive loop "succeeds" with truncated output and never signals failure — or, worse, the provider stalls mid-stream and the iterator never completes. Mitigation (`src/llm/stream.ts`): `streamStructured` (a) sets `abortSignal: AbortSignal.timeout(120s)` so a stalled stream aborts rather than hanging, (b) captures errors via `onError` + a try/catch around the loop and **throws** on any error so `runAgent`'s catch emits `error` + `done` (spinner stops), and (c) returns `finishReason`. When `finishReason === "length"` the synthesizer appends a visible truncation notice. Output is capped at `MAX_TOKENS_SYNTH` (default 8000) to keep reviews bounded; raise via env if needed.
 
 ---
 

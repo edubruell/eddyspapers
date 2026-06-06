@@ -5,7 +5,7 @@ export default function StrategyPanel({ strategy, pending }) {
   return (
     <div className="rounded-lg border border-[var(--border-soft)] bg-[var(--bg-card-2)] px-3 py-2">
       <div className="flex items-center gap-1.5">
-        <span style={{ color: "var(--accent-sky)" }}>◆</span>
+        <img src="/strategy.svg" alt="" aria-hidden="true" className="h-4 w-4" />
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-600">
           Search strategy
         </span>

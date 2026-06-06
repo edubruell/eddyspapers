@@ -100,68 +100,67 @@ describe("preflight", () => {
 // ── clarifierOutputSchema ────────────────────────────────────────────────────
 
 describe("clarifierOutputSchema", () => {
-  it("parses the proceed variant: { done: true }", () => {
-    const result = clarifierOutputSchema.safeParse({ done: true });
+  it("parses the proceed action", () => {
+    const result = clarifierOutputSchema.safeParse({ assessment: "Clear topic and scope.", action: "proceed" });
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data).toEqual({ done: true });
+    if (result.success) expect(result.data.action).toBe("proceed");
   });
 
-  it("parses the question variant: { done: false, question: string }", () => {
+  it("parses the ask action with question + options", () => {
     const result = clarifierOutputSchema.safeParse({
-      done: false,
+      assessment: "Framing is open.",
+      action: "ask",
       question: "Are you looking for empirical or theoretical work?",
+      options: ["Empirical", "Theoretical", "Both"],
     });
     expect(result.success).toBe(true);
     if (result.success) {
       const data = result.data;
-      expect(data.done).toBe(false);
-      if (!data.done && "question" in data) expect(data.question.length).toBeGreaterThan(0);
+      expect(data.action).toBe("ask");
+      expect(data.question?.length).toBeGreaterThan(0);
+      expect(data.options).toHaveLength(3);
     }
   });
 
-  it("parses the reject variant: { done: false, reject: true, reason: string }", () => {
+  it("parses the reject action with a reason", () => {
     const result = clarifierOutputSchema.safeParse({
-      done: false,
-      reject: true,
+      assessment: "Not an economics search.",
+      action: "reject",
       reason: "This service searches economics papers.",
     });
     expect(result.success).toBe(true);
     if (result.success) {
       const data = result.data;
-      expect(data.done).toBe(false);
-      if (!data.done && "reject" in data) {
-        expect(data.reject).toBe(true);
-        expect(data.reason.length).toBeGreaterThan(0);
-      }
+      expect(data.action).toBe("reject");
+      expect(data.reason?.length).toBeGreaterThan(0);
     }
   });
 
-  it("rejects an object where done is missing", () => {
-    const result = clarifierOutputSchema.safeParse({ question: "something" });
+  it("rejects an object where action is missing", () => {
+    const result = clarifierOutputSchema.safeParse({ assessment: "x", question: "something" });
     expect(result.success).toBe(false);
   });
 
-  it("rejects an object where done is true but has extra question field", () => {
-    // Zod strips extra fields — { done: true } is the only valid shape for the first variant
-    const result = clarifierOutputSchema.safeParse({ done: true, question: "hmm" });
-    // Zod union strips unknown fields, so this should succeed by matching the first variant
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data).toEqual({ done: true });
+  it("rejects an unknown action value", () => {
+    const result = clarifierOutputSchema.safeParse({ assessment: "x", action: "maybe" });
+    expect(result.success).toBe(false);
   });
 
-  it("rejects a question variant when question exceeds 280 chars", () => {
+  it("rejects a question that exceeds 280 chars", () => {
     const result = clarifierOutputSchema.safeParse({
-      done: false,
+      assessment: "x",
+      action: "ask",
       question: "q".repeat(281),
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects a reject variant when reason exceeds 280 chars", () => {
+  it("rejects more than 4 options", () => {
     const result = clarifierOutputSchema.safeParse({
-      done: false,
-      reject: true,
-      reason: "r".repeat(281),
+      assessment: "x",
+      action: "ask",
+      question: "pick",
+      options: ["a", "b", "c", "d", "e"],
     });
     expect(result.success).toBe(false);
   });
@@ -181,25 +180,89 @@ describe("clarifierOutputSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects the reject variant when reason is missing", () => {
-    const result = clarifierOutputSchema.safeParse({ done: false, reject: true });
-    expect(result.success).toBe(false);
-  });
-
   it("accepts question at the 280-char boundary", () => {
     const result = clarifierOutputSchema.safeParse({
-      done: false,
+      assessment: "x",
+      action: "ask",
       question: "q".repeat(280),
+      options: ["a", "b"],
     });
     expect(result.success).toBe(true);
   });
 
   it("accepts reason at the 280-char boundary", () => {
     const result = clarifierOutputSchema.safeParse({
-      done: false,
-      reject: true,
+      assessment: "x",
+      action: "reject",
       reason: "r".repeat(280),
     });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects fewer than 2 options (lower bound)", () => {
+    const result = clarifierOutputSchema.safeParse({
+      assessment: "x",
+      action: "ask",
+      question: "pick",
+      options: ["only one"],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts exactly 2 options (lower boundary)", () => {
+    const result = clarifierOutputSchema.safeParse({
+      assessment: "x",
+      action: "ask",
+      question: "pick",
+      options: ["a", "b"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts exactly 4 options (upper boundary)", () => {
+    const result = clarifierOutputSchema.safeParse({
+      assessment: "x",
+      action: "ask",
+      question: "pick",
+      options: ["a", "b", "c", "d"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an option string longer than 120 chars", () => {
+    const result = clarifierOutputSchema.safeParse({
+      assessment: "x",
+      action: "ask",
+      question: "pick",
+      options: ["a".repeat(121), "b"],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an assessment longer than 400 chars", () => {
+    const result = clarifierOutputSchema.safeParse({
+      assessment: "a".repeat(401),
+      action: "proceed",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts assessment at the 400-char boundary", () => {
+    const result = clarifierOutputSchema.safeParse({
+      assessment: "a".repeat(400),
+      action: "proceed",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a missing assessment", () => {
+    const result = clarifierOutputSchema.safeParse({ action: "proceed" });
+    expect(result.success).toBe(false);
+  });
+
+  it("schema does not enforce that 'ask' carries a question — mapping layer handles it", () => {
+    // Documents that the schema accepts a bare 'ask'; clarify.ts treats it as proceed.
+    const result = clarifierOutputSchema.safeParse({ assessment: "x", action: "ask" });
     expect(result.success).toBe(true);
   });
 });

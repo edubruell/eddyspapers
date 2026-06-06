@@ -78,7 +78,7 @@ These ship as identical (or near-identical) React components in `agentic_fronten
 - **`GhostButton`** — outlined "Export" / "Share" / "BibTeX" / "More" style. Reused for "Copy BibTeX", "Download PDF".
 - **`SimilarityBar`** — the 4–6px coloured strip on the left of result cards. Reused for `PaperRow` and inside `SectionCard`'s individual paper rows.
 - **`AdvancedDisclosure`** — the "▶ Show advanced filters" collapsible row. Reused for "▶ Show SQL" and other audit-trail reveals. **Not** used for the R script — the script is never surfaced to the user (see §3.2, decided 2026-06-05).
-- **`DatabaseFooter`** — "Database last updated on YYYY-MM-DD · FAQ / Imprint". Reused verbatim. The agentic app does **not** compute its own snapshot date — it fetches it from the classic semantic API (`GET /stats/last_updated` on `econpapers.eduard-bruell.de/api`, configurable via `PUBLIC_SEMANTIC_API_BASE`), exactly as the semantic frontend does, since both apps read the same shared snapshot.
+- **`DatabaseFooter`** — "Database last updated on YYYY-MM-DD · FAQ / Imprint". Reused verbatim. The agentic app does **not** compute its own snapshot date — it fetches it from the agentic backend (`GET /stats/last_updated`), which **proxies** the classic semantic API (`GET /stats/last_updated` on `econpapers.eduard-bruell.de/api`) server-side with the `X-API-Key` header (`EDDYPAPERS_API_KEY`). The semantic endpoint requires auth, so the browser cannot call it directly; proxying keeps the key off the client. Plumber wraps the scalar in an array; the proxy unwraps it. Both apps still read the same shared snapshot.
 
 A user who already uses Eddy's Papers should immediately recognise the agentic app as the same family.
 
@@ -104,12 +104,12 @@ My recommendation: **`AGENTIC SEARCH`** as primary, with the detective meerkat d
 
 Logo asset goes in `agentic_frontend/public/logo-agentic.png` (Eddy will hand-draw a fresh detective-meerkat illustration via Flux + GIMP, matching the existing meerkat's cel-shaded style; vector version will be produced from that raster).
 
-**Accent colour shift.** The agentic app uses a **slightly different accent colour** for the primary button and `AGENTIC SEARCH` wordmark than the semantic search app. The shift is small enough to read as "same family" but distinct enough that the two tabs are immediately distinguishable side-by-side. Concrete proposal (to be confirmed once we read the real palette out of `frontend/`):
+**Accent colour shift.** The agentic app uses **purple** as its accent for the primary button and the `AGENTIC SEARCH` wordmark, against the semantic app's navy/sky-blue. Purple is the agentic brand accent — the shift is large enough that the two tabs are immediately distinguishable side-by-side while the rest of the palette keeps them in the same family.
 
 | Token | Semantic search | Agentic search |
 |---|---|---|
-| `--primary` | navy `#1F4E8C` | indigo-leaning navy, e.g. `#2A4A8E` shifted toward `#2D3FA0` |
-| `--accent-sky` | sky `#7BB7DD` | a marginally warmer teal-blue, e.g. `#5FA8C9` |
+| `--primary` | navy `#1F4E8C` | purple `#7C3AED` (hover `#6D28D9`, disabled `#C3B2E6`) |
+| `AGENTIC SEARCH` wordmark | n/a | `--accent-purple` `#7C3AED` (was sky-blue) |
 
 Everything else (background, text, similarity bar greens/reds, category pill blues) stays identical so the apps still feel like siblings.
 

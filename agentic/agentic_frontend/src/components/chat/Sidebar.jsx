@@ -10,6 +10,9 @@ export default function Sidebar({
   brief,
   setBrief,
   onRun,
+  onNewSearch,
+  skipClarify,
+  setSkipClarify,
   submitting,
   frozen,
   compact,
@@ -49,23 +52,61 @@ export default function Sidebar({
           }
         />
         <p className="mt-1 text-xs text-stone-500">
-          Press ⌘+Enter or Ctrl+Enter to start. Mention any journal-tier, year, or
-          author preferences in the task — the agent picks the rest.
+          Specify years, journals, authors and topics directly in your task
+          description.
         </p>
+        <p className="mt-1 text-xs text-stone-500">
+          Press ⌘+Enter or Ctrl+Enter to start.
+        </p>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={skipClarify}
+          disabled={frozen}
+          onClick={() => setSkipClarify((v) => !v)}
+          title="When on, the agent never pauses to ask — it makes its best guess and runs straight through."
+          className="mt-3 flex items-center gap-2 text-xs text-stone-600 transition disabled:opacity-50"
+        >
+          <span
+            className={
+              "relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition " +
+              (skipClarify ? "bg-[var(--accent-purple)]" : "bg-stone-300")
+            }
+          >
+            <span
+              className={
+                "inline-block h-3 w-3 transform rounded-full bg-white shadow transition " +
+                (skipClarify ? "translate-x-3.5" : "translate-x-0.5")
+              }
+            />
+          </span>
+          Skip clarifying questions
+        </button>
       </div>
 
       <div className="flex items-center justify-between border-t border-[var(--border-soft)] pt-3">
         <a
           href="https://econpapers.eduard-bruell.de"
-          className="text-xs text-stone-500 hover:text-stone-700"
+          className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-soft)] bg-[var(--bg-card-2)] px-3 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
           title="Just want to search by abstract? Use classic semantic search."
         >
-          ← Semantic mode
+          ← Semantic Search
         </a>
         <PrimaryButton onClick={onRun} disabled={frozen || submitting}>
           {submitting ? "Starting…" : "Run search"}
         </PrimaryButton>
       </div>
+
+      {compact && onNewSearch && (
+        <button
+          type="button"
+          onClick={onNewSearch}
+          className="w-full rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400 hover:bg-stone-100"
+        >
+          New search
+        </button>
+      )}
     </div>
   );
 }

@@ -13,6 +13,8 @@ export function initialState() {
     strategy: null,
     strategyPending: false,
     clarifierQuestion: null,
+    clarifierOptions: [],
+    awaitingReply: false,
     papers: {},
     sections: [],
     synthesis: "",
@@ -34,14 +36,26 @@ export function reduceEvent(state, e) {
         if (e.stage === "write") patch.strategyPending = true;
         return patch;
       }
-      // exit
+      // exit — a clarify exit resolves the paused "waiting" state once the user replied
       if (stages[e.stage] !== "failed") stages[e.stage] = "done";
       if (typeof e.ms === "number") stageMs[e.stage] = e.ms;
-      return { ...state, stages, stageMs };
+      const patch = { ...state, stages, stageMs };
+      if (e.stage === "clarify") patch.awaitingReply = false;
+      return patch;
     }
 
+    case "clarify":
+      // Blocking clarifier turn — the run is paused on us (06_clarifier.md §7.2).
+      return {
+        ...state,
+        clarifierQuestion: e.question,
+        clarifierOptions: e.options ?? [],
+        awaitingReply: e.required === true,
+        stages: { ...state.stages, clarify: "waiting" },
+      };
+
     case "assistant":
-      // clarifier question (single optional turn)
+      // legacy single-token clarifier note (no longer produced by the clarify stage)
       return {
         ...state,
         clarifierQuestion: (state.clarifierQuestion ?? "") + e.delta,
@@ -100,7 +114,7 @@ export function reduceEvent(state, e) {
       const stages = Object.fromEntries(
         Object.entries(state.stages).map(([k, v]) => [k, v === "failed" ? v : "done"]),
       );
-      return { ...state, stages, done: true, msTotal: e.ms_total };
+      return { ...state, stages, awaitingReply: false, done: true, msTotal: e.ms_total };
     }
 
     default:
