@@ -242,8 +242,9 @@ A second product, **`agenticsearch.eduard-bruell.de`**, is being designed alongs
 | 04 | `agentic/04_prompts.md` | context engineering: cached corpus, per-stage prompts, retry-with-rejection-reason, MCP variant |
 | 05 | `agentic/05_roadmap.md` | 12-phase plan of attack with acceptance criteria + dependency graph |
 | 06 | `agentic/06_clarifier.md` | blocking-clarifier feature design: one-shot toggle, pause/resume state machine, reply endpoint, wire/UX/prompt changes (extends 01/03/04) |
+| 07 | `agentic/07_multistage.md` | multistage feature design: results-aware re-running — assess step + bounded loop (≤3 rounds) that revises strategy when a pass underperforms; resolves 01 §9.5 (extends 01/03/04) |
 
-**When working on the agentic project, the lower-numbered doc wins for system decisions; the higher-numbered doc wins for surface decisions.** The numbered design docs are canonical — if you disagree with a decision there, update the doc rather than diverging in code. (06 is a feature design layered on 00–05; on conflict it defers to the doc it extends.)
+**When working on the agentic project, the lower-numbered doc wins for system decisions; the higher-numbered doc wins for surface decisions.** The numbered design docs are canonical — if you disagree with a decision there, update the doc rather than diverging in code. (06 and 07 are feature designs layered on 00–05; on conflict they defer to the docs they extend.)
 
 ### Things the agentic build needs from the existing backend
 
