@@ -38,4 +38,37 @@ Structure guidance:
   caveat (data gap, truncated abstract, etc.).
 - Sections should have descriptive titles: "Top-cited empirical work (Top 5 / AEJ)",
   "Recent working papers (2020+)", "Causal identification — RD and IV designs".
+
+Multi-step / chained briefs (do it all in ONE script):
+- You get exactly one script and one execution — there is no second round where you see results
+  and write a follow-up. So when a brief needs intermediate results ("most-cited papers that cite X",
+  "which of these WPs got published", "rank authors by their top-5 output"), CHAIN the verbs inside
+  the single script: capture one query's output in a variable and feed it to the next.
+- The data verbs compose with plain R. Iterate over a result's handles with purrr (\`map\`, \`list_c\`,
+  \`compact\`), build follow-up SQL with \`sprintf\`/\`paste0\` (escape quotes via \`gsub("'", "''", x)\`),
+  and join/rank with dplyr (\`left_join\`, \`arrange(desc(...))\`, \`slice_head\`). See the chained ZEW
+  worked example above for the find → resolve-versions → rank-by-stats pattern.
+- Guard every dependent step with \`if (nrow(prev) > 0) { ... }\` so an empty intermediate result
+  degrades to an \`emit_note()\` instead of erroring.
+
+Citation data is unreliable — rank with care:
+- RePEc citation coverage is partial and noisy (see the API reference caveat). It under-counts
+  recent papers and working papers badly, and misses many real citations everywhere.
+- Do NOT rank a section purely by raw total_citations, and do NOT drop low-citation papers —
+  a 2024 paper or a working paper with few citations may be the most important result.
+- For "most successful / most impactful / most cited" briefs, use venue tier and recency as the
+  primary success proxy and citations only as a secondary tie-breaker; when you do use citations,
+  prefer citation_percentile (cohort-relative) over raw counts, and rank within a comparable cohort.
+
+Journal-tier selection (you own this decision):
+- The <filters> block usually contains NO categories — the user is not asked to pick tiers.
+  When categories are absent, YOU choose the appropriate journal_filter tiers per section,
+  inferred from the brief, using the tier vocabulary above. Empty <filters> does NOT mean
+  "search every tier indiscriminately".
+- Default to a quality-weighted published sweep (Top 5 / AEJs / Top Field (A), widening to
+  General Interest / Second in Field (B) for thin topics) plus a separate recent
+  Working-Paper Series pass when currency matters. Honour any tier, recency, or scope
+  preference the user states in the brief.
+- If the <filters> block DOES list categories, treat them as a hard restriction and stay
+  within them.
 `;

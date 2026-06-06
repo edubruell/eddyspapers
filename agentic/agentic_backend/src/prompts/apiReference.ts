@@ -36,7 +36,9 @@ semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journ
 
 sql_query(sql, params = list())
   Read-only SELECT against these tables: articles, cit_all, cit_internal, handle_stats,
-  journals, versions, bib_coupling. Parser-validated — COPY/ATTACH/DDL/PRAGMA are rejected.
+  journals, version_links, bib_coupling. Parser-validated — COPY/ATTACH/DDL/PRAGMA are rejected.
+  version_links has columns (source, target, type) — directed version edges between handles;
+  join to articles on target/source for metadata. Prefer the versions() verb below for lookups.
   LIMIT is auto-injected if absent (capped at 5000). Use for keyword chains, SQL aggregations,
   and multi-table joins that semantic_search cannot express.
   Returns a tibble.
@@ -61,6 +63,20 @@ sql_query(sql, params = list())
        ORDER BY hs.total_citations DESC LIMIT 30"
     )
 
+### Citation data — partial and noisy, never treat as ground truth
+
+RePEc citation coverage is incomplete and uneven. The citation graph (cites/citedby/cit_*) is
+parsed from author- and publisher-supplied reference lists, so it MISSES large numbers of real
+citations, skews toward older and economics-internal work, and barely covers the last ~2 years
+(citations lag publication). Working papers and very recent papers therefore look far less cited
+than they are. Consequences for how you write scripts:
+- Never rank a result set by raw total_citations alone, and never filter out a paper just because
+  its citation count is low — especially for post-2022 work or working papers.
+- Treat citations as ONE weak signal, combined with journal tier, recency, and semantic relevance.
+  Prefer citation_percentile (cohort-relative) over raw counts when you must use citations.
+- For "most successful / most impactful" briefs, rank within a comparable cohort (same era + tier),
+  and lead with venue/tier as the primary success proxy, citations as a secondary tie-breaker.
+
 cites(handle, limit = 50)
   Papers cited by the given handle (internal graph only — both ends in our DB).
   Returns tibble: Handle, title, year, authors, journal, category, url, abstract, bib_tex
@@ -81,8 +97,13 @@ handle_stats(handles)
                   top_citing_journal, citer_category_counts, citer_category_shares
 
 versions(handle)
-  All known version links for a paper (working paper → journal, etc.).
-  Returns tibble: canonical_handle, handle, type
+  All known version links for a paper (working paper → journal, etc.). Matches edges in either
+  direction. Returns one row per *linked* paper (never the queried handle itself), with metadata.
+  Returns tibble: Handle (the linked paper), type, title, year, authors, journal, category, url,
+                  bib_tex, abstract. Metadata columns are NA when the linked handle is outside the
+                  articles table. The Handle column drops straight into emit_section/handle_stats/bib_for.
+  Example — keep only the *published* sibling(s) of a working paper:
+    pub <- versions(wp_handle) |> filter(!is.na(category) & category != "Working Paper Series")
 
 bib_for(handles)
   BibTeX entries for a vector of handles.
@@ -126,13 +147,16 @@ emit_progress(label, current = NULL, total = NULL)
 
 ### Allowed glue (base R + tidyverse)
 
-You may use: base R, dplyr, tidyr, stringr, purrr, glue, lubridate.
+You may use: base R, dplyr, tidyr, stringr, purrr, glue.
 These packages are pre-attached and available without library().
+For dates, use base R (Sys.Date(), format(x, "%Y"), as.Date, difftime) — lubridate is not available.
 
 Useful patterns:
   all_handles <- character(0)                             # accumulate handles
   all_handles <- unique(c(all_handles, result$Handle))    # add section results
   bind_rows(df1, df2) |> distinct(Handle, .keep_all = TRUE)  # merge + dedup
+  this_year <- as.integer(format(Sys.Date(), "%Y"))       # for "last N years" filters
+  ids <- map(handles, ~ versions(.x)$handle) |> list_c() |> unique()  # chain verbs
 
 ---
 

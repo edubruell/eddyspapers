@@ -125,9 +125,27 @@ versions <- function(handle) {
   t0 <- Sys.time()
   emit_progress(paste0("versions: ", stringr::str_trunc(handle, 60)))
 
-  sql <- "SELECT * FROM versions WHERE canonical_handle = ? OR handle = ?"
+  # Version relationships live in version_links(source, target, type) as directed edges.
+  # Return one row per *other* endpoint of any edge touching `handle`, joined to article
+  # metadata so the result chains directly into emit_section/handle_stats/bib_for. The `Handle`
+  # column is the linked paper (the queried handle is never returned as its own version).
+  sql <- "
+    WITH links AS (
+      SELECT
+        CASE WHEN LOWER(source) = LOWER(?) THEN target ELSE source END AS related,
+        type
+      FROM version_links
+      WHERE LOWER(source) = LOWER(?) OR LOWER(target) = LOWER(?)
+    )
+    SELECT
+      COALESCE(a.Handle, l.related) AS Handle,
+      l.type AS type,
+      a.title, a.year, a.authors, a.journal, a.category, a.url, a.bib_tex, a.abstract
+    FROM links l
+    LEFT JOIN articles a ON LOWER(a.Handle) = LOWER(l.related)
+  "
 
-  result <- DBI::dbGetQuery(.sandbox_state$con, sql, params = list(handle, handle))
+  result <- DBI::dbGetQuery(.sandbox_state$con, sql, params = list(handle, handle, handle))
   result <- dplyr::as_tibble(result)
 
   emit_progress(paste0("  ↳ ", nrow(result), " results in ", round(as.numeric(Sys.time() - t0, units = "secs"), 1), "s"))

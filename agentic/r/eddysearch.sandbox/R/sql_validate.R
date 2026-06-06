@@ -21,7 +21,7 @@ validate_sql <- function(sql, con) {
 
   allowed_tables <- c(
     "articles", "cit_all", "cit_internal", "handle_stats",
-    "journals", "versions", "bib_coupling"
+    "journals", "version_links", "bib_coupling"
   )
 
   walk_node <- function(node) {

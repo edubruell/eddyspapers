@@ -94,6 +94,10 @@ ALLOWED_PURRR <- c(
   "modify2", "imodify"
 )
 
+ALLOWED_GLUE <- c(
+  "glue", "glue_data", "glue_collapse", "trim"
+)
+
 ALLOWED_SANDBOX <- c(
   "connect_db",
   "semantic_search", "sql_query", "cites", "citedby", "handle_stats",
@@ -119,7 +123,7 @@ ALLOWED_OPS <- c(
 
 ALL_ALLOWED <- unique(c(
   ALLOWED_BASE, ALLOWED_DPLYR, ALLOWED_STRINGR, ALLOWED_TIDYR,
-  ALLOWED_PURRR, ALLOWED_SANDBOX, ALLOWED_CONTROL, ALLOWED_OPS
+  ALLOWED_PURRR, ALLOWED_GLUE, ALLOWED_SANDBOX, ALLOWED_CONTROL, ALLOWED_OPS
 ))
 
 BLOCKED <- c(

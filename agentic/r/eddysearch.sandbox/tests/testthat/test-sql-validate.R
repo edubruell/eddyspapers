@@ -124,6 +124,16 @@ test_that("JOIN with both tables in allowlist passes", {
   ))
 })
 
+test_that("version_links is in the allowlist; the phantom 'versions' table is not", {
+  con <- setup_test_con()
+  DBI::dbExecute(con, "CREATE TABLE version_links (source VARCHAR, target VARCHAR, type VARCHAR)")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  expect_invisible(validate_sql(
+    "SELECT a.Handle FROM version_links vl JOIN articles a ON a.Handle = vl.target", con
+  ))
+  expect_error(validate_sql("SELECT * FROM versions", con), "Table not in allowlist")
+})
+
 test_that("JOIN with one non-allowlisted table is rejected", {
   con <- setup_test_con()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))

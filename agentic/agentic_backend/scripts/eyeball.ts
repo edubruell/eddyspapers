@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-// Run: pnpm eyeball "<brief>" [--min-year=YYYY] [--categories=cat1,cat2]
-// Or:  pnpm tsx --env-file=.env scripts/eyeball.ts "<brief>"
+// Run a brief through write + execute and print everything (script, events, stderr).
+//   pnpm eyeball "<brief>" [--min-year=YYYY] [--categories=cat1,cat2]
+// Debug a failing script directly, skipping the LLM (hand-edit then re-run):
+//   pnpm eyeball --script=path/to/script.R
+// On any failure (validation, timeout, non-zero exit) the script + full stderr + events
+// are written to data/agentic/debug/<timestamp>/ and the path is printed for inspection.
 
-import { writeFile, unlink } from "fs/promises";
+import { writeFile, unlink, mkdir, readFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { writeScript } from "../src/agent/stages/writeScript.js";
@@ -10,27 +14,25 @@ import { runSandbox } from "../src/sandbox/runSandbox.js";
 import { resolveSnapshot } from "../src/sandbox/snapshot.js";
 import type { RawSandboxEvent } from "../src/sandbox/events.js";
 
-if (!process.env.OPENROUTER_API_KEY) {
-  console.error("OPENROUTER_API_KEY is not set. Run via: pnpm eyeball \"<brief>\"");
-  process.exit(1);
-}
-
 function parseArgs(argv: string[]) {
   const positional: string[] = [];
   let minYear: number | undefined;
   let categories: string[] | undefined;
+  let scriptPath: string | undefined;
 
   for (const arg of argv) {
     if (arg.startsWith("--min-year=")) {
       minYear = parseInt(arg.slice("--min-year=".length), 10);
     } else if (arg.startsWith("--categories=")) {
       categories = arg.slice("--categories=".length).split(",").map((s) => s.trim());
+    } else if (arg.startsWith("--script=")) {
+      scriptPath = arg.slice("--script=".length);
     } else {
       positional.push(arg);
     }
   }
 
-  return { brief: positional.join(" "), minYear, categories };
+  return { brief: positional.join(" "), minYear, categories, scriptPath };
 }
 
 function dim(s: string)   { return `\x1b[2m${s}\x1b[0m`; }
@@ -64,29 +66,105 @@ function printEvent(e: RawSandboxEvent) {
   }
 }
 
-async function main() {
-  const { brief, minYear, categories } = parseArgs(process.argv.slice(2));
+// Persist script + full stderr + events for post-mortem inspection.
+async function dumpArtifacts(script: string, stderr: string, events: RawSandboxEvent[]): Promise<string> {
+  const dir = join(process.cwd(), "data", "agentic", "debug", `${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "script.R"), script, "utf-8");
+  await writeFile(join(dir, "stderr.txt"), stderr, "utf-8");
+  await writeFile(join(dir, "events.json"), JSON.stringify(events, null, 2), "utf-8");
+  return dir;
+}
 
+// Run a script string in the sandbox, print events, dump artifacts on failure.
+async function execute(script: string): Promise<boolean> {
+  const snap = await resolveSnapshot();
+  if (!snap.exists) {
+    console.log(yellow(`⚠  DB snapshot not found at ${snap.path} — cannot execute.`));
+    return false;
+  }
+  console.log(dim(`DB: ${snap.path}${snap.stale ? ` (stale, ${Math.floor((snap.ageMs ?? 0) / 86_400_000)}d old)` : ""}`));
+
+  console.log(bold("\n── EXECUTE ───────────────────────────────────"));
+  const tmp = join(tmpdir(), `eyeball_${Date.now()}.R`);
+  const events: RawSandboxEvent[] = [];
+  try {
+    await writeFile(tmp, script, "utf-8");
+
+    const t1 = Date.now();
+    let paperCount = 0;
+    let sectionCount = 0;
+
+    const result = await runSandbox(tmp, snap.path, (event) => {
+      events.push(event);
+      printEvent(event);
+      if (event.type === "paper") paperCount++;
+      if (event.type === "section") sectionCount++;
+    });
+    const execMs = Date.now() - t1;
+
+    const failed = result.timedOut || result.exitCode !== 0;
+    console.log();
+    if (result.timedOut) {
+      console.log(red("  ⏰ Timed out"));
+    } else if (failed) {
+      console.log(red(`  ✗ Exit ${result.exitCode} (${execMs}ms)`));
+    } else {
+      console.log(green(`  ✓ Exit ${result.exitCode} (${execMs}ms)`));
+    }
+    console.log(dim(`  ${paperCount} papers, ${sectionCount} sections`));
+
+    if (result.stderr.trim()) {
+      console.log(dim("\n── R stderr ──────────────────────────────────"));
+      console.log(dim(result.stderr.slice(0, 4000)));
+    }
+
+    if (failed) {
+      const dir = await dumpArtifacts(script, result.stderr, events);
+      console.log(yellow(`\n📁 Artifacts written to ${dir}`));
+      console.log(yellow(`   Hand-edit script.R there, then re-run: pnpm eyeball --script="${join(dir, "script.R")}"`));
+    }
+    return !failed;
+  } finally {
+    await unlink(tmp).catch(() => undefined);
+  }
+}
+
+async function main() {
+  const { brief, minYear, categories, scriptPath } = parseArgs(process.argv.slice(2));
+
+  console.log(bold("\n═══ EYEBALL HARNESS ═══\n"));
+
+  // ── Direct-script mode: skip the LLM, run a raw .R file against the snapshot. ──
+  if (scriptPath) {
+    console.log(`Script:     ${scriptPath}`);
+    const script = await readFile(scriptPath, "utf-8");
+    const ok = await execute(script);
+    process.exit(ok ? 0 : 1);
+  }
+
+  // ── Brief mode: write a script with the LLM, then execute it. ──
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.error('OPENROUTER_API_KEY is not set. Run via: pnpm eyeball "<brief>"');
+    process.exit(1);
+  }
   if (!brief) {
     console.error('Usage: pnpm eyeball "<brief>" [--min-year=YYYY] [--categories=cat1,cat2]');
+    console.error('   or: pnpm eyeball --script=path/to/script.R');
     process.exit(1);
   }
 
-  console.log(bold("\n═══ EYEBALL HARNESS ═══\n"));
   console.log(`Brief:      ${brief}`);
   if (categories) console.log(`Categories: ${categories.join(", ")}`);
   if (minYear)    console.log(`Min year:   ${minYear}`);
   console.log();
 
-  // Resolve DB snapshot
   const snap = await resolveSnapshot();
   if (!snap.exists) {
-    console.log(yellow(`⚠  DB snapshot not found at ${snap.path} — sandbox will fail`));
+    console.log(yellow(`⚠  DB snapshot not found at ${snap.path} — sandbox will be skipped`));
   } else if (snap.stale) {
     const days = Math.floor((snap.ageMs ?? 0) / 86_400_000);
     console.log(yellow(`⚠  Snapshot is ${days}d old`));
-  } else {
-    console.log(dim(`DB: ${snap.path}`));
   }
   console.log();
 
@@ -111,45 +189,15 @@ async function main() {
   console.log();
   console.log(dim("── Script ────────────────────────────────────"));
   console.log(writeResult.script);
-  console.log(dim("─────────────────────────────────────────────\n"));
+  console.log(dim("─────────────────────────────────────────────"));
 
   if (!snap.exists) {
-    console.log(yellow("Skipping sandbox run — no DB snapshot found."));
+    console.log(yellow("\nSkipping sandbox run — no DB snapshot found."));
     process.exit(0);
   }
 
-  // Sandbox stage
-  console.log(bold("── EXECUTE ───────────────────────────────────"));
-  const tmp = join(tmpdir(), `eyeball_${Date.now()}.R`);
-  try {
-    await writeFile(tmp, writeResult.script, "utf-8");
-
-    const t1 = Date.now();
-    let paperCount = 0;
-    let sectionCount = 0;
-
-    const result = await runSandbox(tmp, snap.path, (event) => {
-      printEvent(event);
-      if (event.type === "paper") paperCount++;
-      if (event.type === "section") sectionCount++;
-    });
-    const execMs = Date.now() - t1;
-
-    console.log();
-    if (result.timedOut) {
-      console.log(red("  ⏰ Timed out"));
-    } else {
-      console.log(green(`  ✓ Exit ${result.exitCode} (${execMs}ms)`));
-    }
-    console.log(dim(`  ${paperCount} papers, ${sectionCount} sections`));
-
-    if (result.stderr.trim()) {
-      console.log(dim("\n── R stderr ──────────────────────────────────"));
-      console.log(dim(result.stderr.slice(0, 2000)));
-    }
-  } finally {
-    await unlink(tmp).catch(() => undefined);
-  }
+  const ok = await execute(writeResult.script);
+  process.exit(ok ? 0 : 1);
 }
 
 main().catch((err) => {

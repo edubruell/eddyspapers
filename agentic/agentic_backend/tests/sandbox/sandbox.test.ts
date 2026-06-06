@@ -82,6 +82,11 @@ describe("checkScript", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("accepts a chained script using glue() and verb chaining", async () => {
+    const result = await checkScript(join(GOOD_SCRIPTS_DIR, "08_chained_glue.R"));
+    expect(result.ok).toBe(true);
+  });
+
   it("rejects a bad script with reason", async () => {
     const result = await checkScript(join(BAD_SCRIPTS_DIR, "bad_library.R"));
     expect(result.ok).toBe(false);

@@ -173,4 +173,68 @@ all_handles <- unique(c(all_handles, jole_kw$Handle))
 
 emit_bibtex(all_handles)
 \`\`\`
+
+---
+
+### Brief
+What were the most successfully published ZEW working papers in the last five years?
+
+This is a **multi-step / chained** brief: one query feeds the next inside a single script. Find the
+ZEW discussion papers that *reached a journal*, then rank those journal versions. Do it in one script.
+
+**Critical pitfall: do NOT take the newest WPs.** "Published in the last five years" sounds like
+"newest", but WP-to-journal lag is 2-4 years, so the *newest* ZEW DPs are exactly the ones not yet
+published. Selecting the newest with ORDER BY year DESC LIMIT returns brand-new WPs with zero
+published siblings and an empty result. Restrict to WPs *issued* in the window and let the
+version_links join keep only those that actually reached a journal (no recency sort on the WP side).
+The efficient resolver is a single version_links join in SQL, not a per-handle versions() loop:
+version_links(source, target, type) holds directed WP-to-journal edges; join articles on the other end.
+
+\`\`\`r
+all_handles <- character(0)
+this_year <- as.integer(format(Sys.Date(), "%Y"))
+
+# --- Step 1+2: ZEW DPs issued in the window that reached a journal, with the journal row ---
+# One version_links join: keep only WPs whose linked sibling is a non-WP (published) article.
+# No ORDER BY year on the WP side — the published subset skews to the OLDER end of the window.
+published <- sql_query(sprintf(
+  "SELECT DISTINCT pub.Handle, pub.title, pub.year, pub.authors, pub.journal,
+                   pub.category, pub.url, pub.bib_tex, pub.abstract
+   FROM articles wp
+   JOIN version_links vl
+     ON LOWER(wp.Handle) = LOWER(vl.source) OR LOWER(wp.Handle) = LOWER(vl.target)
+   JOIN articles pub
+     ON LOWER(pub.Handle) = LOWER(CASE WHEN LOWER(vl.source) = LOWER(wp.Handle)
+                                       THEN vl.target ELSE vl.source END)
+   WHERE wp.category = 'Working Paper Series'
+     AND wp.Handle LIKE 'RePEc:zbw:zewdip%%'
+     AND wp.year >= %d
+     AND pub.category <> 'Working Paper Series'
+   LIMIT 500",
+  this_year - 5L
+))
+
+# --- Step 3: rank by journal prestige first, citations only as a tie-breaker ---
+# RePEc citation counts are noisy and under-count recent work, so prestige tier leads the ranking.
+if (nrow(published) > 0) {
+  stats  <- handle_stats(published$Handle)
+  ranked <- published |>
+    left_join(stats, by = c("Handle" = "handle")) |>
+    mutate(tier_rank = case_when(
+      category == "Top 5 Journals"        ~ 1L,
+      category == "AEJs"                  ~ 2L,
+      category == "Top Field Journals (A)"~ 3L,
+      category == "General Interest"      ~ 4L,
+      TRUE                                ~ 5L
+    )) |>
+    arrange(tier_rank, desc(coalesce(total_citations, 0))) |>
+    slice_head(n = 20)
+  emit_section("Most successfully published recent ZEW discussion papers", ranked, n = 20)
+  all_handles <- unique(c(all_handles, ranked$Handle))
+} else {
+  emit_note("No published journal versions of recent ZEW discussion papers were found in the database.")
+}
+
+emit_bibtex(all_handles)
+\`\`\`
 `;

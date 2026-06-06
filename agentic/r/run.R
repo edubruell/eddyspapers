@@ -15,11 +15,21 @@ if (length(file_arg) == 0) {
 script_dir <- normalizePath(dirname(sub("--file=", "", file_arg[[1]])))
 pkg_dir    <- file.path(script_dir, "eddysearch.sandbox")
 
-if (requireNamespace("eddysearch.sandbox", quietly = TRUE)) {
-  suppressPackageStartupMessages(library(eddysearch.sandbox, quietly = TRUE))
-} else {
-  pkgload::load_all(pkg_dir, quiet = TRUE)
-}
+# Attach the data-analysis packages the allowlist advertises so bare calls
+# (mutate, map, str_glue, glue, pivot_wider, …) resolve at runtime and dplyr::filter
+# masks stats::filter. eddysearch.sandbox is loaded LAST so its verbs win any name clash.
+suppressWarnings(suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(purrr)
+  library(glue)
+  if (requireNamespace("eddysearch.sandbox", quietly = TRUE)) {
+    library(eddysearch.sandbox, quietly = TRUE)
+  } else {
+    pkgload::load_all(pkg_dir, quiet = TRUE)
+  }
+}))
 
 connect_db(db_path)
 
