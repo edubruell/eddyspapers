@@ -353,7 +353,7 @@ Things that don't gate launch but should land soon after.
 - [ ] **Paper-upload feature** (`03 §7.1`) — revisit once cost picture is stable.
 - [ ] **DOI column on `articles`** (`01 §4.4`, deferred) — revisit when another initiative wants it anyway.
 - [ ] Adversarial-script corpus growth: every novel rejection in prod auto-feeds the `tests/ast/bad/` corpus.
-- [ ] Iterative model-level multi-script runs (search → expand via citations → re-search), capped at 3 rounds (`01 §9.5`). **Deferred** — instead the writer is now guided to chain verbs *within a single script* (find → resolve-versions → rank-by-stats); see the chained ZEW example in `04 §2.4` / `examples.ts` (2026-06-06).
+- [x] Iterative model-level multi-script runs (search → expand via citations → re-search), capped at 3 rounds (`01 §9.5`) — **designed** as the multistage feature in `07_multistage.md` (2026-06-06); see Phase 14 below for the build plan. Single-script verb chaining (find → resolve-versions → rank-by-stats; chained ZEW example in `04 §2.4` / `examples.ts`) remains the cheaper default; multistage is the escape hatch for strategies unknowable until results return.
 - [ ] German-language synthesis path (`04 §10.3`).
 
 ---
@@ -376,6 +376,32 @@ pause/resume round-trip with a one-shot opt-out.
 **Acceptance:** see `06 §10` — ambiguous brief pauses for input with the box unchecked and the
 answer changes the resulting script; flows straight through with the box checked; reload-during-pause
 restores the input; MCP behaviour unchanged.
+
+---
+
+## Phase 14 — Multistage (results-aware re-running) 🟡 (design done, build pending)
+
+Full design in [`07_multistage.md`](./07_multistage.md); build order is `07 §11`. Today the pipeline
+runs one script and synthesises whatever comes back. This phase adds a bounded loop that lets the
+agent observe its own results and revise strategy when a pass underperforms (the ZEW
+"newest-WPs-aren't-published-yet" failure is the motivating case). Single-script verb chaining stays
+the cheaper default; the loop is the escape hatch for strategies unknowable until data returns.
+
+- [ ] **Result summary + flags**: pure fn over `ExecuteResult` → sections/counts/sample + deterministic flags (`all_empty`, `headline_empty`, `thin`, `no_new`). (`07 §3`)
+- [ ] **Assessor stage**: cached prompt + structured `{verdict, reason, directive?, mode}`; bias to `adequate`; short-circuit on empty flags. (`07 §3`)
+- [ ] **Loop in `runAgent`**: wrap write→validate→execute→assess; cross-round accumulation + dedup; caps (`MAX_ROUNDS=3`) + degenerate-stop; synthesise once. (`07 §2,4,5`)
+- [ ] **Writer feedback channel**: `<previous_run>` + `<revision mode>` per-call blocks, distinct from the validation-retry `<rejection>` path. (`07 §6`)
+- [ ] **Wire + persistence**: `revise` event; optional `round` field on stage events; optional `rounds_run` column. (`07 §7`)
+- [ ] **Frontend**: re-entrant stepper, "refining" sub-state, accumulating results, one-shot pin (`MAX_ROUNDS=1`). (`07 §8`)
+- [ ] **Eval**: multi-round eyeball view; wire the ZEW brief as the canonical acceptance test. (`07 §12`)
+
+**Acceptance:** see `07 §12` — with the *naive* (no-domain-hint) ZEW prompt and multistage on, round 1
+returns an empty published section, the assessor revises (mode `replace`, names the recency pitfall),
+round 2 returns a non-empty tier-led ranking, and synthesis runs once over the accumulated set. Easy
+queries finish in one round (assessor `adequate`), adding only a single cheap assessor call.
+
+Depends on nothing new; reuses `executeScript`, `writeScript`, the searches table, and the SSE bus.
+Independent of Phase 13 (composes with it: a clarified brief feeds every revise round).
 
 ---
 

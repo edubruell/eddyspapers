@@ -657,7 +657,7 @@ Stdio transport (local) bypasses auth — the key is "you have shell on this mac
 2. **DB snapshot cadence.** A nightly read-only snapshot is safer than sharing the live file with the syncer (which writes). Worth the disk.
 3. **Streaming script execution output.** Probably not — wait for the JSON blob, stream only the synthesiser's tokens. Simpler and avoids leaking intermediate state.
 4. **Saving searches.** Reuse the existing `/search/save` hash mechanism, or make agentic conversations first-class with their own table? Probably the latter — they're structurally different.
-5. **Citation-aware iteration.** Should the writer be allowed to emit a *sequence* of scripts (search → pick top handles → expand via `citedby` → re-rank)? Yes, but cap at 3 script rounds total.
+5. **Citation-aware iteration.** Should the writer be allowed to emit a *sequence* of scripts (search → pick top handles → expand via `citedby` → re-rank)? Yes, but cap at 3 script rounds total. **Resolved (2026-06-06) — designed as the multistage feature in `07_multistage.md`:** a bounded results-aware loop (assess → revise → re-run, ≤ 3 execute rounds) that accumulates results and synthesises once at the end. Single-script verb chaining remains the cheaper default; multistage is the escape hatch for strategies that are unknowable until results come back.
 
 ---
 
