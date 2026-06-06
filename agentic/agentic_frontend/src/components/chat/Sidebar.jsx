@@ -1,14 +1,14 @@
 import { useEffect, useRef } from "react";
 import { SectionLabel, PrimaryButton } from "../primitives/index.jsx";
-import CategoryPills from "./CategoryPills.jsx";
 
-// The TASK panel: brief textarea + category pills + advanced (min year) + Run.
+// The TASK panel: just a brief textarea + Run. Journal-tier selection is no longer
+// a UI control — the agent infers the appropriate categories from the brief (the
+// tier vocabulary still lives in the backend writer prompt). Year cutoffs and other
+// filters are expressed in plain language inside the brief.
 // Used both centered (landing) and in the collapsed sidebar (working state).
 export default function Sidebar({
   brief,
   setBrief,
-  selected,
-  toggleCategory,
   onRun,
   submitting,
   frozen,
@@ -49,17 +49,8 @@ export default function Sidebar({
           }
         />
         <p className="mt-1 text-xs text-stone-500">
-          Press ⌘+Enter or Ctrl+Enter to start.
-        </p>
-      </div>
-
-      <div>
-        <SectionLabel>Journal categories to be considered</SectionLabel>
-        <div className="mt-2">
-          <CategoryPills selected={selected} onToggle={toggleCategory} disabled={frozen} />
-        </div>
-        <p className="mt-2 text-xs text-stone-500">
-          Need a year cutoff or other filter? Just say so in the task above.
+          Press ⌘+Enter or Ctrl+Enter to start. Mention any journal-tier, year, or
+          author preferences in the task — the agent picks the rest.
         </p>
       </div>
 

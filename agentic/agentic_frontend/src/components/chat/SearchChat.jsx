@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { startChat } from "../../lib/api.js";
+import { useState, useEffect } from "react";
+import { startChat, getLastUpdated } from "../../lib/api.js";
 import { useAgentStream } from "../../lib/stream.js";
-import { CATEGORY_DEFS, DEFAULT_CATEGORY_IDS } from "../../lib/categories.js";
 import LogoAgentic from "../logo/LogoAgentic.jsx";
 import { SectionLabel } from "../primitives/index.jsx";
 import Sidebar from "./Sidebar.jsx";
@@ -15,20 +14,22 @@ import ArtifactsToolbar from "./ArtifactsToolbar.jsx";
 
 export default function SearchChat() {
   const [brief, setBrief] = useState("");
-  const [selected, setSelected] = useState(DEFAULT_CATEGORY_IDS);
   const [id, setId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [startError, setStartError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const state = useAgentStream(id);
   const hasRun = id != null;
   const frozen = hasRun && !state.done && !state.error;
 
-  function toggleCategory(cid) {
-    setSelected((prev) =>
-      prev.includes(cid) ? prev.filter((c) => c !== cid) : [...prev, cid],
-    );
-  }
+  useEffect(() => {
+    const controller = new AbortController();
+    getLastUpdated({ signal: controller.signal })
+      .then((d) => setLastUpdated(d.last_updated))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   async function onRun() {
     if (brief.trim().length < 15) {
@@ -38,13 +39,7 @@ export default function SearchChat() {
     setSubmitting(true);
     setStartError(null);
     try {
-      const categories = CATEGORY_DEFS.filter((c) => selected.includes(c.id)).map(
-        (c) => c.api,
-      );
-      const { id: newId } = await startChat({
-        brief: brief.trim(),
-        categories,
-      });
+      const { id: newId } = await startChat({ brief: brief.trim() });
       setId(newId);
     } catch (e) {
       setStartError(e.message);
@@ -62,14 +57,18 @@ export default function SearchChat() {
     <Sidebar
       brief={brief}
       setBrief={setBrief}
-      selected={selected}
-      toggleCategory={toggleCategory}
       onRun={onRun}
       submitting={submitting}
       frozen={frozen}
       compact={hasRun}
     />
   );
+
+  const dbFooter = lastUpdated ? (
+    <p className="mt-3 text-center text-[11px] text-stone-500">
+      Database last updated on {lastUpdated}
+    </p>
+  ) : null;
 
   // ── Landing state ──────────────────────────────────────────────────────────
   if (!hasRun) {
@@ -81,6 +80,7 @@ export default function SearchChat() {
           {startError && (
             <p className="mt-3 text-sm text-red-600">{startError}</p>
           )}
+          {dbFooter}
         </div>
       </div>
     );
@@ -104,6 +104,7 @@ export default function SearchChat() {
         <div className="rounded-[14px] border border-[var(--border-soft)] bg-[var(--bg-card)] p-4 shadow-sm">
           {sidebar}
           {startError && <p className="mt-3 text-sm text-red-600">{startError}</p>}
+          {dbFooter}
         </div>
       </aside>
 

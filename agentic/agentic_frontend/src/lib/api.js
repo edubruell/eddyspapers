@@ -1,8 +1,19 @@
 const API_BASE =
   import.meta.env.PUBLIC_AGENTIC_API_BASE ?? "http://127.0.0.1:8001";
 
+// The classic (non-agentic) semantic-search API. Used only to read the shared
+// database snapshot date, exactly as the semantic frontend does via /stats/last_updated.
+const SEMANTIC_API_BASE =
+  import.meta.env.PUBLIC_SEMANTIC_API_BASE ?? "https://econpapers.eduard-bruell.de/api";
+
 export function streamUrl(id) {
   return `${API_BASE}/chat/${encodeURIComponent(id)}/stream`;
+}
+
+export async function getLastUpdated({ signal } = {}) {
+  const res = await fetch(`${SEMANTIC_API_BASE}/stats/last_updated`, { signal });
+  if (!res.ok) throw new Error(`last_updated failed (${res.status})`);
+  return res.json(); // { last_updated }
 }
 
 export async function startChat({ brief, categories, minYear, mustInclude }) {
