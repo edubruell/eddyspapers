@@ -19,6 +19,10 @@ export type WriteScriptOpts = {
   // blocking clarifier asked a question and the user answered (06_clarifier.md §5).
   clarifyQuestion?: string;
   clarifyAnswer?: string;
+  // Multistage refine pass (07_multistage.md §6): the script that ran last round, a compact
+  // summary of its results, and the assessor's revision directive. Distinct from the
+  // validation-retry path — the prior script was VALID and ran; the *strategy* underperformed.
+  revision?: { previousScript: string; resultSummary: string; directive: string; mode: "augment" | "replace" };
 };
 
 export type WriteScriptResult =
@@ -62,6 +66,7 @@ function buildUserMessage(
   mustInclude: string[] | undefined,
   dbDate: string,
   clarification: { question: string; answer: string } | undefined,
+  revision: { previousScript: string; resultSummary: string; directive: string; mode: "augment" | "replace" } | undefined,
   previousAttempt?: string,
   rejection?: { reason: string; offendingNode: string; hint: string }
 ): string {
@@ -80,6 +85,13 @@ function buildUserMessage(
       : "") +
     `<filters>\n${filterLines || "(none)"}\n</filters>\n\n` +
     `<db_snapshot>\n${dbDate}\n</db_snapshot>`;
+
+  if (revision) {
+    msg +=
+      `\n\n<previous_run>\n<script>\n${revision.previousScript}\n</script>\n` +
+      `<result_summary>\n${revision.resultSummary}\n</result_summary>\n</previous_run>\n\n` +
+      `<revision mode="${revision.mode}">\n${revision.directive}\n</revision>`;
+  }
 
   if (previousAttempt && rejection) {
     msg +=
@@ -107,7 +119,7 @@ async function checkAndGetRejection(script: string): Promise<
 }
 
 export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptResult> {
-  const { brief, categories, minYear, mustInclude, dbDate, modelOverride } = opts;
+  const { brief, categories, minYear, mustInclude, dbDate, modelOverride, revision } = opts;
   const clarification =
     opts.clarifyQuestion && opts.clarifyAnswer
       ? { question: opts.clarifyQuestion, answer: opts.clarifyAnswer }
@@ -133,6 +145,7 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
       mustInclude,
       dbDate,
       clarification,
+      revision,
       lastScript,
       lastRejection
     );

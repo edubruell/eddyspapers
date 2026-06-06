@@ -19,6 +19,7 @@ export interface StoredSearch {
   synthesis: string | null;
   clarifyQuestion: string | null;
   clarifyAnswer: string | null;
+  refine: boolean;
 }
 
 export interface SearchDb {
@@ -60,20 +61,26 @@ export async function openSearchDb(): Promise<SearchDb> {
       events TEXT,
       synthesis TEXT,
       clarify_question TEXT,
-      clarify_answer TEXT
+      clarify_answer TEXT,
+      refine BOOLEAN DEFAULT false
     )
   `);
 
-  // Migrate pre-existing tables (created before the blocking clarifier landed).
+  // Migrate pre-existing tables (created before the blocking clarifier / multistage landed).
+  // NOTE: never use a DEFAULT clause in these ALTERs. DuckDB's WAL replay crashes on
+  // `ReplayAlter` for an ADD COLUMN that carries a DEFAULT (the column is nullable here and
+  // reads coerce NULL → false, so a default is unnecessary anyway). The DEFAULT on the CREATE
+  // TABLE above is fine — only ALTERs are replayed through the crashing path.
   await conn.run("ALTER TABLE searches ADD COLUMN IF NOT EXISTS clarify_question TEXT");
   await conn.run("ALTER TABLE searches ADD COLUMN IF NOT EXISTS clarify_answer TEXT");
+  await conn.run("ALTER TABLE searches ADD COLUMN IF NOT EXISTS refine BOOLEAN");
 
   return {
     async upsertSearch(id, input) {
       const existing = await rowsToObjects(conn, "SELECT id FROM searches WHERE id = ?", [id]);
       if (existing.length > 0) return;
       await conn.run(
-        "INSERT INTO searches (id, brief, categories, min_year, db_snapshot_date, events) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO searches (id, brief, categories, min_year, db_snapshot_date, events, refine) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
           id,
           input.brief,
@@ -81,6 +88,7 @@ export async function openSearchDb(): Promise<SearchDb> {
           input.minYear ?? null,
           input.dbSnapshotDate,
           "[]",
+          input.refine ?? false,
         ] as never,
       );
     },
@@ -130,6 +138,7 @@ export async function openSearchDb(): Promise<SearchDb> {
         synthesis: (r.synthesis as string | null) ?? null,
         clarifyQuestion: (r.clarify_question as string | null) ?? null,
         clarifyAnswer: (r.clarify_answer as string | null) ?? null,
+        refine: Boolean(r.refine),
       };
     },
 

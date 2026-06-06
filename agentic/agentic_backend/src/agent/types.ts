@@ -51,6 +51,7 @@ export type StreamEvent =
   | { type: "assistant"; seq: number; stage: Stage; delta: string }
   | { type: "clarify"; seq: number; question: string; options: string[]; required: boolean }
   | { type: "strategy"; seq: number; strategy: string }
+  | { type: "revise"; seq: number; reason: string; mode: "augment" | "replace" }
   | { type: "script"; seq: number; delta: string }
   | { type: "validate"; seq: number; ok: boolean; reason?: string; offending?: string }
   | { type: "progress"; seq: number; label: string; current?: number; total?: number }
@@ -69,6 +70,10 @@ export interface AgentInput {
   // When true the clarify stage never blocks/asks (MCP default, web opt-in via the
   // "one-shot" checkbox). A `question` result is treated as `proceed`.
   skipClarify?: boolean;
+  // When true the agent may run ONE results-aware refine pass (07_multistage.md): after
+  // round 1 executes, an assessor decides adequate vs revise; on revise a single corrected
+  // write→validate→execute round runs before synthesis. Off by default — zero added cost.
+  refine?: boolean;
   // Set on the resume (Phase B) pass: the question that was asked and the user's
   // answer, folded into the writer's user message as a <clarification> block.
   clarifyQuestion?: string;

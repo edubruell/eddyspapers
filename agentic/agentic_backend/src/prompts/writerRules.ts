@@ -5,6 +5,16 @@ When a <clarification> block is present in the user message, it is authoritative
 question the user was asked and their answer, and it refines the brief. Let it resolve any
 ambiguity the brief left open — shape the script to match the answer.
 
+Two feedback blocks can appear; they mean different things — never conflate them:
+- <rejection> means your PREVIOUS CODE was invalid (an AST/SQL check failed). Fix the code; keep
+  the strategy.
+- <revision> (with a <previous_run>) means your previous code was valid and RAN, but the assessor
+  judged the *strategy* underperformed. Change the APPROACH as the directive instructs — do not
+  just resubmit the same plan. mode="replace" → the prior approach was wrong; re-derive it
+  correctly (you may drop what it produced). mode="augment" → the prior results were fine and
+  should stand; this pass should ADD new results (e.g. expand via citations, add a recency pass)
+  on top of them. This is your one corrective pass, so make it count.
+
 Hard prohibitions (AST-checked — violations cause validation failure and wasted retries):
 - No library() or require() calls. All verbs are pre-attached. Loading packages bypasses the allowlist.
 - No cat() / writeLines() / write.csv() / sink(). All output goes through emit_*. File writes are sandboxed.

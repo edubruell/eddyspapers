@@ -1,6 +1,45 @@
 # 07 — Multistage (results-aware re-running)
 
-**Status:** design only — no code yet. Decided 2026-06-06.
+**Status:** implemented 2026-06-06 (single-refine-pass variant — see box below). Original loop design retained for context.
+
+> ### Implementation deltas (2026-06-06) — single refine pass
+>
+> The shipped feature is a **deliberately simplified** form of the ≤3-round loop designed below.
+> Per product decision (2026-06-06), the agent runs **at most one refine pass**, not a bounded
+> loop:
+>
+> 1. **Opt-in toggle, off by default.** A frontend switch **"Refine strategy (multi-stage)"** (same
+>    control family as the clarifier's skip toggle, `06 §2`) enables the feature per run. Default
+>    **off** → behaviour is byte-for-byte the old single-shot pipeline with **zero** added LLM cost.
+>    MCP and one-shot callers never set it (satisfies §5's "MCP defaults to 1").
+> 2. **One pass only — `MAX_ROUNDS = 2`, and that pass is MANDATORY when the toggle is on.** Round 1
+>    runs as today; **assess** is called exactly once (only when the toggle is on). The toggle is an
+>    explicit opt-in, so when it is on the second pass always runs — the assessor is an **advisor,
+>    not a gate**: it does not vote `adequate`/`revise`, it always proposes the single most valuable
+>    next pass (a `directive` + `mode`). (Earlier revision: a bias-to-`adequate` gate meant the
+>    pass almost never fired — corrected 2026-06-06 to always refine when enabled.) The *only* thing
+>    that skips the pass is an advisor LLM failure (`assess` returns `null`) → ship round 1 rather
+>    than run a directionless round 2. There is no third round — the cap is structural, not a loop
+>    bound.
+> 3. **Accumulation simplified to whole-set augment/replace.** `augment` → round-1 results stay and
+>    round-2 sections append (papers deduped by handle, merged BibTeX deduped by cite-key);
+>    `replace` → round-2 result set **fully replaces** round-1 (the frontend clears prior
+>    sections/papers/bibtex on the `revise` event). We do **not** drop individual offending sections
+>    (§4's finer granularity) — for a single corrective pass, whole-set replace matches the
+>    motivating ZEW case and is far simpler. **Graceful degrade:** if the refine round itself *fails*
+>    (write/exec error), an `augment` pass falls back to synthesising the round-1 review (with a
+>    caveat note) rather than discarding it; a `replace` pass is fatal (round 1 was already
+>    discarded, nothing safe to fall back to).
+> 4. **Wire.** One new `revise` event `{ type, seq, reason, mode }` (no `round` field — with a single
+>    pass the re-entry is implicit; stage events simply re-fire and the stepper re-animates). The
+>    assessor stays internal (no public event).
+> 5. **Assessor model.** Haiku (open question §13.1 resolved to the default for now).
+>
+> The loop-oriented sections below (§2 diagram, §5 caps, §10 failure modes) describe the *general*
+> design; the shipped code implements the bounded special case above. Revisit the full loop only if
+> telemetry shows one pass is insufficient.
+
+**Original design — decided 2026-06-06.**
 
 **Scope note / precedence.** This is a *feature* design that spans system, prompt, and UX
 concerns. Where it touches system architecture (the `runAgent` pipeline, SSE protocol, wire

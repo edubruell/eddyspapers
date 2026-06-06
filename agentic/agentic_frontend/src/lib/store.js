@@ -15,6 +15,8 @@ export function initialState() {
     clarifierQuestion: null,
     clarifierOptions: [],
     awaitingReply: false,
+    refining: false,
+    reviseReason: null,
     papers: {},
     sections: [],
     synthesis: "",
@@ -59,6 +61,18 @@ export function reduceEvent(state, e) {
       return {
         ...state,
         clarifierQuestion: (state.clarifierQuestion ?? "") + e.delta,
+      };
+
+    case "revise":
+      // Multistage refine pass (07_multistage.md §7). On `replace` the prior approach was
+      // wrong — clear round-1 results so only the corrected pass shows; on `augment` keep them.
+      return {
+        ...state,
+        refining: true,
+        reviseReason: e.reason,
+        strategy: null,
+        strategyPending: true,
+        ...(e.mode === "replace" ? { sections: [], papers: {}, bibtex: null } : {}),
       };
 
     case "strategy":
@@ -114,7 +128,7 @@ export function reduceEvent(state, e) {
       const stages = Object.fromEntries(
         Object.entries(state.stages).map(([k, v]) => [k, v === "failed" ? v : "done"]),
       );
-      return { ...state, stages, awaitingReply: false, done: true, msTotal: e.ms_total };
+      return { ...state, stages, awaitingReply: false, refining: false, done: true, msTotal: e.ms_total };
     }
 
     default:

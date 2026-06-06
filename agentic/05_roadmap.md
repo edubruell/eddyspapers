@@ -379,26 +379,27 @@ restores the input; MCP behaviour unchanged.
 
 ---
 
-## Phase 14 — Multistage (results-aware re-running) 🟡 (design done, build pending)
+## Phase 14 — Multistage (results-aware re-running) ✅ (single-refine-pass variant, 2026-06-06)
 
-Full design in [`07_multistage.md`](./07_multistage.md); build order is `07 §11`. Today the pipeline
-runs one script and synthesises whatever comes back. This phase adds a bounded loop that lets the
-agent observe its own results and revise strategy when a pass underperforms (the ZEW
-"newest-WPs-aren't-published-yet" failure is the motivating case). Single-script verb chaining stays
-the cheaper default; the loop is the escape hatch for strategies unknowable until data returns.
+Full design in [`07_multistage.md`](./07_multistage.md). Shipped as the **single-refine-pass** variant
+(see the "Implementation deltas" box at the top of doc 07): an opt-in toggle, off by default, that runs
+**one** corrective pass after round 1 underperforms — not the general ≤3-round loop. Single-script verb
+chaining stays the cheaper default; the refine pass is the escape hatch for strategies unknowable until
+data returns (the ZEW "newest-WPs-aren't-published-yet" case).
 
-- [ ] **Result summary + flags**: pure fn over `ExecuteResult` → sections/counts/sample + deterministic flags (`all_empty`, `headline_empty`, `thin`, `no_new`). (`07 §3`)
-- [ ] **Assessor stage**: cached prompt + structured `{verdict, reason, directive?, mode}`; bias to `adequate`; short-circuit on empty flags. (`07 §3`)
-- [ ] **Loop in `runAgent`**: wrap write→validate→execute→assess; cross-round accumulation + dedup; caps (`MAX_ROUNDS=3`) + degenerate-stop; synthesise once. (`07 §2,4,5`)
-- [ ] **Writer feedback channel**: `<previous_run>` + `<revision mode>` per-call blocks, distinct from the validation-retry `<rejection>` path. (`07 §6`)
-- [ ] **Wire + persistence**: `revise` event; optional `round` field on stage events; optional `rounds_run` column. (`07 §7`)
-- [ ] **Frontend**: re-entrant stepper, "refining" sub-state, accumulating results, one-shot pin (`MAX_ROUNDS=1`). (`07 §8`)
-- [ ] **Eval**: multi-round eyeball view; wire the ZEW brief as the canonical acceptance test. (`07 §12`)
+- [x] **Result summary + flags**: `computeFlags` / `summarizeResult` pure fns in `stages/assess.ts` (`all_empty`, `headline_empty`, `thin`, `no_new`). (`07 §3`)
+- [x] **Assessor stage**: cached `assessorSystemMessage` + structured `{assessment, mode, reason, directive}`; an *advisor* (always proposes the next pass), not a gate; Haiku. (`07 §3`)
+- [x] **Refine branch in `runAgent`**: write→validate→execute→assess→(mandatory revise round when enabled); advisor `null` (LLM failure) is the only skip; whole-set augment/replace accumulation + bibtex dedup; augment degrades to round-1 on a failed refine pass; synthesise once. (`07 §2,4,5`)
+- [x] **Writer feedback channel**: `<previous_run>` + `<revision mode>` per-call blocks in `writeScript`, distinct from the validation-retry `<rejection>` path. (`07 §6`)
+- [x] **Wire + persistence**: `revise` event; `refine` column on `searches` (threaded through start + clarifier resume). (`07 §7`)
+- [x] **Frontend**: "Refine strategy (multi-stage)" toggle (off by default), amber refine note, re-animating stepper, augment/replace accumulation in the reducer. (`07 §8`)
+- [ ] **Eval**: multi-round eyeball view; wire the ZEW brief as the canonical acceptance test (deferred — needs live DB). (`07 §12`)
 
-**Acceptance:** see `07 §12` — with the *naive* (no-domain-hint) ZEW prompt and multistage on, round 1
+**Acceptance:** see `07 §12` — with the *naive* (no-domain-hint) ZEW prompt and refine on, round 1
 returns an empty published section, the assessor revises (mode `replace`, names the recency pitfall),
-round 2 returns a non-empty tier-led ranking, and synthesis runs once over the accumulated set. Easy
-queries finish in one round (assessor `adequate`), adding only a single cheap assessor call.
+round 2 returns a non-empty tier-led ranking, and synthesis runs once over the result. Easy queries
+finish in one round (assessor `adequate`), adding only a single cheap assessor call. Toggle off → the
+old single-shot pipeline, byte-for-byte, with zero added cost. (Live ZEW eval still to run.)
 
 Depends on nothing new; reuses `executeScript`, `writeScript`, the searches table, and the SSE bus.
 Independent of Phase 13 (composes with it: a clarified brief feeds every revise round).

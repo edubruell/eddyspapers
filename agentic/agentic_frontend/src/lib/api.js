@@ -13,12 +13,13 @@ export async function getLastUpdated({ signal } = {}) {
   return res.json(); // { last_updated }
 }
 
-export async function startChat({ brief, categories, minYear, mustInclude, skipClarify }) {
+export async function startChat({ brief, categories, minYear, mustInclude, skipClarify, refine }) {
   const body = { brief };
   if (categories && categories.length) body.categories = categories;
   if (minYear != null && minYear !== "") body.minYear = Number(minYear);
   if (mustInclude && mustInclude.length) body.mustInclude = mustInclude;
   if (skipClarify) body.skipClarify = true;
+  if (refine) body.refine = true;
 
   const res = await fetch(`${API_BASE}/chat`, {
     method: "POST",

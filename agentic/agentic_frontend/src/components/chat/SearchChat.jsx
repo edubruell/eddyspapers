@@ -16,6 +16,7 @@ export default function SearchChat() {
   const [brief, setBrief] = useState("");
   const [id, setId] = useState(null);
   const [skipClarify, setSkipClarify] = useState(false);
+  const [refine, setRefine] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [startError, setStartError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -42,7 +43,7 @@ export default function SearchChat() {
     setSubmitting(true);
     setStartError(null);
     try {
-      const { id: newId } = await startChat({ brief: brief.trim(), skipClarify });
+      const { id: newId } = await startChat({ brief: brief.trim(), skipClarify, refine });
       setId(newId);
     } catch (e) {
       setStartError(e.message);
@@ -73,6 +74,8 @@ export default function SearchChat() {
       onNewSearch={onNewSearch}
       skipClarify={skipClarify}
       setSkipClarify={setSkipClarify}
+      refine={refine}
+      setRefine={setRefine}
       submitting={submitting}
       frozen={frozen}
       compact={hasRun}
@@ -126,6 +129,13 @@ export default function SearchChat() {
             msTotal={state.msTotal}
           />
         </div>
+
+        {state.reviseReason && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <span aria-hidden="true">↻</span>
+            <span>{state.reviseReason}</span>
+          </div>
+        )}
 
         <StrategyPanel strategy={state.strategy} pending={state.strategyPending} />
 

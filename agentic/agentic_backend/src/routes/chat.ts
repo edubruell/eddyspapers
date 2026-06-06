@@ -11,6 +11,7 @@ import type { AgentInput, StreamEvent } from "../agent/types.js";
 const chatBodySchema = z.object({
   brief: z.string().min(1).max(2000),
   skipClarify: z.boolean().optional(),
+  refine: z.boolean().optional(),
   categories: z.array(z.string()).optional(),
   minYear: z.number().int().optional(),
   mustInclude: z.array(z.string()).optional(),
@@ -74,7 +75,7 @@ chatRoute.post("/", async (c) => {
     return c.json({ error: parsed.error.issues }, 400);
   }
 
-  const { brief, skipClarify, categories, minYear, mustInclude } = parsed.data;
+  const { brief, skipClarify, refine, categories, minYear, mustInclude } = parsed.data;
   const snapshot = await resolveSnapshot();
 
   const dbSnapshotDate = snapshot.exists && snapshot.ageMs != null
@@ -89,9 +90,9 @@ chatRoute.post("/", async (c) => {
     return c.json({ id }, 200);
   }
 
-  await db.upsertSearch(id, { brief, categories, minYear, mustInclude, dbSnapshotDate });
+  await db.upsertSearch(id, { brief, categories, minYear, mustInclude, refine, dbSnapshotDate });
 
-  const input: AgentInput = { brief, categories, minYear, mustInclude, skipClarify };
+  const input: AgentInput = { brief, categories, minYear, mustInclude, skipClarify, refine };
   runPhase(db, id, input, snapshot.path, { startSeq: 0, runClarify: true });
 
   return c.json({ id }, 201);
@@ -140,6 +141,7 @@ chatRoute.post("/:id/reply", async (c) => {
     brief: search.brief,
     categories: search.categories ?? undefined,
     minYear: search.minYear ?? undefined,
+    refine: search.refine,
     clarifyQuestion: search.clarifyQuestion ?? undefined,
     clarifyAnswer: answer,
   };

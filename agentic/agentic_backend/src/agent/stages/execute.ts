@@ -21,6 +21,9 @@ export async function executeScript(
   script: string,
   dbPath: string,
   onEvent: (e: StreamEventPayload) => void,
+  // Section-id numbering offset. In a multistage refine pass the second round's sections must
+  // not reuse round-1 ids (the frontend keys/dedups sections by id). Defaults to 0.
+  idOffset = 0,
 ): Promise<ExecuteResult> {
   const papers: Record<string, Paper> = {};
   const sections: Section[] = [];
@@ -63,7 +66,7 @@ export async function executeScript(
             similarity: similarityMap.get(handle),
           }));
           const section: Section = {
-            id: `section-${sections.length + 1}`,
+            id: `section-${idOffset + sections.length + 1}`,
             title: raw.title,
             mode: "custom",
             n_total: raw.handles.length,

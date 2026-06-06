@@ -1,6 +1,36 @@
 import { useEffect, useRef } from "react";
 import { SectionLabel, PrimaryButton } from "../primitives/index.jsx";
 
+// A small pill toggle matching the purple accent. Used for the per-run agent settings.
+function Toggle({ checked, onChange, disabled, label, title }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange((v) => !v)}
+      title={title}
+      className="flex items-center gap-2 text-xs text-stone-600 transition disabled:opacity-50"
+    >
+      <span
+        className={
+          "relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition " +
+          (checked ? "bg-[var(--accent-purple)]" : "bg-stone-300")
+        }
+      >
+        <span
+          className={
+            "inline-block h-3 w-3 transform rounded-full bg-white shadow transition " +
+            (checked ? "translate-x-3.5" : "translate-x-0.5")
+          }
+        />
+      </span>
+      {label}
+    </button>
+  );
+}
+
 // The TASK panel: just a brief textarea + Run. Journal-tier selection is no longer
 // a UI control — the agent infers the appropriate categories from the brief (the
 // tier vocabulary still lives in the backend writer prompt). Year cutoffs and other
@@ -13,6 +43,8 @@ export default function Sidebar({
   onNewSearch,
   skipClarify,
   setSkipClarify,
+  refine,
+  setRefine,
   submitting,
   frozen,
   compact,
@@ -59,30 +91,22 @@ export default function Sidebar({
           Press ⌘+Enter or Ctrl+Enter to start.
         </p>
 
-        <button
-          type="button"
-          role="switch"
-          aria-checked={skipClarify}
-          disabled={frozen}
-          onClick={() => setSkipClarify((v) => !v)}
-          title="When on, the agent never pauses to ask — it makes its best guess and runs straight through."
-          className="mt-3 flex items-center gap-2 text-xs text-stone-600 transition disabled:opacity-50"
-        >
-          <span
-            className={
-              "relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition " +
-              (skipClarify ? "bg-[var(--accent-purple)]" : "bg-stone-300")
-            }
-          >
-            <span
-              className={
-                "inline-block h-3 w-3 transform rounded-full bg-white shadow transition " +
-                (skipClarify ? "translate-x-3.5" : "translate-x-0.5")
-              }
-            />
-          </span>
-          Skip clarifying questions
-        </button>
+        <div className="mt-3 flex flex-col gap-2">
+          <Toggle
+            checked={skipClarify}
+            onChange={setSkipClarify}
+            disabled={frozen}
+            label="Skip clarifying questions"
+            title="When on, the agent never pauses to ask — it makes its best guess and runs straight through."
+          />
+          <Toggle
+            checked={refine}
+            onChange={setRefine}
+            disabled={frozen}
+            label="Refine strategy (multi-stage)"
+            title="When on, the agent reviews its first results and, if they look weak, runs one corrected pass before writing up."
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-between border-t border-[var(--border-soft)] pt-3">
