@@ -72,13 +72,13 @@ These ship as identical (or near-identical) React components in `agentic_fronten
 
 - **`SectionLabel`** — uppercase, tracked, dark-gray label (e.g. "QUERY", "RESULTS"). Reused as "TASK", "REVIEW", "EVIDENCE", "REFERENCES".
 - **`Card`** — cream-white panel with `border-soft` outline, 14px radius, soft shadow. Wraps every major block.
-- **`Pill`** — the category chip in both on/off states. Reused **as-is** for the journal-category filter, which still acts as a hard database restriction the agent must honour (the model receives the selected categories as part of the brief context, not as a section pill it draws itself). **Mode pills are dropped** — the search mode for each section is inferred from the brief and shown only as a small label inside `SectionCard`'s header, not as a separate primitive.
+- **`Pill`** — the category chip in both on/off states. **No longer a UI control** (decided 2026-06-06): the landing card is now *just a brief box* — the agent infers the journal tiers from the brief itself (the tier vocabulary lives in the backend writer prompt, `journalCategories.ts`). The categories still exist "in the background" as a hard DB restriction the writer applies per section; they are simply chosen by the model, not the user. The `Pill` primitive is kept for read-only filter chips inside `SectionCard` headers (showing which tiers/years a section actually used). **Mode pills are likewise dropped** — the search mode for each section is inferred from the brief and shown only as a small label inside `SectionCard`'s header, not as a separate primitive.
 
 - **`PrimaryButton`** — navy-blue Search button. Reused as "Run" on the agentic landing and "New search" in the sidebar.
 - **`GhostButton`** — outlined "Export" / "Share" / "BibTeX" / "More" style. Reused for "Copy BibTeX", "Download PDF".
 - **`SimilarityBar`** — the 4–6px coloured strip on the left of result cards. Reused for `PaperRow` and inside `SectionCard`'s individual paper rows.
 - **`AdvancedDisclosure`** — the "▶ Show advanced filters" collapsible row. Reused for "▶ Show SQL" and other audit-trail reveals. **Not** used for the R script — the script is never surfaced to the user (see §3.2, decided 2026-06-05).
-- **`DatabaseFooter`** — "Database last updated on YYYY-MM-DD · FAQ / Imprint". Reused verbatim; same snapshot date logic.
+- **`DatabaseFooter`** — "Database last updated on YYYY-MM-DD · FAQ / Imprint". Reused verbatim. The agentic app does **not** compute its own snapshot date — it fetches it from the classic semantic API (`GET /stats/last_updated` on `econpapers.eduard-bruell.de/api`, configurable via `PUBLIC_SEMANTIC_API_BASE`), exactly as the semantic frontend does, since both apps read the same shared snapshot.
 
 A user who already uses Eddy's Papers should immediately recognise the agentic app as the same family.
 
@@ -138,16 +138,12 @@ The current app has a beautiful two-phase pattern: **centered landing** (logo + 
          │ │                                             │ │
          │ │                                             │ │
          │ └─────────────────────────────────────────────┘ │
-         │ Press ⌘+Enter or Ctrl+Enter to start.           │
-         │                                                 │
-         │ JOURNAL CATEGORIES                              │
-         │ (Top 5)  (General Interest)  (AEJs)  (Top A)    │
-         │ (Top B)  (Other Journals)  (Working Paper)      │
-         │                                                 │
-         │ ▶ Show advanced filters                         │
+         │ Press ⌘+Enter or Ctrl+Enter to start. Mention   │
+         │ any tier/year/author preference in the task —   │
+         │ the agent picks the rest.                        │
          │ ─────────────────────────────────────────────── │
-         │                                          [Run]  │
-         │  Database last updated on 2026-05-16 · FAQ      │
+         │  ← Semantic mode                         [Run]  │
+         │  Database last updated on 2026-05-16             │
          └─────────────────────────────────────────────────┘
 ```
 
@@ -155,7 +151,7 @@ Differences from the existing landing:
 
 - Section label says **`TASK`** instead of `QUERY` — the input expects a *description of what to find* (paragraph-shaped, lit-review-style), not just an abstract to embed. Placeholder reflects that. (Considered `BRIEF` and `SEARCH PROMPT`; `TASK` reads most naturally in German-academic context where the user is delegating work to the agent.)
 - Textarea is an **auto-expanding `<textarea>` à la modern LLM chat inputs** — starts at ~3 rows like the existing app, grows as the user types up to a sensible max (~12 rows) before scrolling. No fixed taller default needed.
-- Same category pills (still a hard DB restriction passed into the brief), same advanced disclosure, same "Press ⌘+Enter" hint, same DB footer.
+- **No journal-category pills and no advanced-filter disclosure** (decided 2026-06-06). The landing is deliberately *just a box*: the agent infers journal tiers, year cutoffs, and author angles from the brief. Any preference is expressed in plain language inside the task. Same "Press ⌘+Enter" hint, same DB footer (date fetched from the semantic API).
 - Primary button reads **`Run`** — short, matches the existing app's vocabulary, and the stepper does the work of signalling "this takes a moment".
 
 
@@ -192,7 +188,7 @@ Differences from the existing landing:
                     └───────────────────────────────────────────────────┘
 ```
 
-Sidebar mirrors the existing app exactly: collapsed logo at top, brief textarea, category pills, advanced disclosure, primary action, DB footer. Adds one item at the bottom — **`← Semantic mode`**, a quiet link back to the non-agentic app (more on cross-linking in §6).
+Sidebar mirrors the existing app's *shape*: collapsed logo at top, brief textarea, primary action, DB footer, and **`← Semantic mode`** (a quiet link back to the non-agentic app; more on cross-linking in §6). It deliberately omits the category pills and advanced-filter disclosure that the semantic app carries — the agentic task box is just the brief (decided 2026-06-06).
 
 The right pane is where the new primitives live:
 
@@ -304,7 +300,7 @@ A common real-world query is "here's my draft / a paper I read — find related 
 
 The current app degrades gracefully to a single-column on narrow viewports; the agentic UI follows the same approach:
 
-- Sidebar becomes a collapsed top header with the logo, brief textarea, and a "Refine" expand button revealing category pills + advanced filters.
+- Sidebar becomes a collapsed top header with the logo and brief textarea (no pills/advanced filters to reveal).
 - Stepper goes vertical, sections stack full-width.
 - StrategyPanel renders as a one/two-line block above the synthesis (same on mobile; nothing to collapse).
 - Synthesis panel always full-width.
@@ -330,7 +326,7 @@ Anyone who has used Eddy's Papers Semantic Search should be productive in Agenti
 
 ## 10. Resolved interface decisions
 
-1. **Clarifier turn UI — inline.** When the agent has one clarifying question, render it as an inline "Quick question:" prompt with a tight reply box that submits on Enter. No chat bubbles. Matches the existing app's non-chatbot tone.
+1. **Clarifier turn UI — inline, now interactive (2026-06-06).** When the agent has one clarifying question, render it as an inline "Quick question:" prompt with a tight reply box that submits on Enter. No chat bubbles. Matches the existing app's non-chatbot tone. As of the [`06_clarifier.md`](./06_clarifier.md) design this is a **real blocking round-trip**, not the v1 read-only banner: the run pauses, the `StageStepper` shows a distinct "waiting for you" state at the clarify step, and sending posts to `POST /chat/:id/reply`. A **one-shot checkbox** in the task box ("skip clarifying questions", unchecked by default) lets the user opt out of being asked. Full UX in `06 §7`.
 
 2. **Task textarea during a run — frozen read-only.** Once `Run` is pressed, the textarea greys out and becomes read-only for the duration of the run; a small `New search` button in the sidebar starts a fresh session (clears the textarea + opens a new `/c/<id>`). This is simpler than the editable-with-restart pattern and avoids the "did my edit take effect?" ambiguity. Worth revisiting if user testing shows people *want* to tweak mid-run.
 
@@ -363,11 +359,8 @@ agentic_frontend/src/components/
 │   └── DatabaseFooter.jsx
 │
 ├── chat/                      # the genuinely new layout
-│   ├── SearchChat.jsx         # root island
-│   ├── Sidebar.jsx            # logo + BriefPanel + categories + adv + Run + DB footer + ← Semantic mode
-│   ├── BriefPanel.jsx         # the brief textarea + hint
-│   ├── CategoryPills.jsx      # reused logic from the old app
-│   ├── AdvancedFilters.jsx
+│   ├── SearchChat.jsx         # root island; fetches DB date from semantic API
+│   ├── Sidebar.jsx            # logo + brief textarea + Run + DB footer + ← Semantic mode (no pills/filters)
 │   ├── StageStepper.jsx
 │   ├── ProgressLine.jsx
 │   ├── StrategyPanel.jsx       # plain-language plan; never the R script (2026-06-05)

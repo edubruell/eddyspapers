@@ -36,7 +36,7 @@ The `eddysearch.sandbox` R package is the heart of the design. Until it exists, 
 - [x] `sql_query(sql, params = list())` — runs `SELECT_NODE`/`SET_OPERATION_NODE` only after DuckDB parse-tree validation (`01 §3.4`), auto-injects `LIMIT 5000` when absent.
 - [x] `cites(handle, limit = 50)`, `citedby(handle, limit = 50)` — joins against `cit_internal`.
 - [x] `handle_stats(handles)` — read from `handle_stats` table.
-- [x] `versions(handle)` — from `versions` table.
+- [x] `versions(handle)` — from `version_links` table (columns `source`, `target`, `type`); returns linked papers with metadata.
 - [x] `bib_for(handles)` — flat tibble of `bib_tex` strings.
 - [x] `journals()`, `categories()` — reference tibbles for discovery.
 - [x] `paper_url(handle)` — two-tier resolver: `articles.url` then IDEAS-from-handle fallback (`01 §4.4`).
@@ -143,6 +143,8 @@ Per `02 §2.1` and `04 §1–§3`.
 
 - [x] `pnpm eyeball "<brief>"` — runs writer → validator → sandbox → pretty-prints event log.
 - [x] End-to-end tested with live 12 GB DuckDB; exit 0, 54 papers on first run.
+- [x] `pnpm eyeball --script=path/to/script.R` — direct-script mode: skips the LLM and runs a raw `.R` file against the snapshot, for iterating on a hand-fixed failing script.
+- [x] On any failure (validation, timeout, non-zero exit) the script + full stderr + events JSON are dumped to `data/agentic/debug/<timestamp>/` and the path is printed, so failures are inspectable without re-running.
 
 ### 4.5 Fixes discovered during integration ✅
 
@@ -258,8 +260,8 @@ Per `03_interface.md` end-to-end. **Can start in parallel with Phase 6** as soon
 
 ### 7.3 Chat layout (`03 §3`)
 
-- [ ] Landing state: centered logo + `TASK` panel + category pills + advanced disclosure + `Run` button + DB footer.
-- [ ] Working/results state: collapsed sidebar with logo + TASK textarea (frozen during run) + category pills + advanced + `Run` + DB footer + `← Semantic mode` link.
+- [x] Landing state: centered logo + `TASK` panel (just the brief box — no category pills/advanced disclosure, decided 2026-06-06) + `Run` button + DB footer (date from semantic API).
+- [x] Working/results state: collapsed sidebar with logo + TASK textarea (frozen during run) + `Run` + DB footer + `← Semantic mode` link.
 - [ ] Right pane reading order (`03 §3.2`): `StageStepper` → `ProgressLine` → `StrategyPanel` (plain-language plan, never the R script — decided 2026-06-05) → `ClarifierBubble` (inline if needed) → `SynthesisPanel` → `ArtifactsToolbar` → `EVIDENCE` divider → collapsed `SectionCard` list.
 
 ### 7.4 Components (`03 §11`)
@@ -351,8 +353,29 @@ Things that don't gate launch but should land soon after.
 - [ ] **Paper-upload feature** (`03 §7.1`) — revisit once cost picture is stable.
 - [ ] **DOI column on `articles`** (`01 §4.4`, deferred) — revisit when another initiative wants it anyway.
 - [ ] Adversarial-script corpus growth: every novel rejection in prod auto-feeds the `tests/ast/bad/` corpus.
-- [ ] Iterative-script runs (search → expand via citations → re-search), capped at 3 rounds (`01 §9.5`).
+- [ ] Iterative model-level multi-script runs (search → expand via citations → re-search), capped at 3 rounds (`01 §9.5`). **Deferred** — instead the writer is now guided to chain verbs *within a single script* (find → resolve-versions → rank-by-stats); see the chained ZEW example in `04 §2.4` / `examples.ts` (2026-06-06).
 - [ ] German-language synthesis path (`04 §10.3`).
+
+---
+
+## Phase 13 — Blocking clarifier + one-shot toggle 🟡 (design done, build pending)
+
+Full design in [`06_clarifier.md`](./06_clarifier.md); build order is `06 §10`. The current clarify
+stage is cosmetic (asks rarely, never blocks, discards the answer). This phase makes it a real
+pause/resume round-trip with a one-shot opt-out.
+
+- [ ] **Wire + types**: `clarify` stream event, `skipClarify` start-body field, `awaiting_clarification` status, `clarify_question/answer` columns + `SearchDb` methods. (`06 §4–5`)
+- [ ] **Pipeline split**: `runAgent` → `runClarifyPhase` + `runSearchPhase`; pause path persists and returns without `done`. (`06 §3`)
+- [ ] **Reply endpoint**: `POST /chat/:id/reply`; resumes `runSearchPhase` on the same bus. (`06 §4.2`)
+- [ ] **SSE pause semantics**: `bus.isDone` false while awaiting; `clarify` event replays on reconnect. (`06 §3`)
+- [ ] **Writer injection**: `<clarification>` block appended to the writer user message. (`06 §5–6`)
+- [ ] **Clarifier prompt**: soften proceed-bias when blocking is on; add ask-worthy exemplars. (`06 §6`)
+- [ ] **Frontend**: one-shot checkbox, interactive `ClarifierBubble`, reducer `clarify`/`waiting` handling, stepper "waiting" state. (`06 §7`)
+- [ ] **Expiry sweeper**: stale `awaiting_clarification` → error after 24h. (`06 §9`)
+
+**Acceptance:** see `06 §10` — ambiguous brief pauses for input with the box unchecked and the
+answer changes the resulting script; flows straight through with the box checked; reload-during-pause
+restores the input; MCP behaviour unchanged.
 
 ---
 

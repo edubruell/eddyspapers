@@ -174,7 +174,7 @@ Connection is `read_only = TRUE` against a snapshot file.
    - Top-level statement must be `SELECT_NODE` or `SET_OPERATION_NODE` (UNION/INTERSECT/EXCEPT over SELECTs).
    - Reject any `ATTACH`, `COPY`, `EXPORT`, `IMPORT`, `INSTALL`, `LOAD`, `PRAGMA`, `CALL`, `CREATE`, `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `VACUUM`, `CHECKPOINT`.
    - Walk function-call nodes; reject any function whose name matches `read_csv*`, `read_parquet*`, `read_json*`, `read_blob`, `glob`, `parquet_*`, `sniff_csv`, `sql_auto_complete`, `query_table`, anything in the `httpfs`, `aws`, `azure`, `iceberg` schemas, plus `system`, `getvariable`, `setvariable`.
-   - Reject references to tables outside the allowed schema (`articles`, `cit_all`, `cit_internal`, `handle_stats`, `journals`, `versions`, `bib_coupling`, plus any views we publish).
+   - Reject references to tables outside the allowed schema (`articles`, `cit_all`, `cit_internal`, `handle_stats`, `journals`, `version_links`, `bib_coupling`, plus any views we publish).
 3. If no `LIMIT` clause is present in the outermost SELECT, inject `LIMIT 5000` before execution.
 4. Set `SET statement_timeout = '15s'` for the session.
 
@@ -224,6 +224,14 @@ A run moves through five stages — the UI shows them as a horizontal stepper, w
 ```
 clarify → write → validate → execute → synthesize
 ```
+
+> **Blocking clarifier (2026-06-06, see [`06_clarifier.md`](./06_clarifier.md)).** When the web
+> caller leaves the one-shot box unchecked (`skipClarify=false`), the clarify stage may ask one
+> question and **pause** between `clarify` and `write` (`status='awaiting_clarification'`, a new
+> `clarify` stream event, no `done`). A `POST /chat/:id/reply` folds the answer into the brief and
+> resumes `write → … → done` on the same `searchId` bus. `skipClarify=true` keeps the straight-through
+> path described here. `06` owns the full state machine, wire, and persistence design; it extends and
+> defers to this doc on system conflicts.
 
 Every stage emits a `stage` event on entry and exit, plus finer-grained events while active:
 
@@ -502,6 +510,8 @@ The web UI happily asks one clarifying question. A coding agent does not want a 
 
 - `skip_clarify = true` (the MCP default): the clarifier stage is replaced by a single internal pass that *infers* sensible defaults (modes, year range, categories) from the brief and proceeds. If the brief is genuinely ambiguous, the tool returns a `CallToolResult` with `isError: false` and a `needs_clarification` structured field listing the questions, so the calling agent can re-invoke with more detail. **No blocking prompts** over MCP — ever.
 - `skip_clarify = false`: returns the clarification questions and stops; the agent makes a second call passing answers in the brief. Useful when the human is in the loop in the calling agent.
+
+The web UI surfaces this same flag as a **one-shot checkbox** (unchecked → `skipClarify=false` → may block and ask). The human-in-the-loop analogue of "re-call with answers" is `POST /chat/:id/reply`. Full design in [`06_clarifier.md`](./06_clarifier.md).
 
 ### 7.4 Streaming via progress notifications
 

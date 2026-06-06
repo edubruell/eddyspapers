@@ -241,13 +241,14 @@ A second product, **`agenticsearch.eduard-bruell.de`**, is being designed alongs
 | 03 | `agentic/03_interface.md` | UX: palette/primitives shared with `frontend/`, two-phase layout, stepper, reading order, microcopy, branding |
 | 04 | `agentic/04_prompts.md` | context engineering: cached corpus, per-stage prompts, retry-with-rejection-reason, MCP variant |
 | 05 | `agentic/05_roadmap.md` | 12-phase plan of attack with acceptance criteria + dependency graph |
+| 06 | `agentic/06_clarifier.md` | blocking-clarifier feature design: one-shot toggle, pause/resume state machine, reply endpoint, wire/UX/prompt changes (extends 01/03/04) |
 
-**When working on the agentic project, the lower-numbered doc wins for system decisions; the higher-numbered doc wins for surface decisions.** The four design docs are canonical — if you disagree with a decision there, update the doc rather than diverging in code.
+**When working on the agentic project, the lower-numbered doc wins for system decisions; the higher-numbered doc wins for surface decisions.** The numbered design docs are canonical — if you disagree with a decision there, update the doc rather than diverging in code. (06 is a feature design layered on 00–05; on conflict it defers to the doc it extends.)
 
 ### Things the agentic build needs from the existing backend
 
 - **DuckDB file:** read-only copy of `articles.duckdb` repointed by `update_repec.R` after each weekly/monthly sync. The sandbox reads this directly; the REST API is a fallback for the rare lookup outside a script run.
-- **Existing tables used by the sandbox verbs:** `articles`, `cit_all`, `cit_internal`, `handle_stats`, `journals`, `versions`, `bib_coupling`.
+- **Existing tables used by the sandbox verbs:** `articles`, `cit_all`, `cit_internal`, `handle_stats`, `journals`, `version_links` (columns `source`, `target`, `type`), `bib_coupling`.
 - **Existing REST endpoints reused:** `/search` (for the MCP `find_papers` passthrough), `/handlestats`, `/versions`, `/cites`, `/citedby`. No new endpoints needed.
 - **Deferred backend change:** adding a `doi VARCHAR` column to `articles` would improve agentic citation links. Deferred (parse side is trivial; backfilling the existing corpus needs care). Revisit when another initiative wants a clean DOI column anyway.
 

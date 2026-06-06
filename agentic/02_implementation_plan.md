@@ -232,9 +232,10 @@ agentic_frontend/
     ├── components/                  # split per 03_interface §11
     │   ├── primitives/              # Card, Pill, PrimaryButton, GhostButton, SectionLabel,
     │   │                            # SimilarityBar, AdvancedDisclosure, DatabaseFooter
-    │   ├── chat/                    # SearchChat, Sidebar, BriefPanel, CategoryPills,
-    │   │                            # AdvancedFilters, StageStepper, ProgressLine,
-    │   │                            # ScriptPanel ("Show database search script"),
+    │   ├── chat/                    # SearchChat, Sidebar (just the brief box — no
+    │   │                            # CategoryPills/AdvancedFilters, decided 2026-06-06),
+    │   │                            # StageStepper, ProgressLine,
+    │   │                            # StrategyPanel (plain-language plan, never the R script),
     │   │                            # ClarifierBubble (inline), SectionCard, PaperRow,
     │   │                            # PaperCard, SynthesisPanel, BibtexDrawer,
     │   │                            # ArtifactsToolbar, ErrorToast

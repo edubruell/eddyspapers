@@ -60,7 +60,7 @@ semantic_search(query, max_k = 30, min_year = NULL,
 
 sql_query(sql, params = list()) -> tibble
   Read-only SELECT against {articles, cit_all, cit_internal, handle_stats,
-  journals, versions, bib_coupling}. Validated at the DuckDB parser level —
+  journals, version_links, bib_coupling}. Validated at the DuckDB parser level —
   COPY/ATTACH/PRAGMA/CREATE/DDL all rejected. LIMIT auto-injected if absent.
   Use for keyword chains like:
     LOWER(title) LIKE '%xxx%' OR LOWER(authors) LIKE '%name%'
@@ -114,6 +114,8 @@ Each example has a `### Brief` block at the top (the natural-language input it w
 
 Each rule is one line followed by one short *why* clause. Order: hard prohibitions first, then numeric caps, then required steps.
 
+**Citation-data caveat (carried in both `apiReference.ts` and `writerRules.ts`).** RePEc citation coverage is partial and noisy: it under-counts recent papers and working papers badly and misses many citations everywhere. The writer is told *not* to rank a section purely by raw `total_citations`, *not* to drop low-citation papers (a 2024 paper or WP may be the most important result), and to use venue tier + recency as the primary "success/impact" proxy with `citation_percentile` (cohort-relative) preferred over raw counts. The synthesiser carries the matching instruction to hedge citation-based claims ("among the more cited", never "the 3rd most cited") and never to imply a recent/WP paper is unimportant because its count is low. This keeps "most successful/impactful" briefs honest given the data quality.
+
 ---
 
 ## 3. Per-run context — what gets injected on each writer call
@@ -126,8 +128,8 @@ The user message to the writer stage is **just three blocks**:
 </brief>
 
 <filters>
-categories: {comma-list from the category pills}
-min_year:   {optional, from advanced filters}
+categories: {usually empty — the web UI no longer collects tiers; the writer chooses them itself (see below). Present only when an MCP caller passes an explicit override}
+min_year:   {optional; usually empty for the web UI — expressed in the brief instead}
 must_include: {handles or author names the caller said must appear, if any}
 </filters>
 
@@ -137,6 +139,8 @@ must_include: {handles or author names the caller said must appear, if any}
 ```
 
 Nothing else. The cached system message has done the heavy lifting; the per-run injection is small and entirely user-derived.
+
+**Categories are model-chosen (decided 2026-06-06).** The web landing is just a brief box — it no longer collects journal-tier pills, so the `<filters>` block usually arrives with `categories` empty. The tier vocabulary still lives in the cached `journalCategories.ts` system block, and `writerRules.ts` instructs the writer to infer the appropriate `journal_filter` tiers per section from the brief (defaulting to a quality-weighted published sweep plus a recent working-paper pass). An empty `categories` line therefore means "you decide", **not** "search every tier". When an MCP caller *does* pass `categories`, they remain a hard restriction.
 
 When the writer retries after a validation failure, a fourth block is appended:
 
@@ -155,6 +159,15 @@ This is the same pattern as Claude Code's `error` → retry loop and is what mak
 ---
 
 ## 4. The clarifier stage — fast and bounded
+
+> **Now a blocking, toggleable stage (2026-06-06, [`06_clarifier.md`](./06_clarifier.md)).** When
+> the caller leaves the one-shot box unchecked (`skipClarify=false`), a `question` result actually
+> **pauses the run** until the user answers (web) or the agent re-calls with answers (MCP); the
+> answer is injected into the *writer* user message as a `<clarification>` block. The proceed-bias
+> below is **softened when blocking is enabled** — the user opted in to being asked, so ask one good
+> question when it would change the script's shape. When `skipClarify=true`, a `question` result is
+> treated as `proceed` (today's behaviour). `06 §6` owns the revised wording; `06 §5` owns the
+> `<clarification>` injection.
 
 ### 4.1 Cached system prompt (~1.5k tokens)
 
@@ -283,7 +296,7 @@ Side-by-side, what the skill does and where the hosted agent matches it:
 
 | `lit-search` phase | Where it lives here |
 |---|---|
-| Phase 0: Orient — read `local_context/notes/`, prior searches | Replaced by the `<brief>` + UI category-pill filters; no filesystem orient in a hosted setting. The MCP variant trusts the calling agent to have done its own orient. |
+| Phase 0: Orient — read `local_context/notes/`, prior searches | Replaced by the `<brief>` alone (the web UI collects no tier/year filters; the writer infers them); no filesystem orient in a hosted setting. The MCP variant trusts the calling agent to have done its own orient. |
 | Phase 1: Ask clarifying questions, tailored | `clarify` stage (§4). One question max, schema-bounded. |
 | Phase 2: Mandatory boilerplate + section templates | Cached few-shots (`examples.ts`, §2.4) + the `eddysearch.sandbox` API ref (§2.1). The "boilerplate" becomes the package's default state — the model doesn't write the `library(...)` lines; they're pre-attached. |
 | Phase 2: Journal-category reference | `journalCategories.ts` (§2.2), verbatim. |
@@ -317,4 +330,4 @@ Cost benchmarking (model selection in `02_implementation_plan.md` §2.1) reuses 
 1. **Should the writer see prior runs of the same brief?** Today: no — every run is fresh. Pro: deterministic, cacheable by `search_id`. Con: misses an opportunity to learn from a previous validated script. Probably stay deterministic.
 2. **Does the synthesiser need the script?** Currently included for "awareness of what was searched". Worth ablating — if removing it doesn't degrade synthesis quality, we save ~1k tokens per call.
 3. **Per-language synthesis.** German-speaking users may want German output. Trivial to add (one extra cached style block + a `lang: "de"|"en"` brief flag). Defer until requested.
-4. **Voice tuning for cover letters vs. related-literature sections.** The lit-search skill's "purpose" question (`paper/grant/cover-letter`) shapes the synthesis. We could surface this as a small select in the UI's advanced filters — or infer from the brief. Inference is cheaper; test it first.
+4. **Voice tuning for cover letters vs. related-literature sections.** The lit-search skill's "purpose" question (`paper/grant/cover-letter`) shapes the synthesis. With the UI now a single brief box (no advanced filters), this is inferred from the brief rather than offered as a control — which matches the "just a box, the agent decides" direction. Inference is cheaper anyway; test it.

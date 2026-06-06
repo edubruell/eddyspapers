@@ -12,6 +12,7 @@ This folder contains the design corpus. Read in this order:
 | 03 | [`03_interface.md`](./03_interface.md) | visual + UX design: palette, primitives shared with the existing app, two-phase layout, reading order, microcopy, mobile, branding |
 | 04 | [`04_prompts.md`](./04_prompts.md) | **context engineering** — how every stage's prompt is assembled, what stays in the cache, what gets injected per-run, lit-search-skill replication in a hosted setting |
 | 05 | [`05_roadmap.md`](./05_roadmap.md) | **plan of attack** — phased build order with concrete tasks, acceptance criteria per phase, dependency graph, cross-cutting risks |
+| 06 | [`06_clarifier.md`](./06_clarifier.md) | **blocking clarifier feature** — one-shot toggle, pause/resume state machine, reply endpoint, wire/UX/prompt changes. Extends `01` (system) and `03`/`04` (surface/prompt); subordinate to them on conflict |
 | — | [`typescript-functional-guidelines.md`](./typescript-functional-guidelines.md) | **code style reference** for all TS work in this project — pure functions, `effect`/`remeda` pipelines, discriminated unions, `Option`/`Either` over `null`/throws, no loops, no mutation, no `any`. Binding for `agentic_backend/` and `agentic_frontend/` |
 | — | [`reference_lit_search_skill.md`](./reference_lit_search_skill.md) | **reference snapshot** of the `lit-search` Claude Code skill that the agentic project is modelled on. Verbatim copy of `~/.claude/skills/lit-search/SKILL.md` — read alongside `04_prompts.md` to see what the hosted agent reproduces |
 
