@@ -5,6 +5,8 @@ import { chatRoute } from "./routes/chat.js";
 import { streamRoute } from "./routes/stream.js";
 import { searchesRoute } from "./routes/searches.js";
 import { statsRoute } from "./routes/stats.js";
+import { exportRoute } from "./routes/export.js";
+import { requireAuth } from "./middleware/auth.js";
 
 const app = new Hono();
 
@@ -16,10 +18,14 @@ const corsOrigins = (process.env.CORS_ORIGINS ?? "http://localhost:4321,http://l
 app.use("*", cors({ origin: corsOrigins }));
 
 app.get("/healthz", (c) => c.json({ status: "ok", service: "agentic_backend" }));
+// Login probe: 200 when the presented password is valid (or the gate is disabled),
+// 401 otherwise. The frontend gate uses this to decide whether to show the lock screen.
+app.get("/auth/check", requireAuth, (c) => c.json({ ok: true }));
 app.route("/chat", chatRoute);
 app.route("/chat", streamRoute);
 app.route("/searches", searchesRoute);
 app.route("/stats", statsRoute);
+app.route("/export", exportRoute);
 
 serve({ fetch: app.fetch, port: 8001 }, (info) => {
   console.log(`agentic_backend listening on http://localhost:${info.port}`);

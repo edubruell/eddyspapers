@@ -13,6 +13,11 @@ This project provides:
 - REST API built with R Plumber
 - Modern web interface built with Astro and React
 
+It also ships a second, agentic product — **Agentic Search** (a.k.a. "Detective mode") — a
+multi-turn assistant that turns a plain-language research brief into a tailored literature review.
+It writes and runs R queries against the same DuckDB in a hardened sandbox, streams its reasoning
+live, and synthesises the result. See [Agentic Search](#agentic-search) below.
+
 ## Project Structure
 
 ```text
@@ -37,6 +42,11 @@ eddyspaperui/
 │   │   ├── lib/             # API client
 │   │   └── pages/           # Astro pages
 │   └── package.json
+├── agentic/                 # Agentic Search ("Detective mode") — second product
+│   ├── agentic_backend/     # Hono + TypeScript service (SSE pipeline, R sandbox, DuckDB cache)
+│   ├── agentic_frontend/    # Astro + React chat-style UI
+│   ├── r/                   # eddysearch.sandbox R package (the verbs the agent calls)
+│   └── 00–07_*.md           # Canonical design docs (architecture, prompts, roadmap, features)
 ├── data/                    # Data storage (not in repo)
 │   ├── RePEc/               # Downloaded archives
 │   ├── rds_archivep/        # Parsed RDF data
@@ -70,6 +80,86 @@ eddyspaperui/
 - **BibTeX export**: One-click citation copying
 - **Expandable abstracts**: Toggle paper abstract visibility
 - **Extended Infromation on Citations/References:** Additional information in results cards
+
+## Agentic Search
+
+**Agentic Search** ("Detective mode") is a second product that lives alongside the semantic search.
+Instead of ranking abstracts by vector similarity, it takes a natural-language brief, writes a
+tailored R script against the same DuckDB, runs it in a hardened sandbox, and synthesises a
+literature review — streaming each step to the browser as it happens.
+
+It is modelled on a literature-search workflow but productised to run server-side with no
+filesystem assumptions. The backend is **Hono + TypeScript** (not R); the frontend is **Astro +
+React**. The existing R Plumber API and search UI are untouched and keep running at their current
+URLs.
+
+### Pipeline
+
+A request streams over Server-Sent Events through a typed event protocol:
+
+```
+clarify → write → validate → execute → synthesize
+```
+
+- **clarify** — judges whether the brief is specific enough; can reject off-topic briefs.
+- **write** — an LLM writes an R script using only the allow-listed `eddysearch.sandbox` verbs.
+- **validate** — the script is AST/SQL-checked before it is allowed to run.
+- **execute** — the script runs in a sandbox against a read-only copy of the DuckDB and emits
+  papers/sections as structured events.
+- **synthesize** — an LLM writes the final review over the returned papers; only this step streams
+  tokens.
+
+### Optional features (per-run toggles)
+
+- **Blocking clarifier** — when enabled, the agent pauses and asks one Claude-Code-style question
+  (multiple-choice chips plus a free-text box) before searching; the answer is folded into the
+  script. A "Skip clarifying questions" toggle runs straight through.
+- **Refine strategy (multi-stage)** — when enabled, after the first results an assessor advises one
+  corrective or broadening pass (e.g. widen the window, expand via citations), then synthesis runs
+  once over the accumulated set. Off by default — zero added cost.
+
+### Exports & access
+
+- **Exports** — a finished review can be downloaded as **PDF** (browser print-to-PDF over the
+  rendered review + sources), **Excel** (`.xlsx`, server-rendered from the collected sources),
+  **BibTeX**, and evidence-rich **Markdown** (the review followed by a `Sources` section with
+  one field row per paper: authors, year, title, journal, abstract).
+- **Access gate** — setting `AGENTIC_PASSWORD` puts the costly LLM routes behind a single shared
+  password (a login screen in the UI; `Authorization: Bearer` on the API). Leave it unset for
+  open local dev. The SSE result stream stays open — run IDs are unguessable.
+
+### How it relates to the main backend
+
+- Reads the **same** `articles.duckdb` (read-only copy) plus the existing `cit_*`, `handle_stats`,
+  `journals`, `version_links`, and `bib_coupling` tables — no new tables required.
+- Reuses existing REST endpoints (`/search`, `/handlestats`, `/versions`, `/cites`, `/citedby`) as
+  fallbacks; the sandbox reads the DB directly for the hot path.
+- A small DuckDB file under `agentic/agentic_backend/data/agentic/` is a disposable cache of search
+  runs — safe to delete.
+
+### Run the agentic services
+
+```bash
+# Backend (Hono + TS) — listens on http://127.0.0.1:8001
+cd agentic/agentic_backend
+npm install
+# Create a .env with at least:
+#   OPENROUTER_API_KEY=...        # LLM access via OpenRouter
+#   MODEL_WRITER=... MODEL_CLARIFIER=... MODEL_ASSESSOR=... MODEL_SYNTH=...
+#   SEMANTIC_API_BASE=...         # the R Plumber API base (fallback lookups)
+#   EDDYPAPERS_API_KEY=...        # key for that API (never reaches the browser)
+#   AGENTIC_PASSWORD=...          # optional: shared password gating the costly LLM
+#                                 #   routes (leave unset to disable the gate in dev)
+npm run dev
+
+# Frontend (Astro + React)
+cd agentic/agentic_frontend
+npm install
+npm run dev
+```
+
+Design decisions are canonical in the numbered docs under `agentic/` (`00_overview.md` →
+`07_multistage.md`).
 
 ## Requirements
 

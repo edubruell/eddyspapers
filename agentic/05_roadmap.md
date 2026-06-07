@@ -282,24 +282,40 @@ Per `03_interface.md` end-to-end. **Can start in parallel with Phase 6** as soon
 
 ---
 
-## Phase 8 — Downloadable artifacts 🟢 ⏱ 1–2 days
+## Phase 8 — Downloadable artifacts ✅ (MVP variant, 2026-06-07)
 
-Per `01 §4.9` and `02 §2 artifacts/`.
+> **Implementation deltas (2026-06-07) — MVP exports.** The original plan (server-side
+> lazy generation, Typst PDF, four `GET /searches/:id/*` routes, `artifact` SSE events) was
+> simplified for the first ZEW-facing deliverable. PDF goes through the **browser's
+> print-to-PDF** instead of Typst — zero server deps, works on the box immediately; Markdown
+> and BibTeX are built **client-side**; only XLSX is server-rendered (the one format that
+> needs a binary writer). No `artifact` events, no on-disk cache — the toolbar acts on the
+> data already in the client store. If higher-fidelity PDF typography is wanted later,
+> revisit Typst/pandoc per the original plan.
 
-- [ ] `src/artifacts/md.ts` — synthesis + section listings, simple string concat.
-- [ ] `src/artifacts/bib.ts` — dedup + sort by year/first-author.
-- [ ] `src/artifacts/xlsx.ts` — `exceljs` workbook with Papers / Sections / Stats sheets per `01 §4.9`.
-- [ ] `templates/report.typ` — Typst template; install `typst` on the box; `src/artifacts/pdf.ts` invokes the CLI.
-- [ ] Routes: `GET /searches/:id/report.pdf`, `papers.xlsx`, `references.bib`, `report.md`.
-- [ ] Lazy generation + on-disk cache keyed by `search_id`.
-- [ ] Emit `artifact` events to the SSE stream when each is ready (`01 §4.9`).
-- [ ] `ArtifactsToolbar` enables buttons progressively.
+- [x] Markdown export — client-side `lib/exports.js#buildMarkdown`: synthesis + an evidence
+      `## Sources` section (one field row per paper: `Authors (Year) "Title", Journal`,
+      handle, `Abstract: …`).
+- [x] BibTeX export — client-side, from the `bibtex` stream event (dedup happens upstream in
+      `runAgent#mergeBibtex`).
+- [x] XLSX export — server-side `src/routes/export.ts` `POST /export/xlsx` via `exceljs`
+      (one Sources sheet: Authors / Year / Title / Journal / Category / Handle / URL /
+      Abstract); auth-gated.
+- [x] PDF export — browser print-to-PDF over the rendered review HTML + source list
+      (`lib/exports.js#printReview`). No Typst.
+- [x] `ArtifactsToolbar` enables PDF / Excel / BibTeX / Markdown buttons with file-type icons.
+- [ ] ~~Lazy generation + on-disk cache / `artifact` SSE events~~ — dropped for the MVP.
 
-**Acceptance:** all four artifacts download cleanly for a completed run, PDF typography reads as academic, XLSX opens without warnings in Excel + LibreOffice.
+**Acceptance:** met — Markdown carries full evidence; BibTeX + XLSX download cleanly (XLSX
+opens without warnings, verified ZIP magic + content-type); PDF prints from the browser.
 
 ---
 
-## Phase 9 — MCP adapter 🟡 ⏱ 2–3 days
+## Phase 9 — MCP adapter ⏸ deferred (2026-06-07)
+
+> **Deferred for the MVP.** The frontend is sufficient for the ZEW preview; the MCP
+> adapter is postponed until after first feedback. The existing R MCP server keeps running
+> in the meantime (see CLAUDE.md "What this project does NOT touch").
 
 Per `01 §7` and `02 §2 mcp/`.
 
@@ -319,6 +335,17 @@ Per `01 §7` and `02 §2 mcp/`.
 
 ## Phase 10 — Auth, rate limits, deploy 🟡 ⏱ 2 days
 
+> **Implementation deltas (2026-06-07) — shared-password MVP gate.** Ahead of a full
+> per-key auth flow, a single shared password (`AGENTIC_PASSWORD` env) now gates the costly
+> LLM routes so the ZEW preview can run behind a wall. `src/middleware/auth.ts#requireAuth`
+> checks `Authorization: Bearer <pw>` or `x-agentic-key` (constant-time); empty password
+> disables the gate for dev. Bound per-POST-route on `/chat` + `/chat/:id/reply` + `/export/*`
+> — the SSE stream stays open (EventSource can't send headers; run IDs are unguessable UUIDs).
+> `GET /auth/check` is the login probe. Frontend `Gate.jsx` shows a password screen and
+> auto-detects whether the backend enforces the gate. Per-IP rate limits + per-key issuance
+> remain TODO below.
+
+- [x] Shared-password gate on `POST /chat`, `/chat/:id/reply`, `/export/*` (`AGENTIC_PASSWORD`).
 - [ ] API key issuance flow on the Hono side (reuse the existing backend key flow if there is one).
 - [ ] Per-IP rate limit on web `POST /chat` (web doesn't need keys).
 - [ ] Concurrency limit: 1 active `lit_search` per key.

@@ -155,7 +155,9 @@ export default function SearchChat() {
 
         <SynthesisPanel synthesis={state.synthesis} />
 
-        <ArtifactsToolbar bibtex={state.bibtex} synthesis={state.synthesis} />
+        {state.done && (
+          <ArtifactsToolbar bibtex={state.bibtex} synthesis={state.synthesis} papers={state.papers} />
+        )}
 
         {state.sections.length > 0 && (
           <div className="flex flex-col gap-3">

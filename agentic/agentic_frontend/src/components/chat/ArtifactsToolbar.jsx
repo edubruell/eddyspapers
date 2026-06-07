@@ -1,7 +1,14 @@
+import { useState } from "react";
 import { GhostButton } from "../primitives/index.jsx";
+import { buildMarkdown, printReview, papersList } from "../../lib/exports.js";
+import { exportXlsx } from "../../lib/api.js";
 
 function download(name, text, mime = "text/plain;charset=utf-8") {
   const blob = new Blob([text], { type: mime });
+  saveBlob(name, blob);
+}
+
+function saveBlob(name, blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -56,35 +63,67 @@ function IconMarkdown() {
   );
 }
 
-// MVP: client-side BibTeX + Markdown export. Server-rendered PDF/XLSX are Phase 8.
-export default function ArtifactsToolbar({ bibtex, synthesis }) {
+// Exports for a finished run. PDF is the browser's print-to-PDF over the rendered review;
+// Excel is server-rendered (exceljs) from the collected sources; BibTeX and the
+// evidence-rich Markdown are built client-side.
+export default function ArtifactsToolbar({ bibtex, synthesis, papers }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const sources = papersList(papers);
   const hasBib = bibtex && bibtex.bibtex;
   const hasMd = synthesis && synthesis.length > 0;
-  if (!hasBib && !hasMd) return null;
+  const hasSources = sources.length > 0;
+  if (!hasBib && !hasMd && !hasSources) return null;
+
+  function onPdf() {
+    setError(null);
+    // Reuse the already-rendered review HTML (react-markdown output) from the page.
+    const node = document.querySelector(".synthesis");
+    const synthesisHtml = node ? node.innerHTML : "";
+    const ok = printReview({ synthesisHtml, papers });
+    if (!ok) setError("Couldn't open the print view. Try again.");
+  }
+
+  async function onExcel() {
+    setError(null);
+    setBusy(true);
+    try {
+      const blob = await exportXlsx(sources);
+      saveBlob("sources.xlsx", blob);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <GhostButton disabled title="Server-rendered PDF — coming soon">
-        <IconPdf />
-        PDF
-      </GhostButton>
-      <GhostButton disabled title="Excel export — coming soon">
-        <IconExcel />
-        Excel
-      </GhostButton>
-      <GhostButton
-        disabled={!hasBib}
-        onClick={() => download("references.bib", bibtex.bibtex)}
-      >
-        <IconBibtex />
-        BibTeX
-      </GhostButton>
-      <GhostButton
-        disabled={!hasMd}
-        onClick={() => download("review.md", synthesis, "text/markdown;charset=utf-8")}
-      >
-        <IconMarkdown />
-        Markdown
-      </GhostButton>
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <GhostButton disabled={!hasMd && !hasSources} onClick={onPdf} title="Print or save as PDF">
+          <IconPdf />
+          PDF
+        </GhostButton>
+        <GhostButton disabled={!hasSources || busy} onClick={onExcel} title="Download sources as Excel">
+          <IconExcel />
+          {busy ? "Excel…" : "Excel"}
+        </GhostButton>
+        <GhostButton disabled={!hasBib} onClick={() => download("references.bib", bibtex.bibtex)}>
+          <IconBibtex />
+          BibTeX
+        </GhostButton>
+        <GhostButton
+          disabled={!hasMd && !hasSources}
+          onClick={() =>
+            download("review.md", buildMarkdown(synthesis, papers), "text/markdown;charset=utf-8")
+          }
+        >
+          <IconMarkdown />
+          Markdown
+        </GhostButton>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

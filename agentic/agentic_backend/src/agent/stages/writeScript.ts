@@ -130,11 +130,17 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
 
   let lastScript: string | undefined;
   let lastRejection: { reason: string; offendingNode: string; hint: string } | undefined;
+  let lastError: string | undefined;
+  // Once the writer model fails to even produce a valid object, it tends to keep failing —
+  // jump straight to the sturdier retry model for the remaining attempts instead of burning
+  // another call on the same flaky model.
+  let escalate = false;
   let totalUsage: UsageSummary = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 };
 
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const baseModel = attempt <= 2 ? models.writer : models.writerRetry;
-    const baseModelId = attempt <= 2 ? modelIds.writer : modelIds.writerRetry;
+    const useRetryModel = escalate || attempt === 3;
+    const baseModel = useRetryModel ? models.writerRetry : models.writer;
+    const baseModelId = useRetryModel ? modelIds.writerRetry : modelIds.writer;
     const model = modelOverride ? or(modelOverride) : baseModel;
     const modelId = modelOverride ?? baseModelId;
 
@@ -161,8 +167,13 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
         stage: `write:attempt${attempt}`,
       }));
     } catch (err) {
+      // The model failed to produce a valid structured object (e.g. schema mismatch / empty
+      // response). Don't abort the run — record it, escalate to the retry model, and try
+      // again. Only a fully-exhausted loop surfaces this as a failure (below).
       const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, reason: `LLM error on attempt ${attempt}: ${message}`, attempts: attempt };
+      lastError = `LLM error on attempt ${attempt}: ${message}`;
+      escalate = true;
+      continue;
     }
 
     totalUsage = {
@@ -185,7 +196,7 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
 
   return {
     ok: false,
-    reason: lastRejection?.reason ?? "unknown validation error",
+    reason: lastRejection?.reason ?? lastError ?? "unknown validation error",
     attempts: 3,
   };
 }

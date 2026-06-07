@@ -8,4 +8,7 @@ export const env = {
   MAX_TOKENS_SYNTH:   Number(process.env.MAX_TOKENS_SYNTH ?? 8000),
   SEMANTIC_API_BASE:  process.env.SEMANTIC_API_BASE  ?? "https://econpapers.eduard-bruell.de/api",
   EDDYPAPERS_API_KEY: process.env.EDDYPAPERS_API_KEY ?? "",
+  // Shared password gating the costly LLM routes. Empty string disables the gate
+  // (dev convenience); set it in production to keep the per-query spend behind a wall.
+  AGENTIC_PASSWORD:   process.env.AGENTIC_PASSWORD   ?? "",
 } as const;
