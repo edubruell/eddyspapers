@@ -590,7 +590,9 @@ dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
   
   pqt_files <- tables |>
     purrr::set_names() |>
-    purrr::keep(~.x %in% c("articles", "saved_searches", "search_logs", "version_links", "cit_all", "cit_internal", "handle_stats")) |>
+    purrr::keep(~.x %in% c("articles", "saved_searches", "search_logs", "version_links",
+                            "cit_all", "cit_internal", "handle_stats",
+                            "persons", "person_works", "person_stats")) |>
     purrr::map(export_tbl)
   
   
@@ -652,7 +654,10 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
     "version_links",
     "cit_all",
     "cit_internal",
-    "handle_stats"
+    "handle_stats",
+    "persons",
+    "person_works",
+    "person_stats"
   )
   
   pqt_paths <- file.path(pqt_folder, paste0(tables, "_", date_stamp, ".parquet"))
@@ -855,8 +860,9 @@ compute_parquet_diffs <- function(base_stamp,
                                   update_stamp,
                                   pqt_folder = NULL,
                                   pqt_diff_folder = NULL,
-                                  tables = c("articles", "handle_stats", "cit_all", 
-                                            "cit_internal", "version_links")) {
+                                  tables = c("articles", "handle_stats", "cit_all",
+                                            "cit_internal", "version_links",
+                                            "persons", "person_works", "person_stats")) {
   
   if (is.null(pqt_folder)) {
     config <- get_folder_config()
@@ -876,13 +882,16 @@ compute_parquet_diffs <- function(base_stamp,
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   table_keys <- list(
-    articles = "Handle",
-    handle_stats = "handle",
-    cit_all = c("citing", "cited"),
-    cit_internal = c("citing", "cited"),
-    version_links = c("source", "target", "type")
+    articles      = "Handle",
+    handle_stats  = "handle",
+    cit_all       = c("citing", "cited"),
+    cit_internal  = c("citing", "cited"),
+    version_links = c("source", "target", "type"),
+    persons       = "short_id",
+    person_works  = c("short_id", "work_handle"),
+    person_stats  = "short_id"
   )
-  
+
   diff_files <- list()
   
   for (tbl in tables) {
@@ -1019,7 +1028,8 @@ apply_parquet_diffs <- function(base_stamp,
                                 db_path = NULL,
                                 pqt_diff_folder = NULL,
                                 tables = c("articles", "handle_stats", "cit_all",
-                                          "cit_internal", "version_links"),
+                                          "cit_internal", "version_links",
+                                          "persons", "person_works", "person_stats"),
                                 rebuild_indices = TRUE) {
   
   if (is.null(db_path)) {
@@ -1038,13 +1048,17 @@ apply_parquet_diffs <- function(base_stamp,
   DBI::dbExecute(con, "LOAD vss;")
   
   table_keys <- list(
-    articles = "Handle",
-    handle_stats = "handle",
-    cit_all = c("citing", "cited"),
-    cit_internal = c("citing", "cited"),
-    version_links = c("source", "target", "type")
+    articles      = "Handle",
+    handle_stats  = "handle",
+    cit_all       = c("citing", "cited"),
+    cit_internal  = c("citing", "cited"),
+    version_links = c("source", "target", "type"),
+    persons       = "short_id",
+    person_works  = c("short_id", "work_handle"),
+    person_stats  = "short_id"
   )
-  
+
+
   results <- list()
   
   for (tbl in tables) {

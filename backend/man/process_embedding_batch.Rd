@@ -20,4 +20,6 @@ NULL invisibly
 }
 \description{
 Generates embeddings for a batch of papers and inserts them into the database.
+Articles whose abstracts cannot be embedded (context length exceeded even
+after truncation) are skipped and logged rather than failing the whole run.
 }

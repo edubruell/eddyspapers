@@ -9,7 +9,8 @@ apply_parquet_diffs(
   update_stamp,
   db_path = NULL,
   pqt_diff_folder = NULL,
-  tables = c("articles", "handle_stats", "cit_all", "cit_internal", "version_links"),
+  tables = c("articles", "handle_stats", "cit_all", "cit_internal", "version_links",
+    "persons", "person_works", "person_stats"),
   rebuild_indices = TRUE
 )
 }

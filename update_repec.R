@@ -98,17 +98,17 @@ tryCatch({
 })
 
 
-info("\n[6/7] Computing handle statistics...")
+info("\n[6/10] Computing handle statistics...")
 tryCatch({
   con <- DBI::dbConnect(
     duckdb::duckdb(),
     dbdir = file.path(config$db_folder, "articles.duckdb")
   )
-  
+
   stats_count <- compute_handle_stats(con)
-  
+
   DBI::dbDisconnect(con)
-  
+
   info("✓ Handle statistics computed successfully")
   info("  Handles processed: ", stats_count)
 }, error = function(e) {
@@ -116,7 +116,40 @@ tryCatch({
   stop(e)
 })
 
-info("\n[7/7] Creating backup...")
+info("\n[7/10] Syncing pers author archive...")
+tryCatch({
+  sync_repec_pers(dest_root = config$repec_folder)
+  info("✓ Pers sync completed successfully")
+}, error = function(e) {
+  info("⚠ Pers sync failed (non-fatal): ", e$message)
+})
+
+info("\n[8/10] Parsing person RDF files...")
+tryCatch({
+  parse_all_persons(
+    repec_folder       = config$repec_folder,
+    rds_persons_folder = config$rds_persons_folder
+  )
+  info("✓ Person parsing completed successfully")
+}, error = function(e) {
+  info("⚠ Person parsing failed (non-fatal): ", e$message)
+})
+
+info("\n[9/10] Populating person tables and computing stats...")
+tryCatch({
+  populate_persons(
+    db_path            = file.path(config$db_folder, "articles.duckdb"),
+    rds_persons_folder = config$rds_persons_folder
+  )
+  con <- get_db_con(file.path(config$db_folder, "articles.duckdb"))
+  person_count <- compute_person_stats(con)
+  DBI::dbDisconnect(con)
+  info("✓ Person tables populated; stats computed for ", person_count, " persons")
+}, error = function(e) {
+  info("⚠ Person table population failed (non-fatal): ", e$message)
+})
+
+info("\n[10/10] Creating backup...")
 tryCatch({
   pqt_file <- dump_db_to_parquet(
     db_path = file.path(config$db_folder, "articles.duckdb"),

@@ -465,6 +465,150 @@ function(day) {
   get_search_logs_day(day)
 }
 
+
+# ---- Person finder endpoints ----
+
+#* Find authors by topic (two-stage overlap retrieval)
+#* @post /person/search
+#* @serializer json
+#* @param query:string Natural-language topic query
+#* @param k_papers:number Stage-1 paper pool size (default 1000)
+#* @param quality_weight:number Prominence blend lambda; 0 = pure relevance (default 0.3)
+#* @param limit:number Authors to return (default 25)
+#* @param offset:number Pagination offset (default 0)
+#* @param min_year:number Restrict Stage-1 papers to this year or later
+#* @param category:string Comma-separated category filter for Stage-1 papers
+#* @param institution:string EDI institution handle for Stage-2 person filter
+#* @param active_since:number Require person_stats.last_year >= this value
+#* @param min_citations:number Require person_stats.total_citations >= this value
+function(req,
+         query,
+         k_papers       = 1000,
+         quality_weight = 0.3,
+         limit          = 25,
+         offset         = 0,
+         min_year       = NULL,
+         category       = NULL,
+         institution    = NULL,
+         active_since   = NULL,
+         min_citations  = NULL) {
+
+  safe_int <- function(x) {
+    if (is.null(x) || length(x) == 0 || identical(x, "") || is.na(x)) NULL
+    else as.integer(x)
+  }
+  safe_dbl <- function(x) {
+    if (is.null(x) || length(x) == 0 || identical(x, "") || is.na(x)) NULL
+    else as.numeric(x)
+  }
+
+  cats <- if (!is.null(category) && nchar(category) > 0)
+    stringr::str_trim(stringr::str_split(category, ",")[[1]])
+  else NULL
+
+  filters <- list(
+    min_year      = safe_int(min_year),
+    category      = cats,
+    institution   = institution,
+    active_since  = safe_int(active_since),
+    min_citations = safe_int(min_citations)
+  )
+
+  results <- search_persons(
+    query          = query,
+    k_papers       = as.integer(k_papers),
+    quality_weight = as.numeric(quality_weight),
+    limit          = as.integer(limit),
+    offset         = as.integer(offset),
+    filters        = filters
+  )
+
+  evidence_cols <- c("evidence_handles", "evidence_titles",
+                     "evidence_journals", "evidence_years", "evidence_scores")
+
+  rows <- seq_len(nrow(results)) |>
+    purrr::map(function(i) {
+      r <- as.list(results[i, setdiff(names(results), c(evidence_cols, "quality_norm"))])
+      ev_handles <- results$evidence_handles[[i]]
+      ev_titles  <- results$evidence_titles[[i]]
+      ev_journals <- results$evidence_journals[[i]]
+      ev_years   <- results$evidence_years[[i]]
+      ev_scores  <- results$evidence_scores[[i]]
+      r$stats <- list(
+        n_works_in_corpus = r$n_works_in_corpus,
+        total_citations   = r$total_citations,
+        top5_count        = r$top5_count,
+        first_year        = r$first_year,
+        last_year         = r$last_year
+      )
+      r$evidence <- purrr::map(seq_along(ev_handles), function(j) {
+        list(handle  = ev_handles[[j]],
+             title   = ev_titles[[j]],
+             journal = ev_journals[[j]],
+             year    = ev_years[[j]],
+             score   = round(ev_scores[[j]], 5))
+      })
+      r[c("short_id", "name_full", "workplace_name", "workplace_institution",
+          "homepage", "score", "overlap_weight", "n_matched", "stats", "evidence")]
+    })
+
+  list(
+    query     = query,
+    n_authors = nrow(results),
+    results   = rows
+  )
+}
+
+#* Name lookup / autocomplete for persons
+#* @get /person/lookup
+#* @serializer json
+#* @param name:string Search string (substring match on full name)
+#* @param limit:number Maximum results (default 20)
+function(name, limit = 20) {
+  if (is.null(name) || nchar(name) == 0) {
+    return(list(error = "name parameter required"))
+  }
+  lookup_persons_by_name(name = name, limit = as.integer(limit))
+}
+
+#* Get author profile by short_id
+#* @get /person/<short_id>
+#* @serializer json
+#* @param short_id:string Author short identifier (e.g. "pac16")
+function(short_id) {
+  result <- get_person_profile(short_id = short_id)
+  if (is.null(result)) {
+    list(error = "Person not found")
+  } else {
+    result
+  }
+}
+
+#* Get full publication list for an author
+#* @get /person/<short_id>/papers
+#* @serializer json
+#* @param short_id:string Author short identifier
+#* @param sort_by:string Sort column: year, citations, journal (default year)
+#* @param order:string Sort direction: desc or asc (default desc)
+#* @param include_out_of_corpus:logical Include handles outside the corpus (default true)
+#* @param limit:number Results per page (default 50)
+#* @param offset:number Pagination offset (default 0)
+function(short_id,
+         sort_by               = "year",
+         order                 = "desc",
+         include_out_of_corpus = TRUE,
+         limit                 = 50,
+         offset                = 0) {
+  get_person_papers(
+    short_id               = short_id,
+    sort_by                = sort_by,
+    order                  = order,
+    include_out_of_corpus  = as.logical(include_out_of_corpus),
+    limit                  = as.integer(limit),
+    offset                 = as.integer(offset)
+  )
+}
+
 #* Apply parquet diffs (admin)
 #* @post /admin/apply_diff
 #* @param base_stamp
