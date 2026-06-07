@@ -138,16 +138,18 @@ fetch_wikidata_batch <- function(short_ids) {
 }
 
 
-#' Sync Wikidata enrichment for all registered persons
+#' Sync Wikidata enrichment for persons
 #'
-#' Queries the Wikidata SPARQL endpoint via the P2428 (RePEC short-ID) property,
-#' batching all person short_ids from the persons table. Drops and recreates
-#' person_wikidata on every run.
+#' Fetches only new persons (not yet in person_wikidata) and stale entries
+#' (fetched_date older than refresh_days). Pass force = TRUE to drop and
+#' rebuild the entire table from scratch.
 #'
 #' @param db_path Path to DuckDB database. Defaults to config$db_folder/articles.duckdb
-#' @return Number of persons with Wikidata entries (invisibly)
+#' @param refresh_days Re-fetch rows older than this many days (default 30)
+#' @param force Drop and rebuild the entire table (default FALSE)
+#' @return Number of rows upserted (invisibly)
 #' @export
-sync_wikidata_persons <- function(db_path = NULL) {
+sync_wikidata_persons <- function(db_path = NULL, refresh_days = 30L, force = FALSE) {
   if (is.null(db_path)) {
     config <- get_folder_config()
     db_path <- file.path(config$db_folder, "articles.duckdb")
@@ -156,15 +158,38 @@ sync_wikidata_persons <- function(db_path = NULL) {
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  short_ids <- DBI::dbGetQuery(con, "SELECT short_id FROM persons")$short_id
-  n_total   <- length(short_ids)
-  info("Querying Wikidata for ", n_total, " persons in batches of ", WIKIDATA_BATCH_SIZE, "...")
+  init_person_wikidata_table(con)
 
-  batches   <- split(short_ids, ceiling(seq_along(short_ids) / WIKIDATA_BATCH_SIZE))
+  if (force) {
+    DBI::dbExecute(con, "DELETE FROM person_wikidata")
+    to_fetch <- DBI::dbGetQuery(con, "SELECT short_id FROM persons")$short_id
+    info("Force rebuild: querying Wikidata for all ", length(to_fetch), " persons...")
+  } else {
+    cutoff <- as.character(Sys.Date() - as.integer(refresh_days))
+    to_fetch <- DBI::dbGetQuery(con, "
+      SELECT p.short_id
+      FROM persons p
+      LEFT JOIN person_wikidata pw ON pw.short_id = p.short_id
+      WHERE pw.short_id IS NULL OR pw.fetched_date < CAST(? AS DATE)
+    ", params = list(cutoff))$short_id
+
+    n_total <- DBI::dbGetQuery(con, "SELECT COUNT(*) FROM persons")[[1]]
+    if (length(to_fetch) == 0) {
+      info("✓ person_wikidata up to date (all ", n_total, " persons fresh within ", refresh_days, " days)")
+      return(invisible(0L))
+    }
+    info(
+      "Querying Wikidata for ", length(to_fetch), " new/stale persons ",
+      "(", n_total - length(to_fetch), " already fresh)..."
+    )
+  }
+
+  batches   <- split(to_fetch, ceiling(seq_along(to_fetch) / WIKIDATA_BATCH_SIZE))
   n_batches <- length(batches)
 
   all_rows <- purrr::imap_dfr(batches, function(batch, i) {
-    if (i == 1 || i %% 50 == 0) info("  Batch ", i, "/", n_batches)
+    i <- as.integer(i)
+    if (i == 1L || i %% 50L == 0L) info("  Batch ", i, "/", n_batches)
     result <- tryCatch(
       fetch_wikidata_batch(batch),
       error = function(e) {
@@ -177,15 +202,16 @@ sync_wikidata_persons <- function(db_path = NULL) {
   })
 
   found <- nrow(all_rows)
-  info("Found Wikidata entries for ", found, " persons")
-
-  DBI::dbExecute(con, "DROP TABLE IF EXISTS person_wikidata")
-  init_person_wikidata_table(con)
 
   if (found > 0) {
+    DBI::dbWriteTable(con, "_wd_upsert_ids",
+                      data.frame(short_id = all_rows$short_id),
+                      overwrite = TRUE, temporary = TRUE)
+    DBI::dbExecute(con, "DELETE FROM person_wikidata WHERE short_id IN (SELECT short_id FROM _wd_upsert_ids)")
+    DBI::dbExecute(con, "DROP TABLE IF EXISTS _wd_upsert_ids")
     DBI::dbAppendTable(con, "person_wikidata", all_rows)
   }
 
-  info("✓ person_wikidata populated with ", found, " rows")
+  info("✓ person_wikidata: upserted ", found, " rows (", length(to_fetch) - found, " had no Wikidata entry)")
   invisible(found)
 }

@@ -20,7 +20,8 @@ log_msg <- function(level, ...) {
   ts <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
   line <- paste0("[", ts, "] ", "[", level, "] ", paste0(..., collapse = ""))
   message(line)
-  write(line, file = log_file, append = TRUE)
+  lf <- tryCatch(get("log_file", envir = .GlobalEnv), error = function(e) NULL)
+  if (!is.null(lf)) write(line, file = lf, append = TRUE)
 }
 
 #' Log an info message
