@@ -182,7 +182,6 @@ init_persons_tables <- function(con) {
       n_works_total     INTEGER,
       n_works_in_corpus INTEGER,
       total_citations   INTEGER,
-      top5_count        INTEGER,
       a_count           INTEGER,
       first_year        INTEGER,
       last_year         INTEGER,
@@ -276,7 +275,6 @@ compute_person_stats <- function(con) {
       n_works_total     INTEGER,
       n_works_in_corpus INTEGER,
       total_citations   INTEGER,
-      top5_count        INTEGER,
       a_count           INTEGER,
       first_year        INTEGER,
       last_year         INTEGER,
@@ -320,7 +318,6 @@ compute_person_stats <- function(con) {
     CREATE TEMP VIEW ps_citation_sums AS
     SELECT cw.short_id,
            COALESCE(SUM(hs.total_citations), 0)                                              AS total_citations,
-           COALESCE(SUM(CASE WHEN cw.category = 'Top 5 Journals'         THEN 1 ELSE 0 END), 0) AS top5_count,
            COALESCE(SUM(CASE WHEN cw.category = 'Top Field Journals (A)' THEN 1 ELSE 0 END), 0) AS a_count
     FROM ps_corpus_works cw
     LEFT JOIN handle_stats hs ON LOWER(hs.handle) = cw.work_handle
@@ -350,7 +347,6 @@ compute_person_stats <- function(con) {
       COALESCE(tw.n_works_total,     0) AS n_works_total,
       COALESCE(cc.n_works_in_corpus, 0) AS n_works_in_corpus,
       COALESCE(cs.total_citations,   0) AS total_citations,
-      COALESCE(cs.top5_count,        0) AS top5_count,
       COALESCE(cs.a_count,           0) AS a_count,
       cc.first_year,
       cc.last_year,
@@ -482,7 +478,7 @@ search_persons <- function(query,
   meta <- DBI::dbGetQuery(con, sprintf("
     SELECT p.short_id, p.name_full, p.workplace_name, p.workplace_institution,
            p.homepage,
-           ps.n_works_in_corpus, ps.total_citations, ps.top5_count,
+           ps.n_works_in_corpus, ps.total_citations,
            ps.first_year, ps.last_year, ps.primary_category
     FROM persons p
     LEFT JOIN person_stats ps ON ps.short_id = p.short_id
@@ -540,7 +536,7 @@ get_person_profile <- function(short_id, pool = NULL) {
 
   person <- DBI::dbGetQuery(con, "
     SELECT p.*, ps.n_works_total, ps.n_works_in_corpus, ps.total_citations,
-           ps.top5_count, ps.a_count, ps.first_year, ps.last_year, ps.primary_category
+           ps.a_count, ps.first_year, ps.last_year, ps.primary_category
     FROM persons p
     LEFT JOIN person_stats ps ON ps.short_id = p.short_id
     WHERE p.short_id = ?
@@ -580,7 +576,6 @@ get_person_profile <- function(short_id, pool = NULL) {
       n_works_total     = person$n_works_total[[1]],
       n_works_in_corpus = person$n_works_in_corpus[[1]],
       total_citations   = person$total_citations[[1]],
-      top5_count        = person$top5_count[[1]],
       a_count           = person$a_count[[1]],
       first_year        = person$first_year[[1]],
       last_year         = person$last_year[[1]],

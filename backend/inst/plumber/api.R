@@ -537,7 +537,6 @@ function(req,
       r$stats <- list(
         n_works_in_corpus = r$n_works_in_corpus,
         total_citations   = r$total_citations,
-        top5_count        = r$top5_count,
         first_year        = r$first_year,
         last_year         = r$last_year
       )
