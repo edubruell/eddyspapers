@@ -25,7 +25,11 @@ async function logUsage(stage: string, model: string, promptTokens: number, comp
   );
 }
 
-const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
+// Only the streaming synthesis stage uses this. A broad brief can produce a full
+// MAX_TOKENS_SYNTH (~8k-token) review that legitimately streams for minutes; 120s was
+// aborting otherwise-good long runs mid-write. 5 minutes gives generous headroom while
+// still surfacing a genuinely stalled/dropped connection. Overridable per call via timeoutMs.
+const DEFAULT_STREAM_TIMEOUT_MS = 300_000;
 
 export interface StreamResult {
   finishReason: string;

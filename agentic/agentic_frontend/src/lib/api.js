@@ -37,6 +37,15 @@ export function streamUrl(id) {
   return `${API_BASE}/chat/${encodeURIComponent(id)}/stream`;
 }
 
+// Read-only fetch of a stored run for share links (08_sharelinks.md). Ungated — no auth
+// header needed; returns { id, brief, status, createdAt, minYear, categories, events }.
+export async function getSharedSearch(id, { signal } = {}) {
+  const res = await fetch(`${API_BASE}/searches/${encodeURIComponent(id)}`, { signal });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Couldn't load this search (${res.status}).`);
+  return res.json();
+}
+
 // The DB snapshot date comes from the agentic backend, which proxies the shared
 // semantic-search API server-side (the key never reaches the browser).
 export async function getLastUpdated({ signal } = {}) {

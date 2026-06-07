@@ -229,7 +229,7 @@ After every implementation step:
 
 A second product, **`agenticsearch.eduard-bruell.de`**, is being designed alongside the existing semantic search. It is a hosted, multi-turn web + MCP service that takes a natural-language brief, writes a tailored R script against the same DuckDB, runs it in a hardened sandbox, and synthesises a literature review. It is modelled on the `lit-search` Claude Code skill (`~/.claude/skills/lit-search/`) but productised so it works without filesystem assumptions.
 
-**Status:** design only — no code yet. All decisions live in design notes; do not begin implementation without reading them.
+**Status:** base product works end-to-end (2026-06-07) — the full clarify→write→validate→execute→synthesize pipeline runs locally, streams over SSE, returns synthesised reviews with cited evidence + PDF/Excel/BibTeX/Markdown exports + shareable read-only permalinks, behind an optional shared-password gate for the ZEW preview. Phases 0–8, 13, 14 and the auth slice of 10 are built; next is the rest of Phase 10 (deploy). The numbered design notes remain canonical — read the relevant one before changing a subsystem.
 
 ### Design corpus (read in order)
 
@@ -243,6 +243,7 @@ A second product, **`agenticsearch.eduard-bruell.de`**, is being designed alongs
 | 05 | `agentic/05_roadmap.md` | 12-phase plan of attack with acceptance criteria + dependency graph |
 | 06 | `agentic/06_clarifier.md` | blocking-clarifier feature design: one-shot toggle, pause/resume state machine, reply endpoint, wire/UX/prompt changes (extends 01/03/04) |
 | 07 | `agentic/07_multistage.md` | multistage feature design: results-aware re-running — assess step + bounded loop (≤3 rounds) that revises strategy when a pass underperforms; resolves 01 §9.5 (extends 01/03/04) |
+| 08 | `agentic/08_sharelinks.md` | share-links feature design: read-only `/c?s=<id>` permalink served from the persistent store (not the in-memory bus), client-side event replay, ungated view with Excel hidden (extends 01/03) |
 
 **When working on the agentic project, the lower-numbered doc wins for system decisions; the higher-numbered doc wins for surface decisions.** The numbered design docs are canonical — if you disagree with a decision there, update the doc rather than diverging in code. (06 and 07 are feature designs layered on 00–05; on conflict they defer to the docs they extend.)
 

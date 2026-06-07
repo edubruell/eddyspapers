@@ -14,6 +14,7 @@ This folder contains the design corpus. Read in this order:
 | 05 | [`05_roadmap.md`](./05_roadmap.md) | **plan of attack** — phased build order with concrete tasks, acceptance criteria per phase, dependency graph, cross-cutting risks |
 | 06 | [`06_clarifier.md`](./06_clarifier.md) | **blocking clarifier feature** — one-shot toggle, pause/resume state machine, reply endpoint, wire/UX/prompt changes. Extends `01` (system) and `03`/`04` (surface/prompt); subordinate to them on conflict |
 | 07 | [`07_multistage.md`](./07_multistage.md) | **multistage feature** — results-aware re-running: an assess step + bounded loop (≤ 3 rounds) that lets the agent see its own results and revise strategy when a pass underperforms. Resolves `01 §9.5`. Extends `01` (system) and `03`/`04` (surface/prompt); subordinate to them on conflict |
+| 08 | [`08_sharelinks.md`](./08_sharelinks.md) | **share-links feature** — read-only `/c?s=<id>` permalink served from the persistent store (not the in-memory bus), client-side event replay, ungated view with the auth-gated Excel export hidden. Extends `01` (system) and `03` (surface); subordinate to them on conflict |
 | — | [`typescript-functional-guidelines.md`](./typescript-functional-guidelines.md) | **code style reference** for all TS work in this project — pure functions, `effect`/`remeda` pipelines, discriminated unions, `Option`/`Either` over `null`/throws, no loops, no mutation, no `any`. Binding for `agentic_backend/` and `agentic_frontend/` |
 | — | [`reference_lit_search_skill.md`](./reference_lit_search_skill.md) | **reference snapshot** of the `lit-search` Claude Code skill that the agentic project is modelled on. Verbatim copy of `~/.claude/skills/lit-search/SKILL.md` — read alongside `04_prompts.md` to see what the hosted agent reproduces |
 
@@ -52,9 +53,9 @@ The two apps differ only in **logo (detective meerkat)**, **wordmark (`AGENTIC S
 - **No file writes from the sandbox.** R user scripts emit events through FD 3 via `emit_section`/`emit_note`/`emit_bibtex` — the orchestrator buffers, serialises, and turns them into wire events. Removes "where can scripts write?" from the threat model.
 - **Defence in depth on the R side:** curated `eddysearch.sandbox` package providing the only allowed verbs + AST allowlist on the generated script + systemd-level process sandbox + DuckDB hardening pragmas. (`01_design.md` §3.)
 
-## 5. Three things we're explicitly **not** building in v1
+## 5. Things we're explicitly **not** building in v1
 
-- Iterative multi-script runs (search → expand via citations → re-search). One script per run; cap at three retries on validation failure with feedback to the writer. (`01_design.md` §9.5 — left open but deferred.)
+- ~~Iterative multi-script runs~~ — **partially shipped.** A bounded **single refine pass** now exists as an opt-in toggle (Phase 14 / `07_multistage.md`): after round 1 an advisor proposes one corrective/broadening pass. The general ≤3-round loop remains out of scope; one script per run is still the default. (`01_design.md` §9.5.)
 - Paper upload as brief context. Tempting, but doubles per-query cost; revisit once the cost picture stabilises. (`03_interface.md` §7.1.)
 - Mode pills as a UI primitive. The brief writer infers modes from prose; modes only show up as a small label inside the (collapsed) `SectionCard` header.
 
@@ -74,25 +75,27 @@ The R sandbox has its own `testthat` suite for `eddysearch.sandbox` verbs and th
 
 ## 7. Milestone arc
 
-The full phased plan with concrete tasks, acceptance criteria, and dependency graph lives in **[`05_roadmap.md`](./05_roadmap.md)**. Twelve phases at a glance:
+The full phased plan with concrete tasks, acceptance criteria, and dependency graph lives in **[`05_roadmap.md`](./05_roadmap.md)**. **As of 2026-06-07 the base product works end-to-end** — the whole pipeline runs locally in production shape, returns synthesised reviews with cited evidence and downloadable artifacts, and both optional features (blocking clarifier, single-pass refine) are live behind a shared-password gate used for the ZEW preview. The phases at a glance:
 
-| # | Phase | Gate |
-|---|---|---|
-| 0 | Project scaffolding | repo tree boots |
-| 1 | R sandbox foundation (`eddysearch.sandbox`) | ⚠ blocks 2–4 |
-| 2 | AST allowlist (`check.R`) | ⚠ blocks 5 |
-| 3 | TS sandbox runner | ⚠ blocks 5 |
-| 4 | LLM layer + writer stage | 20-brief eyeball |
-| 5 | **Cost benchmark + model lock-in** | 🟥 Eddy sign-off gate |
-| 6 | `runAgent` + SSE transport | full pipeline live |
-| 7 | Web frontend | sibling-app feel |
-| 8 | Downloadable artifacts (PDF/XLSX/BIB/MD) | all four download |
-| 9 | MCP adapter | Claude Code uses `lit_search` |
-| 10 | Auth, rate limits, deploy | public URL on TLS |
-| 11 | Retire old R MCP server | one-week dual-run |
-| 12 | Polish & post-launch (continuous) | history, share, DOI, etc. |
+| # | Phase | Gate | Status |
+|---|---|---|---|
+| 0 | Project scaffolding | repo tree boots | ✅ |
+| 1 | R sandbox foundation (`eddysearch.sandbox`) | ⚠ blocks 2–4 | ✅ |
+| 2 | AST allowlist (`check.R`) | ⚠ blocks 5 | ✅ |
+| 3 | TS sandbox runner | ⚠ blocks 5 | ✅ |
+| 4 | LLM layer + writer stage | 20-brief eyeball | ✅ |
+| 5 | **Cost benchmark + model lock-in** | 🟥 Eddy sign-off gate | ◐ informal (~5¢/search); live ZEW sign-off pending |
+| 6 | `runAgent` + SSE transport | full pipeline live | ✅ |
+| 7 | Web frontend | sibling-app feel | ✅ |
+| 8 | Downloadable artifacts (PDF/XLSX/BIB/MD) | all four download | ✅ (MVP variant: browser-print PDF) |
+| 9 | MCP adapter | Claude Code uses `lit_search` | ⏸ deferred |
+| 10 | Auth, rate limits, deploy | public URL on TLS | ◐ shared-password gate done; deploy pending |
+| 11 | Retire old R MCP server | one-week dual-run | ⏸ follows 9 |
+| 12 | Polish & post-launch (continuous) | history, share, DOI, etc. | ⏳ |
+| 13 | Blocking clarifier + one-shot toggle | pause/resume works | ✅ |
+| 14 | Multistage (single refine pass) | refine improves a weak round | ✅ |
 
-Phase 5 is the cost gate — nothing downstream commits until model picks and per-query cost are signed off. Phases 7 and 9 can run in parallel once Phase 6 exposes `runAgent`.
+Phase 5's cost gate has an informal read (~5¢/search, synthesis-dominated); a live ZEW eval + sign-off is the next checkpoint. **The next substantial agenda item is the rest of Phase 10 — deployment** (public/ZEW-reachable URL, TLS, per-IP rate limits, systemd sandbox). MCP (9) is deferred.
 
 ---
 

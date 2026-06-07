@@ -65,8 +65,9 @@ function IconMarkdown() {
 
 // Exports for a finished run. PDF is the browser's print-to-PDF over the rendered review;
 // Excel is server-rendered (exceljs) from the collected sources; BibTeX and the
-// evidence-rich Markdown are built client-side.
-export default function ArtifactsToolbar({ bibtex, synthesis, papers }) {
+// evidence-rich Markdown are built client-side. `serverExports` is false on the shared
+// read-only view, where the password-gated /export/xlsx call would 401 (08_sharelinks.md §4).
+export default function ArtifactsToolbar({ bibtex, synthesis, papers, serverExports = true }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -105,10 +106,12 @@ export default function ArtifactsToolbar({ bibtex, synthesis, papers }) {
           <IconPdf />
           PDF
         </GhostButton>
-        <GhostButton disabled={!hasSources || busy} onClick={onExcel} title="Download sources as Excel">
-          <IconExcel />
-          {busy ? "Excel…" : "Excel"}
-        </GhostButton>
+        {serverExports && (
+          <GhostButton disabled={!hasSources || busy} onClick={onExcel} title="Download sources as Excel">
+            <IconExcel />
+            {busy ? "Excel…" : "Excel"}
+          </GhostButton>
+        )}
         <GhostButton disabled={!hasBib} onClick={() => download("references.bib", bibtex.bibtex)}>
           <IconBibtex />
           BibTeX

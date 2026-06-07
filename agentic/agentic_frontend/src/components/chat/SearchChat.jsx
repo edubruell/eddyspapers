@@ -11,6 +11,7 @@ import ClarifierBubble from "./ClarifierBubble.jsx";
 import SynthesisPanel from "./SynthesisPanel.jsx";
 import SectionCard from "./SectionCard.jsx";
 import ArtifactsToolbar from "./ArtifactsToolbar.jsx";
+import ShareButton from "./ShareButton.jsx";
 
 export default function SearchChat() {
   const [brief, setBrief] = useState("");
@@ -23,6 +24,13 @@ export default function SearchChat() {
 
   const state = useAgentStream(id);
   const hasRun = id != null;
+  // The run has stopped (finished cleanly, or hit a non-recoverable error like a synth
+  // timeout) AND left something worth keeping. A long synthesis that aborts mid-write still
+  // streamed most of its review + evidence — so surface Share + exports there too, not only
+  // on a clean `done`. Early failures (no synthesis/sections) stay bare.
+  const terminal = state.done || Boolean(state.error && !state.error.recoverable);
+  const hasArtifacts =
+    terminal && (state.synthesis.length > 0 || state.sections.length > 0);
   // While paused on a clarifier question the run isn't "done" but the task box should
   // stay frozen — the user answers in the clarifier card, not the brief.
   const frozen = hasRun && !state.done && !state.error;
@@ -121,6 +129,8 @@ export default function SearchChat() {
 
       {/* right pane */}
       <section className="flex min-w-0 flex-1 flex-col gap-4">
+        {hasArtifacts && <ShareButton id={id} />}
+
         <div className="flex flex-col gap-2">
           <StageStepper stages={state.stages} />
           <ProgressLine
@@ -155,7 +165,7 @@ export default function SearchChat() {
 
         <SynthesisPanel synthesis={state.synthesis} />
 
-        {state.done && (
+        {hasArtifacts && (
           <ArtifactsToolbar bibtex={state.bibtex} synthesis={state.synthesis} papers={state.papers} />
         )}
 

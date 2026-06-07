@@ -9,6 +9,24 @@ Legend: 🟢 trivial · 🟡 medium · 🔴 hard or risky · ⏱ rough effort ·
 
 ---
 
+## Status — base product works end-to-end (2026-06-07)
+
+The full pipeline runs in production-shape locally: **clarify → write → validate → execute →
+synthesize**, streaming over SSE, with a real RePEc DuckDB behind the sandbox. A brief returns a
+synthesised review with cited evidence sections, a BibTeX bundle, and PDF / Excel / Markdown
+exports. Both optional features are live: the **blocking clarifier** (Phase 13) and the
+**single-pass refine** (Phase 14). The costly routes sit behind an optional shared password
+(part of Phase 10), in use for the ZEW preview.
+
+**Done:** Phases 0–8 (sandbox → runAgent → frontend → exports), 13 (clarifier), 14 (multistage),
+and the auth gate slice of 10. **Open / next:** live ZEW eval + cost sign-off (5/14 acceptance),
+then **deploy** (rest of Phase 10 — public URL, TLS, rate limits, systemd sandbox). **Deferred:**
+Phase 9 MCP (the web UI is enough for now), Phase 11 (retire old MCP, follows 9), Phase 12 polish.
+
+See the per-phase sections below for the granular state; this banner is the one-glance summary.
+
+---
+
 ## Phase 0 — Project scaffolding 🟡 ⏱ ½ day ✅
 
 Set up the empty repo skeleton so every later phase has somewhere to land code.
@@ -374,7 +392,11 @@ Per `01 §7.10`.
 Things that don't gate launch but should land soon after.
 
 - [ ] **History reveal** in the sidebar (`03 §10.3`), with storage budget enforcement.
-- [ ] **Share links** = same `/c/<id>` URL, read-only for visitors without the search owner key.
+- [x] **Share links** (2026-06-07, `08_sharelinks.md`) — read-only permalink served from the
+      persistent store via `GET /searches/:id` (the in-memory bus is gone after restart), replayed
+      client-side through the same reducer. Share button at the top of the results list copies
+      `/c?s=<id>`; the `/c` view is ungated with Excel hidden. Pretty `/c/<id>` form is a Phase-10
+      reverse-proxy rewrite.
 - [ ] **Dismissable banner** on the existing `frontend/` advertising "Detective mode" (`03 §10.5`).
 - [ ] **Detective meerkat artwork** ships (Eddy, manual).
 - [ ] **Paper-upload feature** (`03 §7.1`) — revisit once cost picture is stable.
@@ -385,24 +407,23 @@ Things that don't gate launch but should land soon after.
 
 ---
 
-## Phase 13 — Blocking clarifier + one-shot toggle 🟡 (design done, build pending)
+## Phase 13 — Blocking clarifier + one-shot toggle ✅ (2026-06-06)
 
-Full design in [`06_clarifier.md`](./06_clarifier.md); build order is `06 §10`. The current clarify
-stage is cosmetic (asks rarely, never blocks, discards the answer). This phase makes it a real
-pause/resume round-trip with a one-shot opt-out.
+Full design in [`06_clarifier.md`](./06_clarifier.md). The clarify stage is now a real pause/resume
+round-trip with a one-shot opt-out ("Skip clarifying questions" toggle), not the old cosmetic ask.
 
-- [ ] **Wire + types**: `clarify` stream event, `skipClarify` start-body field, `awaiting_clarification` status, `clarify_question/answer` columns + `SearchDb` methods. (`06 §4–5`)
-- [ ] **Pipeline split**: `runAgent` → `runClarifyPhase` + `runSearchPhase`; pause path persists and returns without `done`. (`06 §3`)
-- [ ] **Reply endpoint**: `POST /chat/:id/reply`; resumes `runSearchPhase` on the same bus. (`06 §4.2`)
-- [ ] **SSE pause semantics**: `bus.isDone` false while awaiting; `clarify` event replays on reconnect. (`06 §3`)
-- [ ] **Writer injection**: `<clarification>` block appended to the writer user message. (`06 §5–6`)
-- [ ] **Clarifier prompt**: soften proceed-bias when blocking is on; add ask-worthy exemplars. (`06 §6`)
-- [ ] **Frontend**: one-shot checkbox, interactive `ClarifierBubble`, reducer `clarify`/`waiting` handling, stepper "waiting" state. (`06 §7`)
-- [ ] **Expiry sweeper**: stale `awaiting_clarification` → error after 24h. (`06 §9`)
+- [x] **Wire + types**: `clarify` stream event, `skipClarify` start-body field, `awaiting_clarification` status, `clarify_question/answer` columns + `SearchDb` methods. (`06 §4–5`)
+- [x] **Pipeline split**: `runAgent` clarify phase vs search phase via `RunOpts.runClarify`; pause path persists and returns without `done`. (`06 §3`)
+- [x] **Reply endpoint**: `POST /chat/:id/reply` with atomic `recordClarifyAnswer` claim; resumes on the same bus. (`06 §4.2`)
+- [x] **SSE pause semantics**: not-done while awaiting; `clarify` event replays on reconnect. (`06 §3`)
+- [x] **Writer injection**: `<clarification>` block appended to the writer user message. (`06 §5–6`)
+- [x] **Clarifier prompt**: proceed-bias softened when blocking is on; ask-worthy exemplars added. (`06 §6`)
+- [x] **Frontend**: one-shot toggle, interactive `ClarifierBubble`, reducer `clarify`/`waiting` handling, stepper "waiting" state. (`06 §7`)
+- [ ] **Expiry sweeper**: stale `awaiting_clarification` → error after 24h. (`06 §9`) — deferred; matters only once runs are long-lived in a deployed setting (fold into Phase 10).
 
-**Acceptance:** see `06 §10` — ambiguous brief pauses for input with the box unchecked and the
-answer changes the resulting script; flows straight through with the box checked; reload-during-pause
-restores the input; MCP behaviour unchanged.
+**Acceptance:** met — ambiguous brief pauses for input with the toggle off and the answer changes
+the resulting script; flows straight through with it on; reload-during-pause restores the input.
+(Expiry sweeper is the one remaining box, parked for deploy.)
 
 ---
 
@@ -440,7 +461,7 @@ Independent of Phase 13 (composes with it: a clarified brief feeds every revise 
 | OpenRouter caching turns out flaky for the chosen model | Phase 5 | Telemetry-first benchmark; fall back to Haiku 4.5 if cache-hit < 50% |
 | Cold-start Rscript boot dominates latency | Phase 3 | Pool of long-lived R workers via `callr` (deferred until measured) |
 | AST allowlist rejects a script the model can't recover from | Phase 4 | Rejection hints (`04 §6`) + benchmark validity rate; widen allowlist surgically when justified |
-| Typst typography output not academic enough | Phase 8 | Fallback to pandoc + LaTeX class; decided after seeing real output |
+| ~~Typst typography output not academic enough~~ | Phase 8 | Moot — shipped as browser print-to-PDF (no Typst). Revisit server-rendered Typst/pandoc only if print fidelity proves insufficient |
 | DB copy race during weekly update | Phase 1 / Phase 3 | `update_repec.R` writes to a temp path then atomic-renames into the read-only path; sandbox connection retries once on `database is locked` |
 | Per-query cost exceeds target | Phase 5 | Hard ceiling at $0.05 median; if missed, shrink the cached few-shots before considering more expensive models |
 
