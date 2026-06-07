@@ -592,7 +592,8 @@ dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
     purrr::set_names() |>
     purrr::keep(~.x %in% c("articles", "saved_searches", "search_logs", "version_links",
                             "cit_all", "cit_internal", "handle_stats",
-                            "persons", "person_works", "person_stats")) |>
+                            "persons", "person_works", "person_stats",
+                            "person_wikidata")) |>
     purrr::map(export_tbl)
   
   
@@ -648,16 +649,9 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   
   # All tables we might restore
   tables <- c(
-    "articles",
-    "saved_searches",
-    "search_logs",
-    "version_links",
-    "cit_all",
-    "cit_internal",
-    "handle_stats",
-    "persons",
-    "person_works",
-    "person_stats"
+    "articles", "saved_searches", "search_logs", "version_links",
+    "cit_all", "cit_internal", "handle_stats",
+    "persons", "person_works", "person_stats", "person_wikidata"
   )
   
   pqt_paths <- file.path(pqt_folder, paste0(tables, "_", date_stamp, ".parquet"))
@@ -735,7 +729,11 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   }
   
   load_tbl("handle_stats")
-  
+  load_tbl("persons")
+  load_tbl("person_works")
+  load_tbl("person_stats")
+  load_tbl("person_wikidata")
+
   invisible(db_path)
 }
 
@@ -862,34 +860,36 @@ compute_parquet_diffs <- function(base_stamp,
                                   pqt_diff_folder = NULL,
                                   tables = c("articles", "handle_stats", "cit_all",
                                             "cit_internal", "version_links",
-                                            "persons", "person_works", "person_stats")) {
-  
+                                            "persons", "person_works", "person_stats",
+                                            "person_wikidata")) {
+
   if (is.null(pqt_folder)) {
     config <- get_folder_config()
     pqt_folder <- config$pqt_folder
   }
-  
+
   if (is.null(pqt_diff_folder)) {
     config <- get_folder_config()
     pqt_diff_folder <- config$pqt_diff_folder
   }
-  
+
   if (!dir.exists(pqt_diff_folder)) {
     dir.create(pqt_diff_folder, recursive = TRUE, showWarnings = FALSE)
   }
-  
+
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  
+
   table_keys <- list(
-    articles      = "Handle",
-    handle_stats  = "handle",
-    cit_all       = c("citing", "cited"),
-    cit_internal  = c("citing", "cited"),
-    version_links = c("source", "target", "type"),
-    persons       = "short_id",
-    person_works  = c("short_id", "work_handle"),
-    person_stats  = "short_id"
+    articles        = "Handle",
+    handle_stats    = "handle",
+    cit_all         = c("citing", "cited"),
+    cit_internal    = c("citing", "cited"),
+    version_links   = c("source", "target", "type"),
+    persons         = "short_id",
+    person_works    = c("short_id", "work_handle"),
+    person_stats    = "short_id",
+    person_wikidata = "short_id"
   )
 
   diff_files <- list()
@@ -1029,33 +1029,35 @@ apply_parquet_diffs <- function(base_stamp,
                                 pqt_diff_folder = NULL,
                                 tables = c("articles", "handle_stats", "cit_all",
                                           "cit_internal", "version_links",
-                                          "persons", "person_works", "person_stats"),
+                                          "persons", "person_works", "person_stats",
+                                          "person_wikidata"),
                                 rebuild_indices = TRUE) {
-  
+
   if (is.null(db_path)) {
     config <- get_folder_config()
     db_path <- file.path(config$db_folder, "articles.duckdb")
   }
-  
+
   if (is.null(pqt_diff_folder)) {
     config <- get_folder_config()
     pqt_diff_folder <- config$pqt_diff_folder
   }
-  
+
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db_path)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  
+
   DBI::dbExecute(con, "LOAD vss;")
-  
+
   table_keys <- list(
-    articles      = "Handle",
-    handle_stats  = "handle",
-    cit_all       = c("citing", "cited"),
-    cit_internal  = c("citing", "cited"),
-    version_links = c("source", "target", "type"),
-    persons       = "short_id",
-    person_works  = c("short_id", "work_handle"),
-    person_stats  = "short_id"
+    articles        = "Handle",
+    handle_stats    = "handle",
+    cit_all         = c("citing", "cited"),
+    cit_internal    = c("citing", "cited"),
+    version_links   = c("source", "target", "type"),
+    persons         = "short_id",
+    person_works    = c("short_id", "work_handle"),
+    person_stats    = "short_id",
+    person_wikidata = "short_id"
   )
 
 

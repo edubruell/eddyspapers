@@ -536,9 +536,16 @@ get_person_profile <- function(short_id, pool = NULL) {
 
   person <- DBI::dbGetQuery(con, "
     SELECT p.*, ps.n_works_total, ps.n_works_in_corpus, ps.total_citations,
-           ps.a_count, ps.first_year, ps.last_year, ps.primary_category
+           ps.a_count, ps.first_year, ps.last_year, ps.primary_category,
+           pw.wikidata_id, pw.wikipedia_url, pw.image_url,
+           pw.birth_year, pw.birth_place,
+           pw.citizenships, pw.educated_at, pw.doctoral_advisors,
+           pw.doctoral_students, pw.fields_of_work, pw.memberships, pw.awards,
+           pw.orcid, pw.google_scholar_id, pw.ssrn_author_id,
+           pw.math_genealogy_id, pw.website
     FROM persons p
     LEFT JOIN person_stats ps ON ps.short_id = p.short_id
+    LEFT JOIN person_wikidata pw ON pw.short_id = p.short_id
     WHERE p.short_id = ?
   ", params = list(short_id))
 
@@ -563,6 +570,30 @@ get_person_profile <- function(short_id, pool = NULL) {
     LIMIT 5
   ", params = list(short_id))
 
+  wikidata <- if (!is.na(person$wikidata_id[[1]])) {
+    list(
+      wikidata_id       = person$wikidata_id[[1]],
+      wikipedia_url     = person$wikipedia_url[[1]],
+      image_url         = person$image_url[[1]],
+      birth_year        = person$birth_year[[1]],
+      birth_place       = person$birth_place[[1]],
+      citizenships      = person$citizenships[[1]],
+      educated_at       = person$educated_at[[1]],
+      doctoral_advisors = person$doctoral_advisors[[1]],
+      doctoral_students = person$doctoral_students[[1]],
+      fields_of_work    = person$fields_of_work[[1]],
+      memberships       = person$memberships[[1]],
+      awards            = person$awards[[1]],
+      orcid             = person$orcid[[1]],
+      google_scholar_id = person$google_scholar_id[[1]],
+      ssrn_author_id    = person$ssrn_author_id[[1]],
+      math_genealogy_id = person$math_genealogy_id[[1]],
+      website           = person$website[[1]]
+    )
+  } else {
+    NULL
+  }
+
   list(
     short_id              = person$short_id[[1]],
     name_full             = person$name_full[[1]],
@@ -581,6 +612,7 @@ get_person_profile <- function(short_id, pool = NULL) {
       last_year         = person$last_year[[1]],
       primary_category  = person$primary_category[[1]]
     ),
+    wikidata           = wikidata,
     category_breakdown = cat_breakdown,
     top_journals       = top_journals
   )

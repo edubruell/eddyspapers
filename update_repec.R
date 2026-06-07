@@ -149,7 +149,17 @@ tryCatch({
   info("⚠ Person table population failed (non-fatal): ", e$message)
 })
 
-info("\n[10/10] Creating backup...")
+info("\n[10/11] Syncing Wikidata enrichment for persons...")
+tryCatch({
+  wikidata_count <- sync_wikidata_persons(
+    db_path = file.path(config$db_folder, "articles.duckdb")
+  )
+  info("✓ Wikidata sync completed for ", wikidata_count, " persons")
+}, error = function(e) {
+  info("⚠ Wikidata sync failed (non-fatal): ", e$message)
+})
+
+info("\n[11/11] Creating backup...")
 tryCatch({
   pqt_file <- dump_db_to_parquet(
     db_path = file.path(config$db_folder, "articles.duckdb"),
