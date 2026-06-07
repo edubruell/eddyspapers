@@ -225,7 +225,7 @@ After every implementation step:
 
 ---
 
-## Agentic Search (`/agentic`, in design phase)
+## Agentic Search (`/agentic`, base product working)
 
 A second product, **`agenticsearch.eduard-bruell.de`**, is being designed alongside the existing semantic search. It is a hosted, multi-turn web + MCP service that takes a natural-language brief, writes a tailored R script against the same DuckDB, runs it in a hardened sandbox, and synthesises a literature review. It is modelled on the `lit-search` Claude Code skill (`~/.claude/skills/lit-search/`) but productised so it works without filesystem assumptions.
 
@@ -245,7 +245,24 @@ A second product, **`agenticsearch.eduard-bruell.de`**, is being designed alongs
 | 07 | `agentic/07_multistage.md` | multistage feature design: results-aware re-running — assess step + bounded loop (≤3 rounds) that revises strategy when a pass underperforms; resolves 01 §9.5 (extends 01/03/04) |
 | 08 | `agentic/08_sharelinks.md` | share-links feature design: read-only `/c?s=<id>` permalink served from the persistent store (not the in-memory bus), client-side event replay, ungated view with Excel hidden (extends 01/03) |
 
-**When working on the agentic project, the lower-numbered doc wins for system decisions; the higher-numbered doc wins for surface decisions.** The numbered design docs are canonical — if you disagree with a decision there, update the doc rather than diverging in code. (06 and 07 are feature designs layered on 00–05; on conflict they defer to the docs they extend.)
+**When working on the agentic project, the lower-numbered doc wins for system decisions; the higher-numbered doc wins for surface decisions.** The numbered design docs are canonical — if you disagree with a decision there, update the doc rather than diverging in code. (06–08 are feature designs layered on 00–05; on conflict they defer to the docs they extend.)
+
+### What's been built (through 2026-06-07)
+
+The base product is functional end-to-end and was validated against real briefs.
+
+- **Core pipeline (Phases 0–8):** `clarify → write → validate → execute → synthesize`, streamed over SSE through a typed `StreamEvent` union; `runAgent` orchestrates, the writer emits an allow-listed R script run in the `eddysearch.sandbox`, and only the synth stage streams tokens. Two-phase web UI (landing → sidebar+results) with a 5-step stepper, strategy panel, evidence section cards, and `PaperCard`s.
+- **Optional per-run features:** the **blocking clarifier** (Phase 13 — a real pause/resume round-trip with a "Skip clarifying questions" toggle) and the **single refine pass** (Phase 14 — an opt-in advisor that runs one corrective/broadening pass after a weak first round; the general ≤3-round loop stays out of scope).
+- **Exports:** evidence-rich **Markdown** (review + a `Sources` section, one field row per paper), **BibTeX**, server-rendered **Excel** (`exceljs`, `POST /export/xlsx`), and **PDF** via browser print-to-PDF (no Typst/LaTeX dependency). File-type icons in the toolbar; exports surface once a run is terminal *with content* — including a long synthesis that aborts mid-write.
+- **Access gate:** optional shared password (`AGENTIC_PASSWORD`) via `requireAuth`, bound to the costly POST routes (`/chat`, `/chat/:id/reply`, `/export/*`); the SSE stream + `/searches/:id` stay open. `GET /auth/check` login probe; frontend `Gate.jsx` auto-detects whether the backend enforces it. In use for the ZEW preview (unset = open for dev).
+- **Share links (Phase 12):** read-only `/c?s=<id>` permalinks served from the **persistent** store (`GET /searches/:id`), replayed client-side through the same reducer — restart-proof, unlike the in-memory event bus. Share button at the top of the results list.
+- **Reliability fixes:** writer-stage LLM exceptions now escalate to the retry model instead of aborting on attempt 1 (the Qwen "response did not match schema" flake); synth stream timeout raised 120 s → 300 s; `.synthesis h1` heading CSS added (Tailwind preflight had left review titles looking like body text).
+
+### Next steps
+
+1. **Deployment (the rest of Phase 10) — the immediate priority.** Stand the preview up at a ZEW-reachable URL: Caddy reverse proxy + TLS for `agenticsearch.eduard-bruell.de`, per-IP rate limit + 1-concurrent-run cap (cost protection beyond the password), a **systemd sandbox slice** for the R subprocess (`01 §3.5` — the real OS-level security boundary, not yet wired), `/healthz` with DB-copy age, the clarifier 24 h expiry sweeper, and a reverse-proxy rewrite for the pretty `/c/<id>` form. Pair with a live ZEW eval + cost sign-off (Phases 5/14 acceptance). MCP (Phase 9) stays deferred.
+2. **EconPeople — the person finder (third product, design done, build pending).** A person finder for economists at `econpeople.eduard-bruell.de` ("Diogenes meerkat" branding), making the *person* the unit of search instead of the paper. Its design corpus already exists in **`econpeople/`** (`00_overview.md` vision/scope, `01_data_model.md` ingestion + tables, `02_api.md` endpoints; `03_enrichment.md` is the later Phase B). Headline capability: find authors by topic via **two-stage overlap retrieval** — a hidden paper-level semantic search rolled up to authors through `person_works` (no author-vector averaging), with matched papers shown as evidence. Built on the RePEc Author Service (`pers`) archive (~84k authors) joined to the existing corpus on `handle` (no name disambiguation for registered authors). Decided stack (`econpeople` D-3): **person endpoints extend the existing R/Plumber `eddyspapersbackend`** (shared DuckDB, max infra reuse), with a **separate** Astro/React frontend deferred (ships API-first, no MCP). Read the `econpeople/` docs before any code; a few `[OPEN]` calls remain there. This is the candidate **first fully-public** surface.
+3. **Later: fold EconPeople into Agentic Search.** Already anticipated in the econpeople design (`00_overview.md` §"how it's useful" #6): because the person tables live in the **same shared DuckDB**, the agentic sandbox can query them directly in a generated R script — so "who works on X / who could referee this" becomes available inside detective mode **via the DB, not a new API or MCP**. Sequenced after EconPeople Phase A ships standalone and the agentic product is deployed.
 
 ### Things the agentic build needs from the existing backend
 
