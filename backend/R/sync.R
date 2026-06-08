@@ -62,7 +62,7 @@ sync_repec_folder <- function(.archive, .journal = NULL,
   dest <- normalizePath(dest, winslash = "/", mustWork = FALSE)
   
   withr::with_dir(dest, {
-    args <- c("-av", "-s", "--delete", "--contimeout=20", "--exclude=*.pdf", src, "./")
+    args <- c("-av", "-s", "--delete", "--contimeout=20", "--timeout=60", "--exclude=*.pdf", src, "./")
     status <- system2(rsync_bin, args)
     if (status != 0) stop("rsync failed with status ", status)
   })
@@ -126,7 +126,7 @@ sync_repec_cpd_conf <- function(
   dest <- normalizePath(dest, winslash = "/", mustWork = FALSE)
   
   withr::with_dir(dest, {
-    args <- c("-av", "-s", "--delete", "--contimeout=20", src, "./")
+    args <- c("-av", "-s", "--delete", "--contimeout=20", "--timeout=60", src, "./")
     status <- system2(rsync_bin, args)
     if (status != 0) stop("rsync failed with status ", status)
   })
@@ -203,7 +203,7 @@ sync_repec_pers <- function(dest_root = NULL,
       "-av",
       "-s",
       "--delete",
-      "--contimeout=20",
+      "--contimeout=20", "--timeout=60",
       src,
       "./"
     )

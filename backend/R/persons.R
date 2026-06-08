@@ -516,8 +516,6 @@ search_persons <- function(query,
   end_row <- min(offset + limit, nrow(results))
   if (offset >= nrow(results)) return(tibble::tibble())
   results[(offset + 1):end_row, ]
-
-  results
 }
 
 

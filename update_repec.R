@@ -22,7 +22,7 @@ info("Data root: ", config$data_root)
 iscited_file <- get_folder_refs(config)$repec("cit","conf","iscited.txt") 
 
 
-info("\n[1/7] Syncing RePEc archives...")
+info("\n[1/11] Syncing RePEc archives...")
 tryCatch({
   sync_journals_from_csv(
     journals_csv = config$journals_csv,
@@ -41,7 +41,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[2/7] Parsing ReDIF files...")
+info("\n[2/11] Parsing ReDIF files...")
 tryCatch({
   parse_all_journals(
     repec_folder = config$repec_folder,
@@ -54,7 +54,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[3/7] Generating embeddings and updating database...")
+info("\n[3/11] Generating embeddings and updating database...")
 tryCatch({
   embed_and_populate_db(
     db_path = file.path(config$db_folder, "articles.duckdb"),
@@ -72,7 +72,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[4/7] Creating Related Works Table in Database...")
+info("\n[4/11] Creating Related Works Table in Database...")
 tryCatch({
   write_version_links_to_db(
         db_path = file.path(config$db_folder, "articles.duckdb"),
@@ -84,7 +84,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[5/7] Processing citation data...")
+info("\n[5/11] Processing citation data...")
 tryCatch({
   info("  Populating citation tables...")
   cit_result <- populate_citations(
@@ -101,7 +101,7 @@ tryCatch({
 })
 
 
-info("\n[6/10] Computing handle statistics...")
+info("\n[6/11] Computing handle statistics...")
 tryCatch({
   con <- DBI::dbConnect(
     duckdb::duckdb(),
@@ -119,7 +119,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[7/10] Syncing pers author archive...")
+info("\n[7/11] Syncing pers author archive...")
 tryCatch({
   sync_repec_pers(dest_root = config$repec_folder)
   info("✓ Pers sync completed successfully")
@@ -127,7 +127,7 @@ tryCatch({
   info("⚠ Pers sync failed (non-fatal): ", e$message)
 })
 
-info("\n[8/10] Parsing person RDF files...")
+info("\n[8/11] Parsing person RDF files...")
 tryCatch({
   parse_all_persons(
     repec_folder       = config$repec_folder,
@@ -138,7 +138,7 @@ tryCatch({
   info("⚠ Person parsing failed (non-fatal): ", e$message)
 })
 
-info("\n[9/10] Populating person tables and computing stats...")
+info("\n[9/11] Populating person tables and computing stats...")
 tryCatch({
   populate_persons(
     db_path            = file.path(config$db_folder, "articles.duckdb"),
