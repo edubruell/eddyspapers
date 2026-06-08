@@ -547,7 +547,7 @@ function(req,
              score   = round(ev_scores[[j]], 5))
       })
       r[c("short_id", "name_full", "workplace_name", "workplace_institution",
-          "homepage", "score", "overlap_weight", "n_matched", "stats", "evidence")]
+          "homepage", "image_url", "score", "overlap_weight", "n_matched", "stats", "evidence")]
     })
 
   list(
@@ -607,6 +607,37 @@ function(short_id,
     limit                  = as.integer(limit),
     offset                 = as.integer(offset)
   )
+}
+
+#* Save a person search with results and return a shareable hash
+#* @post /person/search/save
+#* @serializer json
+#* @param query:string Natural-language query
+#* @param scoring_mode:string Scoring mode used
+#* @param quality_weight:number Citation blend weight
+#* @param results:object Array of result rows
+function(req, query, scoring_mode = "breadth", quality_weight = 0.3, results = NULL) {
+  res_list <- if (is.null(results)) list() else results
+  hash <- save_person_search(
+    query         = query,
+    scoring_mode  = as.character(scoring_mode),
+    quality_weight = as.numeric(quality_weight),
+    results       = res_list
+  )
+  list(hash = hash)
+}
+
+#* Retrieve a saved person search by hash
+#* @get /person/search/<hash>
+#* @serializer json
+#* @param hash:string 8-character search hash
+function(hash) {
+  result <- get_saved_person_search(hash)
+  if (is.null(result)) {
+    list(error = "Person search not found")
+  } else {
+    result
+  }
 }
 
 #* Apply parquet diffs (admin)

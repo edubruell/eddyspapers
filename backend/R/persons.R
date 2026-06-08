@@ -500,9 +500,11 @@ search_persons <- function(query,
     SELECT p.short_id, p.name_full, p.workplace_name, p.workplace_institution,
            p.homepage,
            ps.n_works_in_corpus, ps.total_citations,
-           ps.first_year, ps.last_year, ps.primary_category
+           ps.first_year, ps.last_year, ps.primary_category,
+           pw.image_url
     FROM persons p
     LEFT JOIN person_stats ps ON ps.short_id = p.short_id
+    LEFT JOIN person_wikidata pw ON pw.short_id = p.short_id
     WHERE p.short_id IN (%s)
   ", ids_sql))
 
@@ -654,6 +656,80 @@ get_person_profile <- function(short_id, pool = NULL) {
     editorial_roles    = editorial_roles,
     category_breakdown = cat_breakdown,
     top_journals       = top_journals
+  )
+}
+
+
+ensure_saved_person_searches_table <- function(pool = NULL) {
+  if (is.null(pool)) pool <- get_api_pool()
+  con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS saved_person_searches (
+      hash          VARCHAR PRIMARY KEY,
+      query         TEXT NOT NULL,
+      scoring_mode  VARCHAR,
+      quality_weight DOUBLE,
+      results       JSON NOT NULL,
+      created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  ")
+  invisible(NULL)
+}
+
+#' Save a person search and return its hash
+#'
+#' @param query Natural-language query string
+#' @param scoring_mode Scoring mode used ("breadth", "best_match", "blended")
+#' @param quality_weight Citation blend weight used
+#' @param results List of result rows (will be serialised to JSON)
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return 8-character hash string
+#' @export
+save_person_search <- function(query, scoring_mode, quality_weight, results, pool = NULL) {
+  if (is.null(pool)) pool <- get_api_pool()
+  ensure_saved_person_searches_table(pool)
+
+  hash_input <- list(query = query, scoring_mode = scoring_mode, quality_weight = quality_weight)
+  hash <- substr(digest::digest(hash_input, algo = "xxhash64"), 1, 8)
+
+  con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
+
+  existing <- DBI::dbGetQuery(con, "SELECT hash FROM saved_person_searches WHERE hash = ?", params = list(hash))
+  if (nrow(existing) == 0) {
+    DBI::dbExecute(con, "
+      INSERT INTO saved_person_searches (hash, query, scoring_mode, quality_weight, results)
+      VALUES (?, ?, ?, ?, ?)
+    ", params = list(
+      hash, query, scoring_mode, as.numeric(quality_weight),
+      as.character(jsonlite::toJSON(results, auto_unbox = TRUE))
+    ))
+  }
+  hash
+}
+
+#' Retrieve a saved person search by hash
+#'
+#' @param hash 8-character hash from save_person_search
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return List with search metadata and results, or NULL if not found
+#' @export
+get_saved_person_search <- function(hash, pool = NULL) {
+  if (is.null(pool)) pool <- get_api_pool()
+  con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
+
+  row <- DBI::dbGetQuery(con, "SELECT * FROM saved_person_searches WHERE hash = ?", params = list(hash))
+  if (nrow(row) == 0) return(NULL)
+
+  list(
+    hash          = row$hash[[1]],
+    query         = row$query[[1]],
+    scoring_mode  = row$scoring_mode[[1]],
+    quality_weight = row$quality_weight[[1]],
+    results       = jsonlite::fromJSON(row$results[[1]], simplifyVector = FALSE),
+    created_at    = as.character(row$created_at[[1]])
   )
 }
 
