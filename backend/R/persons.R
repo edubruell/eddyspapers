@@ -22,8 +22,8 @@ post_process_person_entry <- function(entry) {
   workplace_institution <- ""
   if (!is.null(entry$workplace) && length(entry$workplace) > 0) {
     wp <- entry$workplace[[1]]
-    if (!is.null(wp$organization) && length(wp$organization) > 0)
-      workplace_name <- wp$organization[[1]]
+    if (!is.null(wp$name) && length(wp$name) > 0)
+      workplace_name <- wp$name[[1]]
     if (!is.null(wp$institution) && length(wp$institution) > 0)
       workplace_institution <- wp$institution[[1]]
   }
@@ -570,12 +570,12 @@ get_person_profile <- function(short_id, pool = NULL) {
 
   editorial_roles <- DBI::dbGetQuery(con, "
     SELECT
-      pw.work_handle                                  AS series_handle,
-      pw.work_type                                    AS role,
-      COALESCE(j.long_name, pw.work_handle)           AS series_name,
+      pw.work_handle  AS series_handle,
+      pw.work_type    AS role,
+      j.long_name     AS series_name,
       j.category
     FROM person_works pw
-    LEFT JOIN journals j ON j.series_handle = pw.work_handle
+    JOIN journals j ON j.series_handle = pw.work_handle
     WHERE pw.short_id = ?
       AND pw.work_type IN ('editor-series', 'editor-book')
     ORDER BY pw.work_type, series_name
