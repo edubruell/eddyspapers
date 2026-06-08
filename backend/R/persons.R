@@ -570,6 +570,19 @@ get_person_profile <- function(short_id, pool = NULL) {
     LIMIT 5
   ", params = list(short_id))
 
+  editorial_roles <- DBI::dbGetQuery(con, "
+    SELECT
+      pw.work_handle                                  AS series_handle,
+      pw.work_type                                    AS role,
+      COALESCE(j.long_name, pw.work_handle)           AS series_name,
+      j.category
+    FROM person_works pw
+    LEFT JOIN journals j ON j.series_handle = pw.work_handle
+    WHERE pw.short_id = ?
+      AND pw.work_type IN ('editor-series', 'editor-book')
+    ORDER BY pw.work_type, series_name
+  ", params = list(short_id))
+
   wikidata <- if (!is.na(person$wikidata_id[[1]])) {
     list(
       wikidata_id       = person$wikidata_id[[1]],
@@ -613,6 +626,7 @@ get_person_profile <- function(short_id, pool = NULL) {
       primary_category  = person$primary_category[[1]]
     ),
     wikidata           = wikidata,
+    editorial_roles    = editorial_roles,
     category_breakdown = cat_breakdown,
     top_journals       = top_journals
   )

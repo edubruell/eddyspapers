@@ -63,6 +63,9 @@ tryCatch({
     batch_size = 20,
     model = "mxbai-embed-large"
   )
+  con_j <- get_db_con(file.path(config$db_folder, "articles.duckdb"))
+  populate_journals_table(con_j, journals_csv = config$journals_csv)
+  DBI::dbDisconnect(con_j)
   info("✓ Embeddings and database updated successfully")
 }, error = function(e) {
   info("✗ Embedding/database update failed: ", e$message)

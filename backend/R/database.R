@@ -35,6 +35,31 @@ init_articles_table <- function(con) {
 }
 
 
+#' Populate journals lookup table from journals.csv
+#'
+#' Writes (or replaces) the journals table in DuckDB. Each row gets a
+#' series_handle column (repec:{archive}:{journal_code}) used to join
+#' editor-series handles from person_works.
+#'
+#' @param con DuckDB connection
+#' @param journals_csv Path to journals CSV. Defaults to config$journals_csv
+#' @return Number of rows written (invisibly)
+#' @export
+populate_journals_table <- function(con, journals_csv = NULL) {
+  if (is.null(journals_csv)) {
+    config <- get_folder_config()
+    journals_csv <- config$journals_csv
+  }
+  journals <- readr::read_csv(journals_csv, show_col_types = FALSE) |>
+    dplyr::rename(journal_code = journal) |>
+    dplyr::mutate(series_handle = paste0("repec:", archive, ":", journal_code))
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS journals")
+  DBI::dbWriteTable(con, "journals", journals, overwrite = FALSE)
+  info("✓ journals table populated with ", nrow(journals), " rows")
+  invisible(nrow(journals))
+}
+
+
 #' Get database connection
 #'
 #' Simple helper to open a connection to the articles database.
@@ -593,7 +618,7 @@ dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
     purrr::keep(~.x %in% c("articles", "saved_searches", "search_logs", "version_links",
                             "cit_all", "cit_internal", "handle_stats",
                             "persons", "person_works", "person_stats",
-                            "person_wikidata")) |>
+                            "person_wikidata", "journals")) |>
     purrr::map(export_tbl)
   
   
@@ -651,7 +676,7 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   tables <- c(
     "articles", "saved_searches", "search_logs", "version_links",
     "cit_all", "cit_internal", "handle_stats",
-    "persons", "person_works", "person_stats", "person_wikidata"
+    "persons", "person_works", "person_stats", "person_wikidata", "journals"
   )
   
   pqt_paths <- file.path(pqt_folder, paste0(tables, "_", date_stamp, ".parquet"))
@@ -729,6 +754,7 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   }
   
   load_tbl("handle_stats")
+  load_tbl("journals")
   load_tbl("persons")
   load_tbl("person_works")
   load_tbl("person_stats")
@@ -889,7 +915,8 @@ compute_parquet_diffs <- function(base_stamp,
     persons         = "short_id",
     person_works    = c("short_id", "work_handle"),
     person_stats    = "short_id",
-    person_wikidata = "short_id"
+    person_wikidata = "short_id",
+    journals        = "series_handle"
   )
 
   diff_files <- list()
@@ -1057,7 +1084,8 @@ apply_parquet_diffs <- function(base_stamp,
     persons         = "short_id",
     person_works    = c("short_id", "work_handle"),
     person_stats    = "short_id",
-    person_wikidata = "short_id"
+    person_wikidata = "short_id",
+    journals        = "series_handle"
   )
 
 
