@@ -78,3 +78,12 @@ export async function getPersonProfile(shortId) {
   await check(res);
   return res.json();
 }
+
+export async function getPersonPapers(shortId, { sortBy = "year", order = "desc", limit = 200, offset = 0 } = {}) {
+  const params = new URLSearchParams({ sort_by: sortBy, order, limit, offset });
+  const res = await fetch(`${API_BASE}/person/${encodeURIComponent(shortId)}/papers?${params}`, {
+    headers: apiHeaders(false),
+  });
+  await check(res);
+  return res.json();
+}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getPersonProfile } from "../lib/api.js";
+import { getPersonProfile, getPersonPapers } from "../lib/api.js";
 
 function formatCitations(n) {
   if (!n) return "0";
@@ -37,9 +37,27 @@ function LinkPill({ href, label, small = false }) {
 function EvidencePaper({ ev, rank }) {
   return (
     <div className="flex gap-2 items-baseline text-xs">
-      <span className="shrink-0 text-[10px] font-medium text-[var(--accent-green)] w-4 text-right">{rank}</span>
-      <span className="shrink-0 text-stone-400 w-8">{ev.year || "—"}</span>
+      <span className="shrink-0 text-[10px] font-semibold text-[var(--accent-green)] w-4 text-right">{rank}</span>
+      <span className="shrink-0 text-stone-400 w-8 tabular-nums">{ev.year || "—"}</span>
       <span className="text-stone-700 line-clamp-1 leading-snug">{ev.title || ev.handle}</span>
+    </div>
+  );
+}
+
+function CorpusPaper({ paper, i }) {
+  const cites = paper.citations ? formatCitations(paper.citations) : null;
+  return (
+    <div className="flex gap-2 items-baseline text-xs py-1 border-b border-[var(--border-soft)] last:border-0">
+      <span className="shrink-0 text-stone-400 w-8 tabular-nums">{paper.year || "—"}</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-stone-800 leading-snug line-clamp-2 font-medium">{paper.title || paper.handle}</div>
+        {paper.journal && (
+          <div className="text-stone-400 text-[10px] mt-0.5 truncate">{paper.journal}</div>
+        )}
+      </div>
+      {cites && cites !== "0" && (
+        <span className="shrink-0 text-[10px] text-stone-400 tabular-nums">{cites} cit.</span>
+      )}
     </div>
   );
 }
@@ -68,39 +86,79 @@ function AwardsList({ awards }) {
   return (
     <ul className="space-y-0.5">
       {awards.map((a, i) => (
-        <li key={i} className="text-xs text-stone-600">{a}</li>
+        <li key={i} className="text-xs text-stone-700">{a}</li>
       ))}
     </ul>
   );
 }
 
-function GenealogyLine({ advisors, students }) {
-  const hasAdvisors = advisors && advisors.length > 0;
-  const hasStudents = students && students.length > 0;
-  if (!hasAdvisors && !hasStudents) return null;
+function GenealogySection({ advisors, students, educatedAt, fieldsOfWork }) {
+  const hasAdvisors   = advisors     && advisors.length > 0;
+  const hasStudents   = students     && students.length > 0;
+  const hasEducation  = educatedAt   && educatedAt.length > 0;
+  const hasFields     = fieldsOfWork && fieldsOfWork.length > 0;
+  if (!hasAdvisors && !hasStudents && !hasEducation && !hasFields) return null;
+
   return (
-    <div className="text-xs text-stone-500 space-y-0.5">
+    <div className="space-y-2 text-xs">
+      {hasFields && (
+        <div>
+          <span className="text-stone-400 font-medium">Fields: </span>
+          <span className="text-stone-700">{fieldsOfWork.join(", ")}</span>
+        </div>
+      )}
+      {hasEducation && (
+        <div>
+          <span className="text-stone-400 font-medium">Educated at: </span>
+          <span className="text-stone-700">{educatedAt.join(", ")}</span>
+        </div>
+      )}
       {hasAdvisors && (
-        <div><span className="text-stone-400">Advisor: </span>{advisors.join(", ")}</div>
+        <div>
+          <span className="text-stone-400 font-medium">Doctoral advisor: </span>
+          <span className="text-stone-700">{advisors.join(", ")}</span>
+        </div>
       )}
       {hasStudents && (
         <div>
-          <span className="text-stone-400">Doctoral students: </span>
-          {students.slice(0, 8).join(", ")}
-          {students.length > 8 && <span className="text-stone-400"> +{students.length - 8} more</span>}
+          <span className="text-stone-400 font-medium">Doctoral students: </span>
+          <span className="text-stone-700">
+            {students.slice(0, 12).join(", ")}
+            {students.length > 12 && (
+              <span className="text-stone-400"> +{students.length - 12} more</span>
+            )}
+          </span>
         </div>
       )}
     </div>
   );
 }
 
+function PersonPhoto({ src, name, size = "sm" }) {
+  const [errored, setErrored] = useState(false);
+  if (!src || errored) return null;
+  const cls = size === "lg"
+    ? "h-20 w-20 rounded-xl object-cover shrink-0 border border-stone-200 shadow-sm"
+    : "h-12 w-12 rounded-full object-cover shrink-0 border border-stone-200";
+  return (
+    <img
+      src={src}
+      alt={name}
+      className={cls}
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 export default function PersonCard({ person }) {
-  const [expanded, setExpanded] = useState(false);
-  const [profile, setProfile] = useState(null);
+  const [expanded, setExpanded]           = useState(false);
+  const [profile, setProfile]             = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [showPapers, setShowPapers]       = useState(false);
+  const [papers, setPapers]               = useState(null);
+  const [loadingPapers, setLoadingPapers] = useState(false);
 
-  const wp = person.workplace_name || "";
-
+  const wp    = person.workplace_name || "";
   const years = sinceYear(person.stats?.first_year);
   const cites = formatCitations(person.stats?.total_citations);
   const nPapers = person.stats?.n_works_in_corpus ?? 0;
@@ -112,7 +170,7 @@ export default function PersonCard({ person }) {
         const p = await getPersonProfile(person.short_id);
         setProfile(p);
       } catch {
-        // profile stays null; expanded section shows what we have
+        // profile stays null
       } finally {
         setLoadingProfile(false);
       }
@@ -120,7 +178,25 @@ export default function PersonCard({ person }) {
     setExpanded((v) => !v);
   }
 
+  async function togglePapers() {
+    if (!showPapers && !papers) {
+      setLoadingPapers(true);
+      try {
+        const p = await getPersonPapers(person.short_id);
+        setPapers(p);
+      } catch {
+        setPapers({ in_corpus: [], counts: { in_corpus: 0 } });
+      } finally {
+        setLoadingPapers(false);
+      }
+    }
+    setShowPapers((v) => !v);
+  }
+
   const wd = profile?.wikidata;
+  // Prefer profile image (larger/fresher) over the search-result thumbnail
+  const displayImage = wd?.image_url || person.image_url;
+
   const allLinks = profile ? [
     { href: person.homepage || wd?.website, label: "Homepage" },
     { href: ideasUrl(person.short_id), label: "IDEAS" },
@@ -136,26 +212,21 @@ export default function PersonCard({ person }) {
       {/* ── Collapsed header ── */}
       <div className="p-4">
         <div className="flex gap-3">
-          {/* Photo */}
-          {person.image_url && (
-            <img
-              src={person.image_url}
-              alt={person.name_full}
-              className="h-12 w-12 rounded-full object-cover shrink-0 border border-stone-200"
-              onError={(e) => { e.target.style.display = "none"; }}
-            />
+          {/* Photo — only in collapsed when not expanded (expanded has larger version) */}
+          {!expanded && (
+            <PersonPhoto src={displayImage} name={person.name_full} size="sm" />
           )}
 
           {/* Name + workplace + stats */}
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-stone-900 leading-tight">{person.name_full}</div>
+            <div className="font-bold text-stone-900 leading-tight text-[15px]">{person.name_full}</div>
             {wp && <div className="text-xs text-stone-500 mt-0.5 truncate">{wp}</div>}
             <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[11px] text-stone-500">
               <span>{nPapers} corpus papers</span>
               {cites !== "0" && <span>{cites} citations</span>}
               {years && <span>{years}</span>}
               {person.stats?.primary_category && (
-                <span className="text-[var(--accent-green)] font-medium">{person.stats.primary_category}</span>
+                <span className="text-[var(--accent-green)] font-semibold">{person.stats.primary_category}</span>
               )}
             </div>
           </div>
@@ -188,6 +259,35 @@ export default function PersonCard({ person }) {
       {/* ── Expanded section ── */}
       {expanded && (
         <div className="border-t border-[var(--border-soft)] bg-[var(--bg-card-2)] px-4 py-4 space-y-4">
+
+          {/* Photo + bio block */}
+          {(displayImage || wd?.birth_year || wd?.birth_place) && (
+            <div className="flex gap-3 items-start">
+              <PersonPhoto src={displayImage} name={person.name_full} size="lg" />
+              <div className="space-y-1 text-xs text-stone-600">
+                {wd?.birth_year && (
+                  <div>
+                    <span className="text-stone-400 font-medium">Born: </span>
+                    {wd.birth_year}
+                    {wd.birth_place && `, ${wd.birth_place}`}
+                  </div>
+                )}
+                {wd?.citizenships && wd.citizenships.length > 0 && (
+                  <div>
+                    <span className="text-stone-400 font-medium">Nationality: </span>
+                    {wd.citizenships.join(", ")}
+                  </div>
+                )}
+                {wd?.memberships && wd.memberships.length > 0 && (
+                  <div>
+                    <span className="text-stone-400 font-medium">Member: </span>
+                    {wd.memberships.join(", ")}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Full link strip */}
           {allLinks.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -197,34 +297,40 @@ export default function PersonCard({ person }) {
             </div>
           )}
 
-          {/* Category breakdown */}
-          {profile?.category_breakdown && (
-            <div className="space-y-1">
-              <div className="text-[10px] font-semibold tracking-widest uppercase text-stone-400">Categories</div>
-              <CategoryBreakdown cats={profile.category_breakdown} />
+          {/* Academic genealogy */}
+          {(wd?.doctoral_advisors?.length > 0 || wd?.doctoral_students?.length > 0 ||
+            wd?.educated_at?.length > 0 || wd?.fields_of_work?.length > 0) && (
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Academic background</div>
+              <GenealogySection
+                advisors={wd.doctoral_advisors}
+                students={wd.doctoral_students}
+                educatedAt={wd.educated_at}
+                fieldsOfWork={wd.fields_of_work}
+              />
             </div>
           )}
 
           {/* Awards */}
           {wd?.awards && wd.awards.length > 0 && (
             <div className="space-y-1">
-              <div className="text-[10px] font-semibold tracking-widest uppercase text-stone-400">Awards</div>
+              <div className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Awards</div>
               <AwardsList awards={wd.awards} />
             </div>
           )}
 
-          {/* Academic genealogy */}
-          {(wd?.doctoral_advisors?.length > 0 || wd?.doctoral_students?.length > 0) && (
-            <div className="space-y-1">
-              <div className="text-[10px] font-semibold tracking-widest uppercase text-stone-400">Academic genealogy</div>
-              <GenealogyLine advisors={wd.doctoral_advisors} students={wd.doctoral_students} />
+          {/* Category breakdown */}
+          {profile?.category_breakdown && (
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Research areas</div>
+              <CategoryBreakdown cats={profile.category_breakdown} />
             </div>
           )}
 
-          {/* All evidence papers */}
+          {/* All matched evidence papers */}
           {person.evidence && person.evidence.length > 3 && (
             <div className="space-y-1.5">
-              <div className="text-[10px] font-semibold tracking-widest uppercase text-stone-400">
+              <div className="text-[10px] font-bold tracking-widest uppercase text-stone-400">
                 All matched papers
               </div>
               {person.evidence.map((ev, i) => (
@@ -233,15 +339,55 @@ export default function PersonCard({ person }) {
             </div>
           )}
 
-          {/* IDEAS profile link for full paper list */}
-          <a
-            href={ideasUrl(person.short_id)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-[var(--primary)] hover:underline"
-          >
-            See all {nPapers > 0 ? `${nPapers} corpus papers` : "papers"} on IDEAS →
-          </a>
+          {/* Full corpus papers — lazy-loaded expandable */}
+          {nPapers > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={togglePapers}
+                disabled={loadingPapers}
+                className="flex items-center gap-1 text-xs text-[var(--primary)] hover:underline disabled:opacity-50"
+              >
+                {loadingPapers
+                  ? "Loading papers…"
+                  : showPapers
+                  ? `Hide corpus papers ↑`
+                  : `All ${nPapers} corpus papers ↓`}
+              </button>
+
+              {showPapers && papers && (
+                <div className="mt-2 space-y-0">
+                  {papers.in_corpus.length === 0 ? (
+                    <div className="text-xs text-stone-400">No papers found.</div>
+                  ) : (
+                    papers.in_corpus.map((p, i) => (
+                      <CorpusPaper key={i} paper={p} i={i} />
+                    ))
+                  )}
+                  <a
+                    href={ideasUrl(person.short_id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-[var(--primary)] hover:underline mt-2"
+                  >
+                    Full profile on IDEAS →
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* IDEAS link when no full paper list shown */}
+          {nPapers === 0 && (
+            <a
+              href={ideasUrl(person.short_id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-[var(--primary)] hover:underline"
+            >
+              Full profile on IDEAS →
+            </a>
+          )}
         </div>
       )}
     </div>
