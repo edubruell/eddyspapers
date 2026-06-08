@@ -129,7 +129,11 @@ export default function SearchChat() {
 
       {/* right pane */}
       <section className="flex min-w-0 flex-1 flex-col gap-4">
-        {hasArtifacts && <ShareButton id={id} />}
+        {hasArtifacts && (
+          <div className="flex justify-end">
+            <ShareButton id={id} />
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <StageStepper stages={state.stages} />
