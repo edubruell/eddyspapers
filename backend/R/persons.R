@@ -374,10 +374,13 @@ compute_person_stats <- function(con) {
 #'
 #' Stage 1: HNSW vector search on articles (hidden, large K).
 #' Stage 2: roll up matched papers to authors via person_works, blend with quality signal.
+#' Version duplicates (same title, different repos) are deduplicated before scoring.
 #'
 #' @param query Natural-language search query
 #' @param k_papers Stage-1 paper pool size (default 1000)
-#' @param quality_weight Lambda for prominence blend; 0 = pure relevance (default 0.3)
+#' @param quality_weight Citation prominence blend; 0 = off, 0.3 = default
+#' @param scoring_mode How to weight relevance: "breadth" (total topic coverage, default),
+#'   "best_match" (single highest-scoring paper), or "blended" (50/50 mix)
 #' @param limit Authors to return (default 25)
 #' @param offset Pagination offset (default 0)
 #' @param filters Named list: min_year, category (character vector), institution,
@@ -389,11 +392,13 @@ compute_person_stats <- function(con) {
 search_persons <- function(query,
                            k_papers       = 1000,
                            quality_weight = 0.3,
+                           scoring_mode   = "breadth",
                            limit          = 25,
                            offset         = 0,
                            filters        = list(),
                            pool           = NULL,
                            model          = "mxbai-embed-large") {
+  scoring_mode <- match.arg(scoring_mode, c("breadth", "best_match", "blended"))
   if (is.null(pool)) pool <- get_api_pool()
 
   query_vec <- unlist(tidyllm::ollama_embedding(query, .model = model)$embeddings)
@@ -431,14 +436,13 @@ search_persons <- function(query,
   hits <- DBI::dbFetch(stmt)
   DBI::dbClearResult(stmt)
 
-  if (nrow(hits) == 0) {
-    return(tibble::tibble())
-  }
+  if (nrow(hits) == 0) return(tibble::tibble())
 
-  hits$score        <- 1 - hits$distance
-  hits$work_handle  <- tolower(hits$Handle)
+  hits$score       <- 1 - hits$distance
+  hits$work_handle <- tolower(hits$Handle)
 
   DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_person_hits")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_person_hits_dedup")
   DBI::dbExecute(con, "
     CREATE TEMP TABLE tmp_person_hits (
       work_handle VARCHAR,
@@ -451,6 +455,23 @@ search_persons <- function(query,
   DBI::dbAppendTable(con, "tmp_person_hits",
     hits[, c("work_handle", "score", "title", "journal", "year")])
 
+  # Deduplicate by normalised title so multiple repo versions of the same paper
+  # count only once (highest-scoring handle kept per title group).
+  DBI::dbExecute(con, "
+    CREATE TEMP TABLE tmp_person_hits_dedup AS
+    SELECT work_handle, score, title, journal, year
+    FROM (
+      SELECT work_handle, score, title, journal, year,
+             ROW_NUMBER() OVER (
+               PARTITION BY LOWER(TRIM(COALESCE(title, work_handle)))
+               ORDER BY score DESC
+             ) AS rn
+      FROM tmp_person_hits
+    ) t
+    WHERE rn = 1
+  ")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_person_hits")
+
   stage2_sql <- "
     SELECT pw.short_id,
            SUM(h.score)                                          AS overlap_weight,
@@ -461,13 +482,13 @@ search_persons <- function(query,
            LIST(h.journal     ORDER BY h.score DESC)[1:5]       AS evidence_journals,
            LIST(h.year        ORDER BY h.score DESC)[1:5]       AS evidence_years,
            LIST(h.score       ORDER BY h.score DESC)[1:5]       AS evidence_scores
-    FROM tmp_person_hits h
+    FROM tmp_person_hits_dedup h
     JOIN person_works pw ON pw.work_handle = h.work_handle
     GROUP BY pw.short_id
   "
 
   person_scores <- DBI::dbGetQuery(con, stage2_sql)
-  DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_person_hits")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_person_hits_dedup")
 
   if (nrow(person_scores) == 0) return(tibble::tibble())
 
@@ -503,13 +524,19 @@ search_persons <- function(query,
 
   if (nrow(results) == 0) return(tibble::tibble())
 
-  max_log_cit <- max(log1p(results$total_citations), na.rm = TRUE)
+  max_log_cit  <- max(log1p(results$total_citations), na.rm = TRUE)
+  max_overlap  <- max(results$overlap_weight,          na.rm = TRUE)
+
   results <- results |>
     dplyr::mutate(
-      quality_norm = ifelse(
-        max_log_cit > 0, log1p(total_citations) / max_log_cit, 0
-      ),
-      score = overlap_weight * (1 + quality_weight * quality_norm)
+      quality_norm  = ifelse(max_log_cit > 0, log1p(total_citations) / max_log_cit, 0),
+      quality_blend = 1 + quality_weight * quality_norm,
+      overlap_norm  = ifelse(max_overlap  > 0, overlap_weight / max_overlap, 0),
+      score = dplyr::case_when(
+        scoring_mode == "best_match" ~ best_score  * quality_blend,
+        scoring_mode == "blended"    ~ (0.5 * overlap_norm + 0.5 * best_score) * quality_blend,
+        TRUE                         ~ overlap_weight * quality_blend
+      )
     ) |>
     dplyr::arrange(dplyr::desc(score))
 

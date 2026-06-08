@@ -473,7 +473,8 @@ function(day) {
 #* @serializer json
 #* @param query:string Natural-language topic query
 #* @param k_papers:number Stage-1 paper pool size (default 1000)
-#* @param quality_weight:number Prominence blend lambda; 0 = pure relevance (default 0.3)
+#* @param quality_weight:number Citation prominence blend; 0 = off, 0.3 = default
+#* @param scoring_mode:string Relevance model: "breadth" (default), "best_match", or "blended"
 #* @param limit:number Authors to return (default 25)
 #* @param offset:number Pagination offset (default 0)
 #* @param min_year:number Restrict Stage-1 papers to this year or later
@@ -485,6 +486,7 @@ function(req,
          query,
          k_papers       = 1000,
          quality_weight = 0.3,
+         scoring_mode   = "breadth",
          limit          = 25,
          offset         = 0,
          min_year       = NULL,
@@ -496,10 +498,6 @@ function(req,
   safe_int <- function(x) {
     if (is.null(x) || length(x) == 0 || identical(x, "") || is.na(x)) NULL
     else as.integer(x)
-  }
-  safe_dbl <- function(x) {
-    if (is.null(x) || length(x) == 0 || identical(x, "") || is.na(x)) NULL
-    else as.numeric(x)
   }
 
   cats <- if (!is.null(category) && nchar(category) > 0)
@@ -518,6 +516,7 @@ function(req,
     query          = query,
     k_papers       = as.integer(k_papers),
     quality_weight = as.numeric(quality_weight),
+    scoring_mode   = as.character(scoring_mode),
     limit          = as.integer(limit),
     offset         = as.integer(offset),
     filters        = filters
@@ -552,9 +551,11 @@ function(req,
     })
 
   list(
-    query     = query,
-    n_authors = nrow(results),
-    results   = rows
+    query         = query,
+    scoring_mode  = scoring_mode,
+    quality_weight = as.numeric(quality_weight),
+    n_authors     = nrow(results),
+    results       = rows
   )
 }
 
