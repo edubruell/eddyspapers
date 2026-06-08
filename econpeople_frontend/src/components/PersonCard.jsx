@@ -92,25 +92,36 @@ function AwardsList({ awards }) {
   );
 }
 
-function GenealogySection({ advisors, students, educatedAt, fieldsOfWork }) {
-  const hasAdvisors   = advisors     && advisors.length > 0;
-  const hasStudents   = students     && students.length > 0;
-  const hasEducation  = educatedAt   && educatedAt.length > 0;
-  const hasFields     = fieldsOfWork && fieldsOfWork.length > 0;
-  if (!hasAdvisors && !hasStudents && !hasEducation && !hasFields) return null;
+const EDUCATION_PREVIEW = 3;
+const STUDENTS_PREVIEW  = 8;
+
+function GenealogySection({ advisors, students, educatedAt }) {
+  const [showAllEdu, setShowAllEdu]         = useState(false);
+  const [showAllStudents, setShowAllStudents] = useState(false);
+
+  const hasAdvisors  = advisors   && advisors.length > 0;
+  const hasStudents  = students   && students.length > 0;
+  const hasEducation = educatedAt && educatedAt.length > 0;
+  if (!hasAdvisors && !hasStudents && !hasEducation) return null;
+
+  const eduList      = showAllEdu      ? educatedAt : educatedAt?.slice(0, EDUCATION_PREVIEW);
+  const studentList  = showAllStudents ? students   : students?.slice(0, STUDENTS_PREVIEW);
 
   return (
     <div className="space-y-2 text-xs">
-      {hasFields && (
-        <div>
-          <span className="text-stone-400 font-medium">Fields: </span>
-          <span className="text-stone-700">{fieldsOfWork.join(", ")}</span>
-        </div>
-      )}
       {hasEducation && (
         <div>
           <span className="text-stone-400 font-medium">Educated at: </span>
-          <span className="text-stone-700">{educatedAt.join(", ")}</span>
+          <span className="text-stone-700">{eduList.join(", ")}</span>
+          {educatedAt.length > EDUCATION_PREVIEW && (
+            <button
+              type="button"
+              onClick={() => setShowAllEdu((v) => !v)}
+              className="ml-1 text-[var(--primary)] hover:underline"
+            >
+              {showAllEdu ? "less" : `+${educatedAt.length - EDUCATION_PREVIEW} more`}
+            </button>
+          )}
         </div>
       )}
       {hasAdvisors && (
@@ -123,9 +134,15 @@ function GenealogySection({ advisors, students, educatedAt, fieldsOfWork }) {
         <div>
           <span className="text-stone-400 font-medium">Doctoral students: </span>
           <span className="text-stone-700">
-            {students.slice(0, 12).join(", ")}
-            {students.length > 12 && (
-              <span className="text-stone-400"> +{students.length - 12} more</span>
+            {studentList.join(", ")}
+            {students.length > STUDENTS_PREVIEW && (
+              <button
+                type="button"
+                onClick={() => setShowAllStudents((v) => !v)}
+                className="ml-1 text-[var(--primary)] hover:underline"
+              >
+                {showAllStudents ? "less" : `+${students.length - STUDENTS_PREVIEW} more`}
+              </button>
             )}
           </span>
         </div>
@@ -299,14 +316,13 @@ export default function PersonCard({ person }) {
 
           {/* Academic genealogy */}
           {(wd?.doctoral_advisors?.length > 0 || wd?.doctoral_students?.length > 0 ||
-            wd?.educated_at?.length > 0 || wd?.fields_of_work?.length > 0) && (
+            wd?.educated_at?.length > 0) && (
             <div className="space-y-1.5">
               <div className="text-[10px] font-bold tracking-widest uppercase text-stone-400">Academic background</div>
               <GenealogySection
                 advisors={wd.doctoral_advisors}
                 students={wd.doctoral_students}
                 educatedAt={wd.educated_at}
-                fieldsOfWork={wd.fields_of_work}
               />
             </div>
           )}
