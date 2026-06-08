@@ -44,13 +44,27 @@ function EvidencePaper({ ev, rank }) {
   );
 }
 
-function CorpusPaper({ paper, i }) {
+function handleToIdeasUrl(handle, workType) {
+  const prefix = { paper: "p", article: "a", chapter: "h", book: "b", software: "e", "editor-book": "b", "editor-series": "s" }[workType] ?? "p";
+  const path = handle.replace(/^repec:/, "").replace(/:/g, "/");
+  return `https://ideas.repec.org/${prefix}/${path}.html`;
+}
+
+function CorpusPaper({ paper }) {
   const cites = paper.citations ? formatCitations(paper.citations) : null;
+  const href  = paper.url || handleToIdeasUrl(paper.handle, paper.work_type);
   return (
     <div className="flex gap-2 items-baseline text-xs py-1 border-b border-[var(--border-soft)] last:border-0">
       <span className="shrink-0 text-stone-400 w-8 tabular-nums">{paper.year || "—"}</span>
       <div className="flex-1 min-w-0">
-        <div className="text-stone-800 leading-snug line-clamp-2 font-medium">{paper.title || paper.handle}</div>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-stone-800 leading-snug line-clamp-2 font-medium hover:text-[var(--primary)] hover:underline"
+        >
+          {paper.title || paper.handle}
+        </a>
         {paper.journal && (
           <div className="text-stone-400 text-[10px] mt-0.5 truncate">{paper.journal}</div>
         )}
@@ -377,7 +391,7 @@ export default function PersonCard({ person }) {
                     <div className="text-xs text-stone-400">No papers found.</div>
                   ) : (
                     papers.in_corpus.map((p, i) => (
-                      <CorpusPaper key={i} paper={p} i={i} />
+                      <CorpusPaper key={i} paper={p} />
                     ))
                   )}
                   <a
