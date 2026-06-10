@@ -182,6 +182,18 @@ info("\n==== Update Complete ====")
 info("Finished at: ", Sys.time())
 info("Database: ", file.path(config$db_folder, "articles.duckdb"))
 
+info("\n==== Refresh agentic DB copy ====")
+tryCatch({
+  src <- file.path(config$db_folder, "articles.duckdb")
+  dst <- file.path(config$db_folder, "articles_agentic.duckdb")
+  file.copy(src, dst, overwrite = TRUE)
+  wal <- paste0(src, ".wal")
+  if (file.exists(wal)) file.copy(wal, paste0(dst, ".wal"), overwrite = TRUE)
+  info("✓ Agentic copy refreshed: ", dst)
+}, error = function(e) {
+  info("⚠ Agentic DB copy failed (non-fatal): ", e$message)
+})
+
 info("\n==== Create Diffs for server sync ====")
 
 info("\n[1] List available parquet dumps:")
