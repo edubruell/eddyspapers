@@ -31,6 +31,11 @@ suppressWarnings(suppressPackageStartupMessages({
   }
 }))
 
+# `.sandbox_state` is an internal package env. Under `pkgload::load_all` (dev) it
+# is visible at top level, but under an installed `library()` (prod) it is not —
+# reach it via the namespace so the bibtex tail below works in both modes.
+.sandbox_state <- getNamespace("eddysearch.sandbox")[[".sandbox_state"]]
+
 connect_db(db_path)
 
 tryCatch(
