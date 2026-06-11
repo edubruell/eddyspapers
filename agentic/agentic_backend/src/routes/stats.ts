@@ -1,7 +1,31 @@
 import { Hono } from "hono";
 import { env } from "../env.js";
+import { getSearchDb } from "../db/singleton.js";
+import { requireAuth } from "../middleware/auth.js";
 
 export const statsRoute = new Hono();
+
+// Admin telemetry for the operator's R poller (mirrors the semantic-search
+// /stats/searches contract: ?days=N window, aggregate totals). Usage data is
+// not public, so both routes sit behind requireAuth — the poller authenticates
+// with the same password as the costly POST routes (x-agentic-key or Bearer).
+statsRoute.get("/searches", requireAuth, async (c) => {
+  const days = Number(c.req.query("days") ?? "30");
+  if (!Number.isInteger(days) || days <= 0) {
+    return c.json({ error: "days must be a positive integer" }, 400);
+  }
+  const db = await getSearchDb();
+  return c.json(await db.getStats(days));
+});
+
+statsRoute.get("/dailylogs", requireAuth, async (c) => {
+  const day = c.req.query("day");
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return c.json({ error: "day=YYYY-MM-DD required" }, 400);
+  }
+  const db = await getSearchDb();
+  return c.json(await db.getDailyLogs(day));
+});
 
 // Proxies the shared semantic-search API so the browser can show the DB snapshot
 // date without ever handling the API key. Plumber wraps scalars in arrays

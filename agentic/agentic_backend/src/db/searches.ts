@@ -1,9 +1,11 @@
 import { DuckDBInstance } from "@duckdb/node-api";
 import { mkdir } from "fs/promises";
-import { join } from "path";
+import { dirname, join } from "path";
 import type { StreamEvent, AgentInput } from "../agent/types.js";
 
-const DB_PATH = join(process.cwd(), "data", "agentic", "searches.duckdb");
+// Resolved lazily (not at module load) so tests can point AGENTIC_DB_PATH at a temp file.
+const dbPath = (): string =>
+  process.env.AGENTIC_DB_PATH ?? join(process.cwd(), "data", "agentic", "searches.duckdb");
 
 export type SearchStatus = "running" | "awaiting_clarification" | "done" | "error";
 
@@ -22,6 +24,29 @@ export interface StoredSearch {
   refine: boolean;
 }
 
+// Aggregate usage telemetry for the admin poller (mirrors the semantic-search
+// /stats/searches shape: a `days` window plus totals).
+export interface SearchStats {
+  days: number;
+  total_searches: number;
+  by_status: Record<string, number>;
+  clarified: number;
+  refined: number;
+}
+
+// One row per run for the admin daily-log poller. `brief` is included because the
+// poller is the operator's own tooling — this endpoint sits behind requireAuth.
+export interface DailyLogRow {
+  id: string;
+  created_at: string;
+  status: SearchStatus;
+  brief: string;
+  refine: boolean;
+  clarified: boolean;
+  n_events: number;
+  has_synthesis: boolean;
+}
+
 export interface SearchDb {
   upsertSearch(id: string, input: AgentInput & { dbSnapshotDate: string }): Promise<void>;
   appendEvents(id: string, newEvents: StreamEvent[]): Promise<void>;
@@ -33,6 +58,8 @@ export interface SearchDb {
   // (already resumed / done) — closes the double-reply race so only one resume launches.
   recordClarifyAnswer(id: string, answer: string): Promise<boolean>;
   getSearch(id: string): Promise<StoredSearch | null>;
+  getStats(days: number): Promise<SearchStats>;
+  getDailyLogs(day: string): Promise<DailyLogRow[]>;
   close(): Promise<void>;
 }
 
@@ -44,9 +71,10 @@ async function rowsToObjects(conn: Awaited<ReturnType<DuckDBInstance["connect"]>
 }
 
 export async function openSearchDb(): Promise<SearchDb> {
-  await mkdir(join(process.cwd(), "data", "agentic"), { recursive: true });
+  const path = dbPath();
+  await mkdir(dirname(path), { recursive: true });
 
-  const instance = await DuckDBInstance.create(DB_PATH);
+  const instance = await DuckDBInstance.create(path);
   const conn = await instance.connect();
 
   await conn.run(`
@@ -140,6 +168,57 @@ export async function openSearchDb(): Promise<SearchDb> {
         clarifyAnswer: (r.clarify_answer as string | null) ?? null,
         refine: Boolean(r.refine),
       };
+    },
+
+    async getStats(days) {
+      // COUNT()/SUM() come back as BigInt from the node driver — coerce before JSON.
+      const totals = await rowsToObjects(
+        conn,
+        `SELECT
+           COUNT(*) AS total,
+           SUM(CASE WHEN clarify_question IS NOT NULL THEN 1 ELSE 0 END) AS clarified,
+           SUM(CASE WHEN refine THEN 1 ELSE 0 END) AS refined
+         FROM searches
+         WHERE created_at >= now() - to_days(CAST(? AS INTEGER))`,
+        [days],
+      );
+      const byStatus = await rowsToObjects(
+        conn,
+        `SELECT status, COUNT(*) AS n
+         FROM searches
+         WHERE created_at >= now() - to_days(CAST(? AS INTEGER))
+         GROUP BY status`,
+        [days],
+      );
+      return {
+        days,
+        total_searches: Number(totals[0]?.total ?? 0),
+        by_status: Object.fromEntries(byStatus.map((r) => [String(r.status), Number(r.n)])),
+        clarified: Number(totals[0]?.clarified ?? 0),
+        refined: Number(totals[0]?.refined ?? 0),
+      };
+    },
+
+    async getDailyLogs(day) {
+      const rows = await rowsToObjects(
+        conn,
+        `SELECT id, created_at, status, brief, refine, clarify_question, events, synthesis
+         FROM searches
+         WHERE created_at >= CAST(? AS TIMESTAMP)
+           AND created_at <  CAST(? AS TIMESTAMP) + INTERVAL 1 DAY
+         ORDER BY created_at`,
+        [day, day],
+      );
+      return rows.map((r) => ({
+        id: r.id as string,
+        created_at: String(r.created_at),
+        status: r.status as SearchStatus,
+        brief: r.brief as string,
+        refine: Boolean(r.refine),
+        clarified: r.clarify_question != null,
+        n_events: r.events ? (JSON.parse(r.events as string) as unknown[]).length : 0,
+        has_synthesis: typeof r.synthesis === "string" && r.synthesis.length > 0,
+      }));
     },
 
     async close() {

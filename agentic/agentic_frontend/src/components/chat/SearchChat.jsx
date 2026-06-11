@@ -90,11 +90,19 @@ export default function SearchChat() {
     />
   );
 
-  const dbFooter = lastUpdated ? (
+  const dbFooter = (
     <p className="mt-3 text-center text-[11px] text-stone-500">
-      Database last updated on {lastUpdated}
+      {lastUpdated && <>Database last updated on {lastUpdated} · </>}
+      <a
+        href="/faq"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline hover:text-stone-700"
+      >
+        FAQ / Imprint
+      </a>
     </p>
-  ) : null;
+  );
 
   // ── Landing state ──────────────────────────────────────────────────────────
   if (!hasRun) {

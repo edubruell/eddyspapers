@@ -1,0 +1,253 @@
+---
+layout: null
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <title>FAQ, Imprint and Data Protection - Agentic Search</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 720px;
+            margin: 40px auto;
+            padding: 0 16px;
+            line-height: 1.6;
+            color: #1f2937;
+            background: #eee7da;
+        }
+        h1, h2, h3 {
+            color: #111827;
+        }
+        details {
+            margin-bottom: 0.75rem;
+            background: #faf7f0;
+            border-radius: 0.25rem;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e2dacb;
+        }
+        summary {
+            cursor: pointer;
+            font-weight: 600;
+        }
+        small {
+            color: #6b7280;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+<img
+        src="/faq_meerkat.webp"
+        alt="Illustration of a meerkat sitting in a comfy chair and answering Q&A questions"
+        style="width: 45%; height: auto;"
+>
+
+<details open>
+    <summary>What does this site do?</summary>
+    <p>
+        You describe what you are looking for in plain language. That can be a research
+        question, a topic, or the outline of a literature section. An AI research assistant then plans a search
+        strategy, runs it against a large database of economics papers, and writes a short
+        literature review from what it finds. Every paper it mentions is shown as a card with
+        its abstract and a link to the original source.
+    </p>
+    <p>
+        A run typically takes a few minutes. You can watch the assistant work through its steps,
+        and the result can be shared via a link or exported as Markdown, BibTeX, Excel or PDF.
+    </p>
+</details>
+
+<details>
+    <summary>How is this different from the regular semantic search?</summary>
+    <p>
+        The <a href="https://econpapers.eduard-bruell.de">semantic search</a> runs a single
+        query and returns a ranked list, which is fast and great when you know roughly what you want.
+        Agentic Search is for the messier cases: it can break a brief into several searches,
+        follow citations, filter by what you asked for in plain language, and then write up what
+        it found as a structured review instead of a list.
+    </p>
+</details>
+
+<details>
+    <summary>Can I trust what the review says?</summary>
+    <p>
+        Only partly, so please read this one carefully. The review text is written by a large
+        language model, and like all such models it can <strong>hallucinate</strong>: it may
+        misread a paper from its abstract, overstate or garble a finding, or draw connections
+        that are not in the original work.
+    </p>
+    <p>
+        What you <em>can</em> rely on: the papers themselves are real. They come directly from
+        the database, every card links to the original source, and the citation data is taken
+        from RePEc, not generated.
+    </p>
+    <p>
+        Treat the review as a fast first map of a literature, not as a substitute for reading
+        the papers. Verify any claim against the linked original before you cite or repeat it.
+    </p>
+</details>
+
+<details>
+    <summary>Where does the data come from?</summary>
+    <p>
+        The paper database is built from <a href="https://repec.org">RePEc</a>, covering a
+        curated subset of roughly 250 major economics journals and working paper series with
+        abstracts and citation data. It is the same database that powers the semantic search,
+        and it is updated about once per month. Very recent papers may not be in it yet.
+    </p>
+</details>
+
+<details>
+    <summary>Why is there a password?</summary>
+    <p>
+        Each run costs real money in AI processing. While the service is in preview, access is
+        limited to invited testers. If you would like access, email
+        <a href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a>.
+    </p>
+</details>
+
+<details>
+    <summary>What is stored when I run a search?</summary>
+    <p>
+        Unlike the regular semantic search, this site stores your task description in full.
+        It has to, so that share links can replay the whole run. A run record contains:
+    </p>
+    <ul>
+        <li>The task description you typed (and any clarification answers)</li>
+        <li>The steps the assistant took and the papers it found</li>
+        <li>The generated review text</li>
+    </ul>
+    <p>
+        Anyone with the share link can see all of this, so don't put anything confidential or
+        personal in a task description. To generate the review, the task description and
+        intermediate results are also sent to external AI model providers for processing
+        (see the data protection section below).
+    </p>
+</details>
+
+<details>
+    <summary>My run failed or stopped halfway. What now?</summary>
+    <p>
+        Runs occasionally fail, usually because an AI model timed out or returned something
+        unusable. Just run the search again. If a run keeps failing on the same brief, email
+        <a href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a> with the brief text.
+    </p>
+</details>
+
+<details>
+    <summary>Who can I contact if something looks wrong?</summary>
+    <p>
+        Please send corrections, feedback or examples of bad reviews to
+        <a href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a>.
+    </p>
+</details>
+
+
+<hr />
+
+<h2>Imprint</h2>
+
+<p><strong>Responsible according to § 5 TMG</strong></p>
+
+<p>
+    Dr. Eduard Brüll<br />
+    L7, 1<br />
+    68161 Mannheim<br />
+    Germany
+</p>
+
+<p>
+    Email: <a href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a><br />
+    Phone: +49 621 1235-146
+</p>
+
+<p>
+    This is a private project. The contact details above are provided for legal requirements.
+</p>
+
+<hr />
+
+<h2>Data protection (GDPR)</h2>
+
+<h3>1. Controller</h3>
+<p>
+    The controller in terms of the General Data Protection Regulation is:
+</p>
+<p>
+    Dr. Eduard Brüll<br />
+    L7, 1<br />
+    68161 Mannheim<br />
+    Germany<br />
+    Email: <a href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a>
+</p>
+
+<h3>2. Server log files</h3>
+<p>
+    The web server automatically stores technical logs when the site is accessed. This may include:
+</p>
+<ul>
+    <li>IP address (shortened or anonymised if configured)</li>
+    <li>Date and time of request</li>
+    <li>Accessed URL</li>
+    <li>Referrer and browser information</li>
+</ul>
+<p>
+    Processing is based on Art. 6(1)(f) GDPR for technical operation and security. Logs are kept for a
+    limited time and not used for profiling.
+</p>
+
+<h3>3. Stored search runs</h3>
+<p>
+    When you start a search, the task description you enter, any clarification answers, the
+    intermediate results and the generated review are stored on the server. This storage is
+    necessary to provide the service itself, including shareable result links (Art. 6(1)(b)
+    GDPR). Run records are not linked to your name or account; do not include personal data in
+    task descriptions.
+</p>
+
+<h3>4. AI processing by third parties</h3>
+<p>
+    To generate the review, the task description and intermediate results are transmitted to
+    external large-language-model providers (via the OpenRouter API). These providers process
+    the text to produce the response; depending on the provider, processing may take place
+    outside the EU. No other data, in particular no IP address tied to the request content,
+    is shared with them. The legal basis is Art. 6(1)(b) GDPR, as this processing is what the
+    service consists of.
+</p>
+
+<h3>5. Cookies and analytics</h3>
+<p>
+    The site stores the access password locally in your browser so you do not have to re-enter
+    it. No analytics or third-party tracking tools are used.
+</p>
+
+<h3>6. Contact by email</h3>
+<p>
+    If you send an email, your message and contact details are processed to handle your request. The legal
+    basis is Art. 6(1)(b) or Art. 6(1)(f) GDPR.
+</p>
+
+<h3>7. Your rights</h3>
+<ul>
+    <li>Right of access</li>
+    <li>Right to rectification</li>
+    <li>Right to erasure</li>
+    <li>Right to restriction of processing</li>
+    <li>Right to data portability</li>
+    <li>Right to object</li>
+</ul>
+
+<h3>8. Changes to this notice</h3>
+<p>
+    This page may be updated if technical features or legal requirements change. The version shown here
+    is the current version.
+</p>
+
+<hr />
+
+
+</body>
+</html>

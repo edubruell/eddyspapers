@@ -461,6 +461,8 @@ Concrete model picks and the OpenRouter-caching constraints behind them live in 
 
 The concrete repo layout is owned by **`02_implementation_plan.md` §1–§2**. In short: a top-level `agentic/` folder alongside the existing `backend/` and `frontend/`, containing `agentic_backend/` (TypeScript + Hono, also hosts the MCP server), `agentic_frontend/` (Astro + React), and `r/` (the `eddysearch.sandbox` package + `check.R` AST allowlist + `run.R` entrypoint). Infra (systemd unit + sandbox slice + Caddy reverse proxy for `agenticsearch.eduard-bruell.de`) co-locates on the same box as the existing eddyspapers service; the sandbox slice is the only thing that needs careful systemd hardening (see §3.5).
 
+**Operator telemetry.** Two admin routes behind `requireAuth` (same password as the costly POST routes, sent as `x-agentic-key` or `Bearer`) expose run statistics from the persistent `searches` store, mirroring the semantic-search `/stats/searches` contract so the operator's existing R poller works across all three products: `GET /stats/searches?days=N` (total runs, status breakdown, clarifier/refine usage) and `GET /stats/dailylogs?day=YYYY-MM-DD` (one row per run: id, created_at, status, brief, flags, event count). The DB file path is overridable via `AGENTIC_DB_PATH` (tests, deployment). The static `/faq` page (FAQ + imprint + GDPR, including the hallucination disclaimer and the third-party LLM-processing notice) ships with the frontend and stays outside the gate.
+
 ---
 
 ## 7. Coding-agent interface (MCP)
