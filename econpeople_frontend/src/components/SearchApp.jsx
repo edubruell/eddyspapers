@@ -98,7 +98,7 @@ export default function SearchApp() {
 
   // ── Results state: sidebar + results pane ──
   return (
-    <div className="flex gap-6 items-start">
+    <div className="flex flex-col gap-6 md:flex-row md:items-start">
       {/* Sidebar */}
       <div className="hidden md:flex flex-col gap-4 w-56 shrink-0 sticky top-6">
         <button
