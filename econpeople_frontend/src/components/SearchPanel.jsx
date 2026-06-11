@@ -127,11 +127,17 @@ export default function SearchPanel({
         {loading ? "Searching…" : "Find economists"}
       </button>
 
-      {lastUpdated && !compact && (
-        <p className="text-[10px] text-stone-400 text-center">
-          Corpus updated {lastUpdated}
-        </p>
-      )}
+      <p className="text-[10px] text-stone-400 text-center">
+        {lastUpdated && !compact && <>Corpus updated {lastUpdated} · </>}
+        <a
+          href="/faq"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-stone-600"
+        >
+          FAQ / Imprint
+        </a>
+      </p>
     </div>
   );
 }
