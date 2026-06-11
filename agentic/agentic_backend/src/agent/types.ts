@@ -9,7 +9,10 @@ export interface SectionRow {
 export interface Section {
   id: string;
   title: string;
-  mode: "keyword" | "semantic" | "journal_scan" | "author" | "wp" | "editor" | "custom";
+  mode: "keyword" | "semantic" | "journal_scan" | "author" | "wp" | "editor" | "person" | "custom";
+  // "papers" (default) — rows reference Paper handles; "persons" — rows reference
+  // Person short_ids via the same `handle` field.
+  kind?: "papers" | "persons";
   query?: string;
   sql?: string;
   filters?: {
@@ -46,6 +49,32 @@ export interface Paper {
   versions?: string[];
 }
 
+export interface PersonEvidence {
+  handle: string;
+  title: string;
+  journal: string;
+  year: number;
+  score?: number;
+}
+
+export interface Person {
+  short_id: string;
+  name: string;
+  affiliation: string | null;
+  homepage: string | null;
+  image_url: string | null;
+  wikipedia_url: string | null;
+  orcid: string | null;
+  url: string;
+  n_works: number | null;
+  citations: number | null;
+  first_year: number | null;
+  last_year: number | null;
+  primary_category: string | null;
+  n_matched: number | null;
+  evidence: PersonEvidence[];
+}
+
 export type StreamEvent =
   | { type: "stage"; seq: number; stage: Stage; state: "enter" | "exit"; ms?: number }
   | { type: "assistant"; seq: number; stage: Stage; delta: string }
@@ -57,6 +86,7 @@ export type StreamEvent =
   | { type: "progress"; seq: number; label: string; current?: number; total?: number }
   | { type: "section"; seq: number; section: Section }
   | { type: "paper"; seq: number; paper: Paper }
+  | { type: "person"; seq: number; person: Person }
   | { type: "bibtex"; seq: number; entries: number; bibtex: string }
   | { type: "synthesis"; seq: number; delta: string }
   | { type: "error"; seq: number; where: Stage; message: string; recoverable: boolean }

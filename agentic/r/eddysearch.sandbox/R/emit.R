@@ -14,10 +14,20 @@ emit_note <- function(markdown) {
 
 emit_bibtex <- function(handles) {
   .sandbox_state$bibtex_handles <- unique(c(.sandbox_state$bibtex_handles, handles))
-  emit_event(list(type = "bibtex", handles = unique(.sandbox_state$bibtex_handles)))
+  # I() keeps a length-1 vector a JSON array — auto_unbox would collapse it to a
+  # scalar and the TS schema would drop the event.
+  emit_event(list(type = "bibtex", handles = I(unique(.sandbox_state$bibtex_handles))))
 }
 
-emit_section <- function(title, df, n = 25, note = NULL) {
+.section_modes <- c("keyword", "semantic", "journal_scan", "author", "wp", "editor", "custom")
+
+emit_section <- function(title, df, n = 25, note = NULL, mode = NULL) {
+  if (is.null(mode)) {
+    # Infer how the section was produced: semantic_search results carry a similarity
+    # column; plain SQL/keyword results do not.
+    mode <- if ("similarity" %in% names(df) && any(!is.na(df$similarity))) "semantic" else "keyword"
+  }
+  if (!mode %in% .section_modes) mode <- "custom"
   top_df <- head(df, n)
 
   make_paper_event <- function(row) list(
@@ -41,5 +51,60 @@ emit_section <- function(title, df, n = 25, note = NULL) {
     }
   })
 
-  emit_event(list(type = "section", title = title, handles = top_df$Handle, note = note))
+  emit_event(list(type = "section", title = title, handles = I(top_df$Handle), note = note, mode = mode))
+}
+
+emit_person_section <- function(title, df, n = 10, note = NULL) {
+  top_df <- head(df, n)
+
+  na_null <- function(x) {
+    if (is.null(x) || length(x) == 0) return(NULL)
+    x <- x[[1]]
+    if (length(x) == 1 && is.na(x)) NULL else x
+  }
+  col <- function(row, name) if (name %in% names(row)) na_null(row[[name]]) else NULL
+
+  make_evidence <- function(row) {
+    ev_cols <- c("evidence_handles", "evidence_titles", "evidence_journals",
+                 "evidence_years", "evidence_scores")
+    if (!all(ev_cols %in% names(row))) return(NULL)
+    hs <- row$evidence_handles[[1]]
+    if (is.null(hs) || length(hs) == 0) return(NULL)
+    purrr::map(seq_along(hs), function(j) list(
+      handle  = hs[[j]],
+      title   = row$evidence_titles[[1]][[j]],
+      journal = row$evidence_journals[[1]][[j]],
+      year    = row$evidence_years[[1]][[j]],
+      score   = row$evidence_scores[[1]][[j]]
+    ))
+  }
+
+  make_person_event <- function(row) list(
+    type             = "person",
+    short_id         = row$short_id[[1]],
+    name             = col(row, "name_full"),
+    affiliation      = col(row, "workplace_name"),
+    homepage         = col(row, "homepage"),
+    image_url        = col(row, "image_url"),
+    wikipedia_url    = col(row, "wikipedia_url"),
+    orcid            = col(row, "orcid"),
+    url              = person_url(row$short_id[[1]]),
+    n_works          = col(row, "n_works_in_corpus"),
+    citations        = col(row, "total_citations"),
+    first_year       = col(row, "first_year"),
+    last_year        = col(row, "last_year"),
+    primary_category = col(row, "primary_category"),
+    n_matched        = col(row, "n_matched"),
+    evidence         = make_evidence(row)
+  )
+
+  purrr::walk(seq_len(nrow(top_df)), function(i) {
+    sid <- top_df$short_id[[i]]
+    if (!sid %in% .sandbox_state$seen_persons) {
+      .sandbox_state$seen_persons <- c(.sandbox_state$seen_persons, sid)
+      emit_event(make_person_event(top_df[i, , drop = FALSE]))
+    }
+  })
+
+  emit_event(list(type = "person_section", title = title, short_ids = I(top_df$short_id), note = note))
 }

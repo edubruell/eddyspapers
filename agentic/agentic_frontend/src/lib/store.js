@@ -18,6 +18,7 @@ export function initialState() {
     refining: false,
     reviseReason: null,
     papers: {},
+    persons: {},
     sections: [],
     synthesis: "",
     bibtex: null,
@@ -72,7 +73,7 @@ export function reduceEvent(state, e) {
         reviseReason: e.reason,
         strategy: null,
         strategyPending: true,
-        ...(e.mode === "replace" ? { sections: [], papers: {}, bibtex: null } : {}),
+        ...(e.mode === "replace" ? { sections: [], papers: {}, persons: {}, bibtex: null } : {}),
       };
 
     case "strategy":
@@ -104,6 +105,12 @@ export function reduceEvent(state, e) {
       return {
         ...state,
         papers: { ...state.papers, [e.paper.handle]: e.paper },
+      };
+
+    case "person":
+      return {
+        ...state,
+        persons: { ...state.persons, [e.person.short_id]: e.person },
       };
 
     case "bibtex":

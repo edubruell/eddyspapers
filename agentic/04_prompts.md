@@ -69,6 +69,8 @@ sql_query(sql, params = list()) -> tibble
 
 The reference is the single source of truth — when the schema changes, this file changes, and every prompt automatically picks it up.
 
+Since 2026-06-11 the reference also documents the **person finder verbs** (`person_search`, `person_lookup`, `person_profile`, `person_papers`, `person_url`) and `emit_person_section` for person-finder briefs ("who works on X", referee/discussant suggestions), plus the four person tables now in the `sql_query` allowlist. The `emit_section` entry gained the optional `mode` argument that drives the colour-coded UI chips.
+
 ### 2.2 `journalCategories.ts` — the ZEW ranking, verbatim from `lit-search`
 
 The big table in `lit-search/SKILL.md` (Top 5, AEJs, Top Field A, General Interest, Second in Field B, Other, Working Paper Series) ports across **unchanged**, including the per-journal counts and the "Notes on Working Paper Series" / "Notes on General Interest" paragraphs. This is irreplaceable domain context — without it the model picks the wrong filters.
@@ -92,6 +94,8 @@ Few-shots are the most reliable way to teach a model the *shape* of a good scrip
 1. **Topic + journal-scan combo** — a keyword SQL sweep over Top 5/Field-A, plus 2 semantic sections varying the framing, plus a WP scan. Ends with `emit_bibtex(all_handles)`.
 2. **Active-authors + editor-targeting** — `sql_query` chains over `authors LIKE '%lastname%'` for a curated list of editors, plus a semantic section per editor's main area, plus a coauthor-network section using `cit_internal`. (The skill calls this Mode E.)
 3. **Single-journal exhaustive** — `journal_name = "Journal of Labor Economics"` for the semantic side, plus a brute-force `LOWER(journal) LIKE '%journal of labor economics%' AND LOWER(title) LIKE '%kw%'` SQL chain.
+
+Two more were added later: a **chained multi-step** example (ZEW WPs → version links → prestige ranking) and, since 2026-06-11, a **person-finder** example (discussant suggestions: two `person_search` passes with different scoring modes + `person_papers` on the top name as a paper section).
 
 Each example has a `### Brief` block at the top (the natural-language input it was written for) so the model learns brief → script mapping directly.
 

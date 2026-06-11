@@ -1,10 +1,13 @@
 import { z } from "zod";
 
+// R emits explicit `current: null` / `total: null` on every emit_progress() call
+// (jsonlite serializes the NULL defaults) — `.optional()` alone rejected those, silently
+// dropping every R-side progress event. Accept null and coerce to undefined.
 const rawProgressEventSchema = z.object({
   type: z.literal("progress"),
   label: z.string(),
-  current: z.number().optional(),
-  total: z.number().optional(),
+  current: z.number().nullable().optional().transform((v) => v ?? undefined),
+  total: z.number().nullable().optional().transform((v) => v ?? undefined),
 });
 
 // R emits explicit `null` (not absent) for missing fields — e.g. keyword/SQL
@@ -25,10 +28,64 @@ const rawPaperEventSchema = z.object({
   abstract: z.string().nullable().optional(),
 });
 
+const SECTION_MODES = [
+  "keyword",
+  "semantic",
+  "journal_scan",
+  "author",
+  "wp",
+  "editor",
+  "person",
+  "custom",
+] as const;
+
 const rawSectionEventSchema = z.object({
   type: z.literal("section"),
   title: z.string(),
   handles: z.array(z.string()),
+  note: z.string().nullable().optional(),
+  // emit_section() stamps how the section was produced (semantic vs keyword, or an
+  // explicit writer override). Absent on pre-mode scripts; unknown strings coerce to "custom".
+  mode: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((v) => (SECTION_MODES.includes(v as (typeof SECTION_MODES)[number]) ? (v as (typeof SECTION_MODES)[number]) : undefined)),
+});
+
+const rawPersonEvidenceSchema = z.object({
+  handle: z.string(),
+  title: z.string().nullable().optional().transform((v) => v ?? ""),
+  journal: z.string().nullable().optional().transform((v) => v ?? ""),
+  year: z.number().nullable().optional().transform((v) => v ?? 0),
+  score: z.number().nullable().optional().transform((v) => v ?? undefined),
+});
+
+// Person results carry the same null-tolerance as papers: only short_id and url are
+// guaranteed, everything else (wikidata extras, stats) may arrive as explicit null.
+const rawPersonEventSchema = z.object({
+  type: z.literal("person"),
+  short_id: z.string(),
+  name: z.string().nullable().optional().transform((v) => v ?? ""),
+  affiliation: z.string().nullable().optional(),
+  homepage: z.string().nullable().optional(),
+  image_url: z.string().nullable().optional(),
+  wikipedia_url: z.string().nullable().optional(),
+  orcid: z.string().nullable().optional(),
+  url: z.string(),
+  n_works: z.number().nullable().optional(),
+  citations: z.number().nullable().optional(),
+  first_year: z.number().nullable().optional(),
+  last_year: z.number().nullable().optional(),
+  primary_category: z.string().nullable().optional(),
+  n_matched: z.number().nullable().optional(),
+  evidence: z.array(rawPersonEvidenceSchema).nullable().optional(),
+});
+
+const rawPersonSectionEventSchema = z.object({
+  type: z.literal("person_section"),
+  title: z.string(),
+  short_ids: z.array(z.string()),
   note: z.string().nullable().optional(),
 });
 
@@ -54,6 +111,8 @@ export const rawSandboxEventSchema = z.discriminatedUnion("type", [
   rawProgressEventSchema,
   rawPaperEventSchema,
   rawSectionEventSchema,
+  rawPersonEventSchema,
+  rawPersonSectionEventSchema,
   rawBibtexEventSchema,
   rawNoteEventSchema,
   rawErrorEventSchema,
@@ -62,6 +121,8 @@ export const rawSandboxEventSchema = z.discriminatedUnion("type", [
 export type RawProgressEvent = z.infer<typeof rawProgressEventSchema>;
 export type RawPaperEvent = z.infer<typeof rawPaperEventSchema>;
 export type RawSectionEvent = z.infer<typeof rawSectionEventSchema>;
+export type RawPersonEvent = z.infer<typeof rawPersonEventSchema>;
+export type RawPersonSectionEvent = z.infer<typeof rawPersonSectionEventSchema>;
 export type RawBibtexEvent = z.infer<typeof rawBibtexEventSchema>;
 export type RawNoteEvent = z.infer<typeof rawNoteEventSchema>;
 export type RawErrorEvent = z.infer<typeof rawErrorEventSchema>;
@@ -90,6 +151,14 @@ export function isPaperEvent(e: RawSandboxEvent): e is RawPaperEvent {
 
 export function isSectionEvent(e: RawSandboxEvent): e is RawSectionEvent {
   return e.type === "section";
+}
+
+export function isPersonEvent(e: RawSandboxEvent): e is RawPersonEvent {
+  return e.type === "person";
+}
+
+export function isPersonSectionEvent(e: RawSandboxEvent): e is RawPersonSectionEvent {
+  return e.type === "person_section";
 }
 
 export function isBibtexEvent(e: RawSandboxEvent): e is RawBibtexEvent {

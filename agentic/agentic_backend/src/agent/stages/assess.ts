@@ -1,7 +1,7 @@
 import { generateStructured } from "../../llm/structured.js";
 import { models, modelIds } from "../models.js";
 import { assessorSystemMessage, assessorOutputSchema } from "../../prompts/assemble.js";
-import type { Paper, Section } from "../types.js";
+import type { Paper, Person, Section } from "../types.js";
 
 export interface ResultFlags {
   all_empty: boolean;       // zero papers across all sections
@@ -25,8 +25,10 @@ export function computeFlags(
   papers: Record<string, Paper>,
   sections: Section[],
   priorCount = 0,
+  persons: Record<string, Person> = {},
 ): ResultFlags {
-  const total = Object.keys(papers).length;
+  // Persons count as results: a person-finder brief legitimately returns zero papers.
+  const total = Object.keys(papers).length + Object.keys(persons).length;
   const nonEmptySections = sections.filter((s) => s.n_total > 0);
   const last = sections[sections.length - 1];
   return {
@@ -40,10 +42,14 @@ export function computeFlags(
 
 // Compact, cacheable result summary: section titles + counts and a tiny sample of rows.
 // Never the full papers payload (§3).
-export function summarizeResult(papers: Record<string, Paper>, sections: Section[]): string {
+export function summarizeResult(
+  papers: Record<string, Paper>,
+  sections: Section[],
+  persons: Record<string, Person> = {},
+): string {
   const sectionLines = sections.length
     ? sections
-        .map((s) => `- "${s.title}": ${s.n_total} paper(s)`)
+        .map((s) => `- "${s.title}": ${s.n_total} ${s.kind === "persons" ? "person(s)" : "paper(s)"}`)
         .join("\n")
     : "(no sections emitted)";
 
@@ -52,10 +58,20 @@ export function summarizeResult(papers: Record<string, Paper>, sections: Section
     .map((p) => `- ${p.title} (${p.journal || "?"}, ${p.year || "?"})`)
     .join("\n");
 
+  const personCount = Object.keys(persons).length;
+  const personSample = Object.values(persons)
+    .slice(0, 5)
+    .map((p) => `- ${p.name} (${p.affiliation || "?"})`)
+    .join("\n");
+  const personBlock = personCount
+    ? `\n\nDistinct persons: ${personCount}\n\nPerson sample:\n${personSample}`
+    : "";
+
   return (
     `Sections:\n${sectionLines}\n\n` +
     `Distinct papers: ${Object.keys(papers).length}\n\n` +
-    `Sample:\n${sample || "(none)"}`
+    `Sample:\n${sample || "(none)"}` +
+    personBlock
   );
 }
 
@@ -64,10 +80,11 @@ export async function assess(opts: {
   script: string;
   papers: Record<string, Paper>;
   sections: Section[];
+  persons?: Record<string, Person>;
   priorCount?: number;
 }): Promise<AssessResult | null> {
-  const flags = computeFlags(opts.papers, opts.sections, opts.priorCount ?? 0);
-  const summary = summarizeResult(opts.papers, opts.sections);
+  const flags = computeFlags(opts.papers, opts.sections, opts.priorCount ?? 0, opts.persons ?? {});
+  const summary = summarizeResult(opts.papers, opts.sections, opts.persons ?? {});
 
   const flagLine = (Object.entries(flags) as [keyof ResultFlags, boolean][])
     .map(([k, v]) => `${k}=${v}`)

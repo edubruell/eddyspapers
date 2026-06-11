@@ -102,7 +102,8 @@ ALLOWED_SANDBOX <- c(
   "connect_db",
   "semantic_search", "sql_query", "cites", "citedby", "handle_stats",
   "versions", "bib_for", "journals", "categories", "paper_url",
-  "emit_section", "emit_bibtex", "emit_note", "emit_event", "emit_progress",
+  "person_search", "person_lookup", "person_profile", "person_papers", "person_url",
+  "emit_section", "emit_person_section", "emit_bibtex", "emit_note", "emit_event", "emit_progress",
   "fmt_row", "format_results"
 )
 

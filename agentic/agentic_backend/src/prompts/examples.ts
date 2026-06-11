@@ -237,4 +237,50 @@ if (nrow(published) > 0) {
 
 emit_bibtex(all_handles)
 \`\`\`
+
+---
+
+### Brief
+Who are the leading researchers working on minimum wages right now? I need discussant
+suggestions for a paper on minimum wage employment effects in Germany.
+
+This is a **person-finder** brief: the unit of result is the researcher, not the paper. Use
+person_search + emit_person_section, then ground the top names with their actual papers.
+
+\`\`\`r
+all_handles <- character(0)
+
+# --- Section 1: people — broad coverage of the field, active recently ---
+people <- person_search(
+  "This paper estimates the employment effects of minimum wage increases using
+   administrative linked employer-employee data, exploiting regional variation in the
+   bite of the wage floor. We find wage compression at the bottom of the distribution
+   with small disemployment effects concentrated among marginal jobs.",
+  max_k = 12, scoring_mode = "breadth", active_since = 2019L
+)
+emit_person_section("Researchers active on minimum wages", people, n = 10)
+
+# --- Section 2: people — Germany-specific, sharpest single match ---
+de_people <- person_search(
+  "Using the introduction of the statutory federal minimum wage in Germany in 2015 and
+   linked employer-employee data, this paper estimates effects on employment, wages and
+   firm outcomes across regions with different wage-floor bite.",
+  max_k = 8, scoring_mode = "best_match", active_since = 2019L
+)
+emit_person_section("Best match: German minimum-wage specialists", de_people, n = 8)
+
+# --- Section 3: key published work of the top name, as paper evidence ---
+if (nrow(people) > 0) {
+  top_work <- person_papers(people$short_id[[1]], limit = 40) |>
+    filter(category != "Working Paper Series") |>
+    head(10)
+  if (nrow(top_work) > 0) {
+    emit_section(paste0("Key published work: ", people$name_full[[1]]),
+                 top_work, n = 10, mode = "author")
+    all_handles <- unique(c(all_handles, top_work$Handle))
+  }
+}
+
+emit_bibtex(all_handles)
+\`\`\`
 `;

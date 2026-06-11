@@ -1,4 +1,4 @@
-import type { StreamEvent, StreamEventPayload, Stage, AgentInput, Paper, Section } from "./types.js";
+import type { StreamEvent, StreamEventPayload, Stage, AgentInput, Paper, Person, Section } from "./types.js";
 import { clarify } from "./stages/clarify.js";
 import { writeScript } from "./stages/writeScript.js";
 import { executeScript } from "./stages/execute.js";
@@ -74,7 +74,14 @@ export async function runAgent(
   // One write → validate → execute round. Emits the stepper stage events and the live
   // strategy/paper/section/bibtex events. `revision`/`idOffset` drive the multistage refine pass.
   type RoundResult =
-    | { ok: true; script: string; papers: Record<string, Paper>; sections: Section[]; bibtex: string }
+    | {
+        ok: true;
+        script: string;
+        papers: Record<string, Paper>;
+        persons: Record<string, Person>;
+        sections: Section[];
+        bibtex: string;
+      }
     | { ok: false; message: string; recoverable: boolean };
 
   // Runs the stages and emits the stepper/result events, but does NOT terminate the run on
@@ -133,6 +140,7 @@ export async function runAgent(
       ok: true,
       script: writeResult.script,
       papers: executeResult.papers,
+      persons: executeResult.persons ?? {},
       sections: executeResult.sections,
       bibtex: executeResult.bibtex,
     };
@@ -181,6 +189,7 @@ export async function runAgent(
     }
 
     let papers = round1.papers;
+    let persons = round1.persons;
     let sections = round1.sections;
     let bibtex = round1.bibtex;
     let script = round1.script;
@@ -188,7 +197,7 @@ export async function runAgent(
     // ── Refine pass (07_multistage.md) — opt-in but MANDATORY when enabled ──────
     // The advisor always proposes one more pass; only an advisor failure (null) skips it.
     if (input.refine) {
-      const advice = await assess({ brief: input.brief, script, papers, sections });
+      const advice = await assess({ brief: input.brief, script, papers, sections, persons });
       if (advice) {
         emit({ type: "revise", reason: advice.reason, mode: advice.mode });
 
@@ -196,7 +205,7 @@ export async function runAgent(
           dbDate,
           {
             previousScript: script,
-            resultSummary: summarizeResult(papers, sections),
+            resultSummary: summarizeResult(papers, sections, persons),
             directive: advice.directive,
             mode: advice.mode,
           },
@@ -207,7 +216,10 @@ export async function runAgent(
           // augment keeps round-1 intact, so a failed refine pass degrades to the round-1
           // review with a caveat rather than throwing the good result away. replace had already
           // discarded round 1 (on the client too), so there is nothing safe to fall back to.
-          if (advice.mode === "replace" || Object.keys(papers).length === 0) {
+          if (
+            advice.mode === "replace" ||
+            (Object.keys(papers).length === 0 && Object.keys(persons).length === 0)
+          ) {
             fail(round2.message, round2.recoverable);
             return { paused: false };
           }
@@ -215,12 +227,14 @@ export async function runAgent(
         } else if (advice.mode === "replace") {
           // Discard round 1: the prior approach was wrong and was re-derived this round.
           papers = round2.papers;
+          persons = round2.persons;
           sections = round2.sections;
           bibtex = round2.bibtex;
           script = round2.script;
         } else {
           // augment: union by handle; append new sections; dedup the merged BibTeX by cite-key.
           papers = { ...papers, ...round2.papers };
+          persons = { ...persons, ...round2.persons };
           sections = [...sections, ...round2.sections];
           bibtex = mergeBibtex(bibtex, round2.bibtex);
           script = round2.script;
@@ -233,15 +247,16 @@ export async function runAgent(
     // ── Synthesize (once, over the accumulated set) ─────────────────────────────
     const tStage = stageEnter("synthesize");
     let synthesis = "";
-    if (Object.keys(papers).length === 0) {
-      emit({ type: "synthesis", delta: "_No papers were returned by the search script._" });
-      synthesis = "_No papers were returned by the search script._";
+    if (Object.keys(papers).length === 0 && Object.keys(persons).length === 0) {
+      emit({ type: "synthesis", delta: "_No results were returned by the search script._" });
+      synthesis = "_No results were returned by the search script._";
     } else {
       synthesis = await synthesize(
         input.brief,
         script,
         sections,
         papers,
+        persons,
         bibtex,
         (delta) => emit({ type: "synthesis", delta }),
       );

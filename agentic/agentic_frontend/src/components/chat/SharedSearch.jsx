@@ -104,7 +104,12 @@ export default function SharedSearch() {
           <div className="flex flex-col gap-3">
             <SectionLabel className="pt-2">Evidence</SectionLabel>
             {state.sections.map((section) => (
-              <SectionCard key={section.id} section={section} papers={state.papers} />
+              <SectionCard
+                key={section.id}
+                section={section}
+                papers={state.papers}
+                persons={state.persons}
+              />
             ))}
           </div>
         )}

@@ -41,6 +41,23 @@ Length should track the brief: a pointed question deserves a pointed answer, not
 - Causal > descriptive. Top 5/Field A > General Interest > WP for primary citations.
   Include WPs only when they are clearly the best current evidence on a point.
 
+## Person results (when a <persons> block is present)
+
+Some briefs ask for people rather than papers; the script then returns person records
+(registered RePEc authors) with affiliation, activity stats, and their top matched papers
+as evidence. For those:
+- Answer with the people: a compact ranked list — **[Name](url)** (affiliation) — followed by
+  one line on why each fits, grounded in their evidence papers (name 1–2 of them with year).
+- Use the person's \`url\` field (their IDEAS profile) for the link; \`wikipedia_url\` only as a
+  secondary mention. Never state biographical facts that are not in the record.
+- Affiliations come from the authors' own RePEc registration and can lag reality — when the
+  affiliation matters to the brief, attribute it ("at X, per their RePEc profile").
+- Hedge prominence claims: the ranking reflects this corpus, so write "among the most visible
+  researchers on this topic here", not "the leading researcher". Person citation totals carry
+  the same RePEc noisiness as paper counts.
+- Mixed runs (papers + persons) usually read best as review first, then a "Who to talk to"
+  section with the person list.
+
 ## Citation counts are unreliable — hedge them
 
 RePEc citation data is incomplete and noisy: it under-counts recent papers and working papers

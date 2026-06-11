@@ -3,10 +3,16 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { runSandbox } from "../../sandbox/runSandbox.js";
 import type { RawSandboxEvent } from "../../sandbox/events.js";
-import type { StreamEventPayload, Paper, Section } from "../types.js";
+import type { StreamEventPayload, Paper, Person, Section } from "../types.js";
 
 export type ExecuteResult =
-  | { ok: true; papers: Record<string, Paper>; sections: Section[]; bibtex: string }
+  | {
+      ok: true;
+      papers: Record<string, Paper>;
+      persons: Record<string, Person>;
+      sections: Section[];
+      bibtex: string;
+    }
   | { ok: false; message: string; timedOut: boolean };
 
 function parseAuthors(raw: string): string[] {
@@ -26,6 +32,7 @@ export async function executeScript(
   idOffset = 0,
 ): Promise<ExecuteResult> {
   const papers: Record<string, Paper> = {};
+  const persons: Record<string, Person> = {};
   const sections: Section[] = [];
   let bibtex = "";
   // Track similarity per handle from paper events (for section row assembly)
@@ -68,9 +75,51 @@ export async function executeScript(
           const section: Section = {
             id: `section-${idOffset + sections.length + 1}`,
             title: raw.title,
-            mode: "custom",
+            mode: raw.mode ?? "custom",
+            kind: "papers",
             n_total: raw.handles.length,
             n_shown: raw.handles.length,
+            rows,
+            note: raw.note ?? undefined,
+          };
+          sections.push(section);
+          onEvent({ type: "section", section });
+          break;
+        }
+
+        case "person": {
+          const person: Person = {
+            short_id: raw.short_id,
+            name: raw.name,
+            affiliation: raw.affiliation || null,
+            homepage: raw.homepage || null,
+            image_url: raw.image_url || null,
+            wikipedia_url: raw.wikipedia_url || null,
+            orcid: raw.orcid || null,
+            url: raw.url,
+            n_works: raw.n_works ?? null,
+            citations: raw.citations ?? null,
+            first_year: raw.first_year ?? null,
+            last_year: raw.last_year ?? null,
+            primary_category: raw.primary_category ?? null,
+            n_matched: raw.n_matched ?? null,
+            evidence: raw.evidence ?? [],
+          };
+          persons[raw.short_id] = person;
+          onEvent({ type: "person", person });
+          break;
+        }
+
+        case "person_section": {
+          // Person sections reuse the Section row shape; `handle` carries the short_id.
+          const rows = raw.short_ids.map((shortId, i) => ({ handle: shortId, rank: i + 1 }));
+          const section: Section = {
+            id: `section-${idOffset + sections.length + 1}`,
+            title: raw.title,
+            mode: "person",
+            kind: "persons",
+            n_total: raw.short_ids.length,
+            n_shown: raw.short_ids.length,
             rows,
             note: raw.note ?? undefined,
           };
@@ -118,7 +167,7 @@ export async function executeScript(
       };
     }
 
-    return { ok: true, papers, sections, bibtex };
+    return { ok: true, papers, persons, sections, bibtex };
   } finally {
     await unlink(tmp).catch(() => undefined);
   }

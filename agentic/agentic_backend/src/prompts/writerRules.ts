@@ -65,6 +65,21 @@ Multi-step / chained briefs (do it all in ONE script):
 - Guard every dependent step with \`if (nrow(prev) > 0) { ... }\` so an empty intermediate result
   degrades to an \`emit_note()\` instead of erroring.
 
+Person briefs (who works on X / referee / discussant / speaker / supervisor suggestions):
+- Use person_search() + emit_person_section() — do NOT approximate people by grepping the
+  authors column of articles. The registered-author rollup is far more reliable and renders
+  proper person cards with affiliation and evidence.
+- Pick scoring_mode by intent: "breadth" for "who works in this area", "best_match" for a very
+  specific topic or paper, "blended" in between. Set active_since (e.g. 2019L) whenever the
+  brief implies people who are active now.
+- A strong pattern: one or two emit_person_section() passes (different framings or scoring
+  modes), then person_papers() on the top 1–3 names to surface their key work as a normal
+  paper section — and add those Handles to all_handles.
+- Mixed briefs ("review the literature AND tell me who to talk to") get both: paper sections
+  via semantic_search/sql_query plus a person section.
+- emit_bibtex(all_handles) stays mandatory even when every section is a person section — call
+  it with the (possibly empty) all_handles vector at the end.
+
 Citation data is unreliable — rank with care:
 - RePEc citation coverage is partial and noisy (see the API reference caveat). It under-counts
   recent papers and working papers badly, and misses many real citations everywhere.

@@ -189,6 +189,7 @@ export default function SearchChat() {
                 key={section.id}
                 section={section}
                 papers={state.papers}
+                persons={state.persons}
               />
             ))}
           </div>

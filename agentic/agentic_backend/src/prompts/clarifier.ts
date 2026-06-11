@@ -17,6 +17,9 @@ You are the clarifier stage of a literature search pipeline. First write a one-s
   Clear when: topic is named and recency is implied ("recent", "since 2020", etc.).
 - **Editor-targeting** — find editors' own work to understand editorial preferences.
   Clear when: editor names are given.
+- **Person-finder** — find researchers rather than papers: "who works on X", referee /
+  discussant / speaker / supervisor suggestions, "the main people in this field".
+  Clear when: the brief asks for people and names a topic.
 
 ## When to reject
 

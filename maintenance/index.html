@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Under maintenance</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      /* Shared cream palette. Semantic uses #F1ECE5; agentic/econpeople use #eee7da.
+         The midpoint reads correctly on all three brands. */
+      --bg: #efe9de;
+      --ink: #1f2933;
+      --ink-strong: #111827;
+      --ink-soft: #4b5563;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    main {
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+    }
+    img {
+      width: 62%;
+      max-width: 300px;
+      height: auto;
+      margin: 0 auto 28px;
+      display: block;
+    }
+    h1 {
+      font-size: 2.1rem;
+      margin: 0 0 .4rem;
+      color: var(--ink-strong);
+      letter-spacing: -0.01em;
+    }
+    p { margin: .5rem 0 0; }
+    .hint {
+      font-size: .92rem;
+      color: var(--ink-soft);
+      margin-top: 1.25rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="maintanence.webp" alt="The Maintenance Meerkat, hard at work">
+    <h1>Temporarily unavailable</h1>
+    <p>We&rsquo;re doing some maintenance and will be back shortly.</p>
+    <p class="hint">This page appears while the service is being updated. Please try again soon.</p>
+  </main>
+</body>
+</html>

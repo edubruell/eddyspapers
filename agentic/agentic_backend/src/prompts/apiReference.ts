@@ -123,13 +123,89 @@ paper_url(handle, url = NULL)
 
 ---
 
+### Person finder verbs (economists, not papers)
+
+The database also holds the RePEc Author Service registry (~84k registered economists) joined
+to the paper corpus. Use these verbs when the brief asks for PEOPLE: "who works on X",
+referee / discussant / speaker / supervisor suggestions, "the main researchers in this area".
+
+person_search(query, max_k = 25, k_papers = 600, scoring_mode = "breadth", quality_weight = 0.3,
+              min_year = NULL, journal_filter = NULL, active_since = NULL, min_citations = NULL)
+  Two-stage author search: a hidden paper-level semantic search rolled up to registered
+  authors, with the matched papers kept as evidence. Returns a tibble, one row per person.
+  - query: a mock abstract of the ideal paper BY the person you want (same style as
+    semantic_search — 2–4 sentences, not keywords).
+  - max_k: persons to return (≤ 25).
+  - k_papers: hidden paper pool size (default 600; up to 1000 for broad fields).
+  - scoring_mode: "breadth" (default — rewards many matching papers, for "who works in this
+    area"), "best_match" (single closest paper, for very specific topics), "blended" (50/50).
+  - quality_weight: how much total citations boost the ranking (0 = off, 0.3 default).
+  - min_year / journal_filter: restrict the hidden paper search (same semantics as semantic_search).
+  - active_since: keep only persons whose most recent work is in or after this year, e.g. 2020L.
+    Use for "currently active" / discussant / referee briefs.
+  - min_citations: floor on a person's total citations.
+  Returns columns: short_id, name_full, workplace_name, homepage, n_matched, overlap_weight,
+  best_score, score, evidence_handles/_titles/_journals/_years/_scores (top-5 list columns),
+  n_works_in_corpus, total_citations, first_year, last_year, primary_category,
+  image_url, wikipedia_url, orcid.
+
+  Example:
+    people <- person_search(
+      "This paper estimates the labor market effects of minimum wage increases using
+       administrative linked employer-employee data and regional variation in the bite
+       of the wage floor. We find wage compression with small disemployment effects.",
+      max_k = 12, scoring_mode = "breadth", active_since = 2018L
+    )
+    emit_person_section("Researchers active on minimum wages", people, n = 10)
+
+person_lookup(name, limit = 10)
+  Resolve a (partial) name to registered persons, most-cited first.
+  Returns tibble: short_id, name_full, workplace_name, homepage, n_works_in_corpus,
+  total_citations, first_year, last_year, primary_category.
+
+person_profile(short_id)
+  One-row tibble with the full profile: identity + stats (n_works_total, n_works_in_corpus,
+  total_citations, a_count, first_year, last_year, primary_category) + Wikidata extras when
+  linked (wikipedia_url, image_url, birth_year, birth_place, citizenships, educated_at,
+  doctoral_advisors, doctoral_students, memberships, awards, orcid, google_scholar_id, website).
+  Array fields are list-columns — pluck with profile$doctoral_advisors[[1]]. Use to enrich the
+  top names or answer education/genealogy/awards questions; Wikidata fields are NA for most people.
+
+person_papers(short_id, limit = 100)
+  All in-corpus papers of a person, newest first. Returns the standard paper columns
+  (Handle, title, year, authors, journal, category, url, bib_tex, abstract) plus work_type —
+  the result drops straight into emit_section / handle_stats / bib_for.
+
+person_url(short_id)
+  IDEAS author profile URL for a short_id.
+
+The person tables are also queryable via sql_query: persons(short_id, name_full, workplace_name,
+workplace_institution, homepage), person_works(short_id, work_handle, work_type) — work_handle is
+LOWER-cased, join on LOWER(articles.Handle) —, person_stats(short_id, n_works_total,
+n_works_in_corpus, total_citations, a_count, first_year, last_year, primary_category),
+person_wikidata(short_id, image_url, wikipedia_url, orcid, doctoral_advisors, awards, ...).
+Affiliations (workplace_name) come from the authors' own RePEc registration — never infer them
+from elsewhere.
+
+---
+
 ### Output verbs
 
-emit_section(title, df, n = 25, note = NULL)
+emit_section(title, df, n = 25, note = NULL, mode = NULL)
   Emit a named result section. df must have columns: Handle, title, year, authors, journal,
   category, url (and optionally abstract, similarity). Deduplicates against already-emitted
   handles across the script run — safe to call multiple times with overlapping result sets.
   Each new paper emits a paper event; then a section event groups the handles under title.
+  mode labels the section chip in the UI: one of "semantic", "keyword", "journal_scan",
+  "author", "wp", "editor", "custom". It defaults sensibly (semantic_search results →
+  "semantic", SQL results → "keyword") — set it only when the default reads wrong, e.g.
+  mode = "author" for an author-name sweep or "journal_scan" for a single-journal pass.
+
+emit_person_section(title, df, n = 10, note = NULL)
+  Emit a section of PERSON results — df must come from person_search() (or carry its columns).
+  Each new person renders as a person card (photo, affiliation, stats, matched-paper evidence);
+  deduplicates by short_id across the run. Do NOT pass person rows to emit_section() — papers
+  and persons render as different cards.
 
 emit_bibtex(handles)
   Collect handles for BibTeX export. Call with all_handles at the end of the script.

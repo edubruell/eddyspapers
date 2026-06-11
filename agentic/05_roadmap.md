@@ -454,6 +454,40 @@ Independent of Phase 13 (composes with it: a clarified brief feeds every revise 
 
 ---
 
+## Phase 15 — EconPeople person search in detective mode ✅ (2026-06-11)
+
+The "fold EconPeople into Agentic Search" step (econpeople `00_overview.md` §"how it's useful" #6):
+the person tables live in the same shared DuckDB, so the sandbox reaches them via the DB — no new
+API, no MCP. Agentic runs can now fire person searches the same way they fire semantic searches.
+
+- [x] **Sandbox person verbs** (`person_verbs.R`): `person_search` (the EconPeople two-stage rollup
+      re-implemented as one CTE chain — read-only connection, no temp tables — with scoring modes,
+      `active_since`/`min_citations` filters and top-5 evidence list-columns), `person_lookup`,
+      `person_profile` (Wikidata enrichment for the agent), `person_papers`, `person_url`.
+- [x] **Emit + allowlists**: `emit_person_section` (dedup by short_id, `person`/`person_section`
+      raw events); person tables in the `sql_query` table allowlist; verbs in `check.R`'s
+      `ALLOWED_SANDBOX`; `emit_section` gained a `mode` argument (auto-inferred semantic/keyword).
+- [x] **Wire schema + executor**: `Person` record + `person` StreamEvent; `Section.kind`
+      (`papers`/`persons`) + `person` mode; zod raw schemas; persons threaded through
+      `runRound`/refine merge/assessor flags; `<persons>` block in the synthesiser user message;
+      person-only runs synthesise (the zero-papers guard counts persons). Also fixed: R progress
+      events with explicit `current: null` were silently dropped by the zod schema.
+- [x] **Prompts**: person verbs in `apiReference`, Person-finder mode in the clarifier, person-brief
+      rules in `writerRules`, a worked discussant-suggestion example, person guidance in the
+      synthesiser (IDEAS-linked names, RePEc-registration affiliation caveat, hedged prominence).
+- [x] **Frontend**: `PersonCard` (photo, IDEAS-linked name, affiliation, stats, evidence papers,
+      link pills), colour-coded mode chips with icons (person green / semantic blue / other grey),
+      `persons` map in the reducer + share-link replay.
+- [ ] **Eval**: person-finder briefs in the live ZEW eval alongside the Phase 5/14 acceptance runs.
+
+**Acceptance:** the worked example brief ("discussant suggestions for a German minimum-wage paper")
+run end-to-end against the live DB returns person sections (Neumark/Dube/Caliendo/Dustmann-grade
+names with evidence), a paper section of the top name's published work, and a synthesis that lists
+people with IDEAS links. Sandbox-runner leg verified 2026-06-11 via `run.R` against
+`articles_agentic.duckdb`; full pipeline (writer → synthesis) pending the live eval.
+
+---
+
 ## Cross-cutting risks to watch
 
 | Risk | Surfaces in | Mitigation |

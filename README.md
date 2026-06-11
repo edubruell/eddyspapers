@@ -18,6 +18,10 @@ multi-turn assistant that turns a plain-language research brief into a tailored 
 It writes and runs R queries against the same DuckDB in a hardened sandbox, streams its reasoning
 live, and synthesises the result. See [Agentic Search](#agentic-search) below.
 
+A third product, **EconPeople**, makes the *person* the unit of search instead of the paper:
+find economists by topic, joined from the RePEc Author Service archive onto the same corpus. See
+[EconPeople](#econpeople) below.
+
 ## Project Structure
 
 ```text
@@ -47,6 +51,9 @@ eddyspaperui/
 │   ├── agentic_frontend/    # Astro + React chat-style UI
 │   ├── r/                   # eddysearch.sandbox R package (the verbs the agent calls)
 │   └── 00–07_*.md           # Canonical design docs (architecture, prompts, roadmap, features)
+├── econpeople/              # EconPeople (person finder): design docs + assets
+│   └── 00–03_*.md           # Vision, data model, API surface, profile tiers
+├── econpeople_frontend/     # EconPeople Astro + React web interface
 ├── data/                    # Data storage (not in repo)
 │   ├── RePEc/               # Downloaded archives
 │   ├── rds_archivep/        # Parsed RDF data
@@ -160,6 +167,49 @@ npm run dev
 
 Design decisions are canonical in the numbered docs under `agentic/` (`00_overview.md` →
 `07_multistage.md`).
+
+## EconPeople
+
+**EconPeople** (branding: the "Diogenes meerkat") is a third product whose unit of search is the
+**person** rather than the paper. It finds economists by topic or natural-language query ("who
+works on monetary policy in commodity-exporting economies?"). It is built on the RePEc Author
+Service (`pers`) archive of ~88k registered authors, ingested into the **same** DuckDB and joined
+to the existing corpus on `handle`, so each author's papers, citations and impact stats are
+*joined in* from tables already maintained (no data duplicated, no name disambiguation for
+registered authors).
+
+### Two-stage overlap retrieval
+
+The headline capability does **not** average each author into a single vector (that would blend an
+author's separate research lines together). Instead:
+
+1. Run a large *hidden* paper-level semantic search (the existing base-eddyspapers vector search).
+2. Roll the matched papers up to their authors via `person_works` and rank authors by weighted
+   overlap.
+
+An author's automation papers surface them for "automation" and their democracy papers for
+"democracy" (same person, no blending), and the matched papers are returned as **evidence** for
+why each author ranked.
+
+### Architecture & endpoints
+
+Per design decision **D-3**, EconPeople ships **API-first**: the person endpoints **extend the
+existing R/Plumber `eddyspapersbackend`** (shared DuckDB, maximum infra reuse) rather than a new
+service. It adds the person tables `persons`, `person_works`, `person_stats`, `person_wikidata`
+alongside the existing ones. A separate Astro + React frontend lives in `econpeople_frontend/`.
+
+- `POST /person/search`: topic to ranked authors with matched-paper evidence (the headline).
+- `GET /person/{short_id}`: author profile.
+- `GET /person/{short_id}/papers`: full expandable publication list.
+- `GET /person/lookup?name=...`: name search / autocomplete.
+- `GET /person/stats/searches`, `GET /person/dailylogs`: admin telemetry (mirrors the
+  paper-search logging machinery).
+
+The person verbs are also exposed inside **Agentic Search** (`person_search`, `person_lookup`,
+`person_profile`, `person_papers`), so a brief can target people as well as papers.
+
+Design decisions are canonical in the numbered docs under `econpeople/` (`00_overview.md` →
+`03_profile_tiers.md`).
 
 ## Requirements
 

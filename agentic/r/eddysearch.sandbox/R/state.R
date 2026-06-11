@@ -2,4 +2,5 @@
 .sandbox_state$con <- NULL
 .sandbox_state$fd3 <- NULL
 .sandbox_state$seen_handles <- character(0)
+.sandbox_state$seen_persons <- character(0)
 .sandbox_state$bibtex_handles <- character(0)

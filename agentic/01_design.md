@@ -67,8 +67,16 @@ Pre-attached. Exposes:
 - `cites(handle, limit = 50)`, `citedby(handle, limit = 50)`, `handle_stats(handles)`, `versions(handle)`, `bib_for(handles)` → tibbles.
 - `journals()`, `categories()` → reference tibbles so the model can discover values without guessing.
 
+**Person verbs** (EconPeople integration, added 2026-06-11 — the person tables live in the same DuckDB, so detective mode reaches them via the DB, not a new API):
+- `person_search(query, max_k = 25, k_papers = 600, scoring_mode, quality_weight, min_year, journal_filter, active_since, min_citations)` → tibble — the EconPeople two-stage rollup (hidden paper-level HNSW search → `person_works` → registered authors) re-implemented as a single CTE chain because the sandbox connection is read-only (no temp tables). Returns one row per person with top-5 evidence papers as list-columns plus stats and Wikidata extras (image, Wikipedia URL, ORCID).
+- `person_lookup(name, limit = 10)` — resolve a (partial) name to short_ids, citation-sorted.
+- `person_profile(short_id)` — one-row tibble incl. Wikidata enrichment (education, advisors/students, awards, links) for agent inspection.
+- `person_papers(short_id, limit = 100)` — a person's in-corpus papers with the standard paper columns; chains into `emit_section`/`handle_stats`/`bib_for`.
+- `person_url(short_id)` — IDEAS author profile URL.
+
 **Output verbs** (replace `cat(file=…)` / `writeLines` entirely)
-- `emit_section(title, df, n = 25, note = NULL)` — appends a labelled result section to the in-memory report buffer.
+- `emit_section(title, df, n = 25, note = NULL, mode = NULL)` — appends a labelled result section to the in-memory report buffer. `mode` stamps how the section was produced for the UI chip (`semantic`/`keyword`/`journal_scan`/`author`/`wp`/`editor`/`custom`); defaults by inference (similarity column present → `semantic`, else `keyword`).
+- `emit_person_section(title, df, n = 10, note = NULL)` — the person counterpart: emits `person` events (deduped by short_id) + a `person_section` raw event; renders as person cards.
 - `emit_bibtex(handles)` — accumulates handles for a final BibTeX bundle.
 - `emit_note(markdown)` — free-form markdown commentary between sections.
 
@@ -174,7 +182,7 @@ Connection is `read_only = TRUE` against a snapshot file.
    - Top-level statement must be `SELECT_NODE` or `SET_OPERATION_NODE` (UNION/INTERSECT/EXCEPT over SELECTs).
    - Reject any `ATTACH`, `COPY`, `EXPORT`, `IMPORT`, `INSTALL`, `LOAD`, `PRAGMA`, `CALL`, `CREATE`, `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `VACUUM`, `CHECKPOINT`.
    - Walk function-call nodes; reject any function whose name matches `read_csv*`, `read_parquet*`, `read_json*`, `read_blob`, `glob`, `parquet_*`, `sniff_csv`, `sql_auto_complete`, `query_table`, anything in the `httpfs`, `aws`, `azure`, `iceberg` schemas, plus `system`, `getvariable`, `setvariable`.
-   - Reject references to tables outside the allowed schema (`articles`, `cit_all`, `cit_internal`, `handle_stats`, `journals`, `version_links`, `bib_coupling`, plus any views we publish).
+   - Reject references to tables outside the allowed schema (`articles`, `cit_all`, `cit_internal`, `handle_stats`, `journals`, `version_links`, `bib_coupling`, plus the EconPeople person tables `persons`, `person_works`, `person_stats`, `person_wikidata`, plus any views we publish).
 3. If no `LIMIT` clause is present in the outermost SELECT, inject `LIMIT 5000` before execution.
 4. Set `SET statement_timeout = '15s'` for the session.
 
@@ -254,6 +262,7 @@ type StreamEvent =
   | { type: "progress";    seq: number; label: string; current?: number; total?: number }
   | { type: "section";     seq: number; section: Section }                 // a completed result block
   | { type: "paper";       seq: number; paper: Paper }                     // canonical record, one per handle
+  | { type: "person";      seq: number; person: Person }                   // canonical person record, one per short_id (person-finder runs)
   | { type: "bibtex";      seq: number; entries: number; bibtex: string }
   | { type: "synthesis";   seq: number; delta: string }                    // alias of assistant during synthesize, kept separate for clarity
   | { type: "error";       seq: number; where: Stage; message: string; recoverable: boolean }
@@ -268,7 +277,8 @@ type Stage = "clarify" | "write" | "validate" | "execute" | "synthesize";
 interface Section {
   id: string;                       // "kw-1", "sem-2", "wp", "authors-johnson"
   title: string;                    // "Bureaucratic quality — keyword sweep"
-  mode: "keyword" | "semantic" | "journal_scan" | "author" | "wp" | "editor" | "custom";
+  mode: "keyword" | "semantic" | "journal_scan" | "author" | "wp" | "editor" | "person" | "custom";
+  kind?: "papers" | "persons";      // "persons" → rows[].handle carries a Person short_id instead of a paper handle
   query?: string;                   // semantic query prose, if any
   sql?: string;                     // raw SQL, if any (already validated)
   filters?: {
@@ -307,6 +317,24 @@ interface Paper {
     cites_by_year?: { year: number; n: number }[];
   };
   versions?: string[];              // sibling handles (preprint ↔ published)
+}
+
+interface Person {                  // person-finder runs (EconPeople integration, 2026-06-11)
+  short_id: string;                 // canonical key — RePEc Author Service short id ("pne16")
+  name: string;
+  affiliation: string | null;       // workplace_name from the author's own RePEc registration
+  homepage: string | null;
+  image_url: string | null;         // Wikidata photo, when linked
+  wikipedia_url: string | null;
+  orcid: string | null;
+  url: string;                      // IDEAS author profile
+  n_works: number | null;           // in-corpus works
+  citations: number | null;
+  first_year: number | null;
+  last_year: number | null;
+  primary_category: string | null;
+  n_matched: number | null;         // matched papers in the hidden stage-1 pool
+  evidence: { handle: string; title: string; journal: string; year: number; score?: number }[];
 }
 ```
 
