@@ -418,7 +418,8 @@ ensure_search_logs_table <- function(pool = NULL) {
   }
   
   con <- pool::poolCheckout(pool)
-  
+  on.exit(pool::poolReturn(con), add = TRUE)
+
   DBI::dbExecute(con, "
     CREATE TABLE IF NOT EXISTS search_logs (
       search_id INTEGER PRIMARY KEY,
@@ -439,8 +440,7 @@ ensure_search_logs_table <- function(pool = NULL) {
   DBI::dbExecute(con, "
     CREATE SEQUENCE IF NOT EXISTS search_logs_seq START 1
   ")
-  
-  pool::poolReturn(con)
+
   invisible(NULL)
 }
 
@@ -471,6 +471,7 @@ log_search <- function (ip,
   
   ensure_search_logs_table(pool)
   con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
   search_id <- DBI::dbGetQuery(con, "SELECT nextval('search_logs_seq') as id")$id
   
   has_year <- if (!is.null(filter_flags)) 
@@ -501,11 +502,10 @@ log_search <- function (ip,
     list(character(0))
   }
   DBI::dbExecute(con, "\n    INSERT INTO search_logs \n      (search_id, ip, query_hash, result_count, top3_handles,\n       has_year_filter, has_journal_filter, has_journal_name_filter,\n       has_title_keyword, has_author_keyword, response_time_ms)\n    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n  ", 
-                 params = list(search_id, ip, query_hash, result_count, 
-                               handles_list, has_year, has_journal_filter, has_journal_name, 
+                 params = list(search_id, ip, query_hash, result_count,
+                               handles_list, has_year, has_journal_filter, has_journal_name,
                                has_title_keyword, has_author_keyword, response_time_ms))
   DBI::dbExecute(con, "CHECKPOINT;")
-  pool::poolReturn(con)
   search_id
 }
 
@@ -587,6 +587,190 @@ get_search_logs_day <- function(day, pool = NULL) {
     "
     SELECT *
     FROM search_logs
+    WHERE timestamp >= ?::TIMESTAMP
+      AND timestamp <  (?::TIMESTAMP + INTERVAL 1 DAY)
+    ORDER BY timestamp
+    ",
+    params = list(day, day)
+  )
+}
+
+#' Ensure person search logs table exists
+#'
+#' Creates the person_search_logs table if it doesn't exist.
+#'
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return NULL invisibly
+#' @export
+ensure_person_search_logs_table <- function(pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+
+  con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
+
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS person_search_logs (
+      search_id INTEGER PRIMARY KEY,
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ip VARCHAR,
+      query_hash VARCHAR(8),
+      result_count INTEGER,
+      top3_short_ids VARCHAR[],
+      scoring_mode VARCHAR,
+      has_min_year BOOLEAN,
+      has_category BOOLEAN,
+      has_institution BOOLEAN,
+      has_active_since BOOLEAN,
+      has_min_citations BOOLEAN,
+      response_time_ms INTEGER
+    )
+  ")
+
+  DBI::dbExecute(con, "
+    CREATE SEQUENCE IF NOT EXISTS person_search_logs_seq START 1
+  ")
+
+  invisible(NULL)
+}
+
+#' Log person search query
+#'
+#' Logs a person search with IP, filters, and top result short_ids.
+#'
+#' @param ip Client IP address
+#' @param query_hash Hash of the query
+#' @param result_count Number of authors returned
+#' @param top3_short_ids Vector of top 3 author short_ids
+#' @param scoring_mode Scoring mode used
+#' @param filter_flags Named list of filter presence flags
+#' @param response_time_ms Response time in milliseconds
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Search log ID
+#' @export
+log_person_search <- function(ip,
+                              query_hash,
+                              result_count,
+                              top3_short_ids = NULL,
+                              scoring_mode = NULL,
+                              filter_flags = NULL,
+                              response_time_ms = NULL,
+                              pool = NULL) {
+
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+
+  ensure_person_search_logs_table(pool)
+  con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
+  search_id <- DBI::dbGetQuery(con, "SELECT nextval('person_search_logs_seq') as id")$id
+
+  flag <- function(name) {
+    isTRUE(filter_flags[[name]])
+  }
+
+  ids_list <- if (!is.null(top3_short_ids) && length(top3_short_ids) > 0) {
+    list(top3_short_ids[1:min(3, length(top3_short_ids))])
+  } else {
+    list(character(0))
+  }
+
+  DBI::dbExecute(con, "
+    INSERT INTO person_search_logs
+      (search_id, ip, query_hash, result_count, top3_short_ids, scoring_mode,
+       has_min_year, has_category, has_institution, has_active_since,
+       has_min_citations, response_time_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ",
+  params = list(search_id, ip, query_hash, result_count,
+                ids_list, scoring_mode,
+                flag("has_min_year"), flag("has_category"), flag("has_institution"),
+                flag("has_active_since"), flag("has_min_citations"), response_time_ms))
+  DBI::dbExecute(con, "CHECKPOINT;")
+  search_id
+}
+
+#' Get person search log statistics
+#'
+#' Returns aggregated statistics from person search logs.
+#'
+#' @param days Number of days to include (default 30)
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return List with various statistics
+#' @export
+get_person_search_stats <- function(days = 30, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+
+  con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
+
+  ensure_person_search_logs_table(pool)
+
+  cutoff <- format(Sys.time() - days * 86400, "%Y-%m-%d %H:%M:%S")
+
+  totals <- DBI::dbGetQuery(con, sprintf("
+    SELECT
+      COUNT(*) as total,
+      AVG(result_count) as avg_results,
+      AVG(response_time_ms) as avg_ms
+    FROM person_search_logs
+    WHERE timestamp >= '%s'
+  ", cutoff))
+
+  scoring_modes <- DBI::dbGetQuery(con, sprintf("
+    SELECT scoring_mode, COUNT(*) as n
+    FROM person_search_logs
+    WHERE timestamp >= '%s'
+    GROUP BY scoring_mode
+    ORDER BY n DESC
+  ", cutoff))
+
+  filter_usage <- DBI::dbGetQuery(con, sprintf("
+    SELECT
+      SUM(CASE WHEN has_min_year THEN 1 ELSE 0 END) as min_year_filters,
+      SUM(CASE WHEN has_category THEN 1 ELSE 0 END) as category_filters,
+      SUM(CASE WHEN has_institution THEN 1 ELSE 0 END) as institution_filters,
+      SUM(CASE WHEN has_active_since THEN 1 ELSE 0 END) as active_since_filters,
+      SUM(CASE WHEN has_min_citations THEN 1 ELSE 0 END) as min_citations_filters
+    FROM person_search_logs
+    WHERE timestamp >= '%s'
+  ", cutoff))
+
+  list(
+    days = days,
+    total_searches = totals$total,
+    avg_results = totals$avg_results,
+    avg_response_ms = totals$avg_ms,
+    scoring_modes = scoring_modes,
+    filter_usage = filter_usage
+  )
+}
+
+#' Get raw person search log entries for a single day
+#'
+#' @param day Date string YYYY-MM-DD
+#' @param pool Database pool. Defaults to get_api_pool()
+#' @return Tibble of raw log rows
+#' @export
+get_person_search_logs_day <- function(day, pool = NULL) {
+  if (is.null(pool)) {
+    pool <- get_api_pool()
+  }
+
+  con <- pool::poolCheckout(pool)
+  on.exit(pool::poolReturn(con), add = TRUE)
+
+  ensure_person_search_logs_table(pool)
+
+  DBI::dbGetQuery(
+    con,
+    "
+    SELECT *
+    FROM person_search_logs
     WHERE timestamp >= ?::TIMESTAMP
       AND timestamp <  (?::TIMESTAMP + INTERVAL 1 DAY)
     ORDER BY timestamp

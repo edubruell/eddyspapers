@@ -132,15 +132,18 @@ function(req,
     has_author_keyword = !is.null(author_keyword) && nchar(author_keyword) > 0
   )
   
-  log_search(
-    ip                = get_client_ip(req),
-    query_hash        = query_hash,
-    result_count      = nrow(res),
-    top3_handles      = top3_handles,
-    filter_flags      = filter_flags,
-    response_time_ms  = response_time_ms
+  tryCatch(
+    log_search(
+      ip                = get_client_ip(req),
+      query_hash        = query_hash,
+      result_count      = nrow(res),
+      top3_handles      = top3_handles,
+      filter_flags      = filter_flags,
+      response_time_ms  = response_time_ms
+    ),
+    error = function(e) NULL
   )
-  
+
   res
 }
 
@@ -217,15 +220,18 @@ function(req,
     has_author_keyword = !is.null(author_keyword) && nchar(author_keyword) > 0
   )
   
-  log_search(
-    ip                = get_client_ip(req),
-    query_hash        = hash,
-    result_count      = nrow(res),
-    top3_handles      = top3_handles,
-    filter_flags      = filter_flags,
-    response_time_ms  = response_time_ms
+  tryCatch(
+    log_search(
+      ip                = get_client_ip(req),
+      query_hash        = hash,
+      result_count      = nrow(res),
+      top3_handles      = top3_handles,
+      filter_flags      = filter_flags,
+      response_time_ms  = response_time_ms
+    ),
+    error = function(e) NULL
   )
-  
+
   list(
     hash = hash,
     results = res
@@ -250,8 +256,13 @@ NULL
 #* @serializer json
 #* @apiResponse 200 {object} SearchStats Aggregated search statistics
 #* @param days:number Number of days to include
-function(days = 30) {
-  get_search_stats(days = as.integer(days))
+function(res, days = 30) {
+  days <- suppressWarnings(as.integer(days))
+  if (is.na(days) || days <= 0) {
+    res$status <- 400
+    return(list(error = "days must be a positive integer"))
+  }
+  get_search_stats(days = days)
 }
 
 
@@ -468,6 +479,42 @@ function(day) {
 
 # ---- Person finder endpoints ----
 
+#* @schema PersonSearchStats
+#* @property days integer Number of days included
+#* @property total_searches integer Total number of person searches
+#* @property avg_results number Average number of authors returned
+#* @property avg_response_ms number Average response time in milliseconds
+#* @property scoring_modes array Counts per scoring mode
+#* @property filter_usage object Breakdown of filter usage counts
+#* @property filter_usage.min_year_filters integer
+#* @property filter_usage.category_filters integer
+#* @property filter_usage.institution_filters integer
+#* @property filter_usage.active_since_filters integer
+#* @property filter_usage.min_citations_filters integer
+NULL
+
+#* Get person search log statistics
+#* @get /person/stats/searches
+#* @serializer json
+#* @apiResponse 200 {object} PersonSearchStats Aggregated person search statistics
+#* @param days:number Number of days to include
+function(res, days = 30) {
+  days <- suppressWarnings(as.integer(days))
+  if (is.na(days) || days <= 0) {
+    res$status <- 400
+    return(list(error = "days must be a positive integer"))
+  }
+  get_person_search_stats(days = days)
+}
+
+#* Get raw person search logs for a day (admin)
+#* @get /person/dailylogs
+#* @param day YYYY-MM-DD
+function(day) {
+  stopifnot(!is.null(day))
+  get_person_search_logs_day(day)
+}
+
 #* Find authors by topic (two-stage overlap retrieval)
 #* @post /person/search
 #* @serializer json
@@ -494,6 +541,8 @@ function(req,
          institution    = NULL,
          active_since   = NULL,
          min_citations  = NULL) {
+
+  start_time <- Sys.time()
 
   safe_int <- function(x) {
     if (is.null(x) || length(x) == 0 || identical(x, "") || is.na(x)) NULL
@@ -549,6 +598,35 @@ function(req,
       r[c("short_id", "name_full", "workplace_name", "workplace_institution",
           "homepage", "image_url", "score", "overlap_weight", "n_matched", "stats", "evidence")]
     })
+
+  response_time_ms <- as.numeric(difftime(Sys.time(), start_time, units = "secs")) * 1000
+
+  query_hash <- substr(digest::digest(
+    list(query = query, scoring_mode = scoring_mode,
+         quality_weight = quality_weight, filters = filters),
+    algo = "xxhash64"
+  ), 1, 8)
+
+  top3_short_ids <- if (nrow(results) > 0) results$short_id[1:min(3, nrow(results))] else NULL
+
+  tryCatch(
+    log_person_search(
+      ip               = get_client_ip(req),
+      query_hash       = query_hash,
+      result_count     = nrow(results),
+      top3_short_ids   = top3_short_ids,
+      scoring_mode     = as.character(scoring_mode),
+      filter_flags     = list(
+        has_min_year      = !is.null(filters$min_year),
+        has_category      = !is.null(filters$category),
+        has_institution   = !is.null(filters$institution) && nchar(filters$institution) > 0,
+        has_active_since  = !is.null(filters$active_since),
+        has_min_citations = !is.null(filters$min_citations)
+      ),
+      response_time_ms = response_time_ms
+    ),
+    error = function(e) NULL
+  )
 
   list(
     query         = query,

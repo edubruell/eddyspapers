@@ -177,8 +177,8 @@ extract_cidr <- function(ripe_data) {
 get_stats_from_api <- function(days=1){
   request("https://econpapers.eduard-bruell.de/api/stats/searches") |>
     req_url_query(days = days) |>
-    req_headers("X-API-Key" = Sys.getenv("EDDYPAPERS_API_KEY")) |> 
-    req_perform() |> 
+    req_headers("X-API-Key" = Sys.getenv("EDDYPAPERS_API_KEY")) |>
+    req_perform() |>
     resp_body_json()
 }
 
@@ -191,6 +191,49 @@ get_day_tibble_from_api <- function(day = lubridate::today()){
     purrr::map_dfr(tibble::as_tibble) |>
     dplyr::mutate(top3_handles = purrr::map_chr(top3_handles,1),
                   day = day)
+}
+
+# EconPeople person-search stats (same backend, /person/* routes)
+get_person_stats_from_api <- function(days = 1){
+  request("https://econpapers.eduard-bruell.de/api/person/stats/searches") |>
+    req_url_query(days = days) |>
+    req_headers("X-API-Key" = Sys.getenv("EDDYPAPERS_API_KEY")) |>
+    req_perform() |>
+    resp_body_json()
+}
+
+get_person_day_tibble_from_api <- function(day = lubridate::today()){
+  request("https://econpapers.eduard-bruell.de/api/person/dailylogs") |>
+    req_url_query(day = day) |>
+    req_headers("X-API-Key" = Sys.getenv("EDDYPAPERS_API_KEY")) |>
+    req_perform() |>
+    resp_body_json() |>
+    purrr::map_dfr(tibble::as_tibble) |>
+    dplyr::mutate(top3_short_ids = purrr::map_chr(top3_short_ids, 1, .default = NA_character_),
+                  day = day)
+}
+
+# Agentic search run stats (separate Hono backend; auth via AGENTIC_PASSWORD)
+get_agentic_stats_from_api <- function(days = 1,
+                                       base = Sys.getenv("AGENTIC_API_BASE", "https://agenticsearch.eduard-bruell.de")){
+  request(base) |>
+    req_url_path_append("stats", "searches") |>
+    req_url_query(days = days) |>
+    req_headers("x-agentic-key" = Sys.getenv("AGENTIC_PASSWORD")) |>
+    req_perform() |>
+    resp_body_json()
+}
+
+get_agentic_day_tibble_from_api <- function(day = lubridate::today(),
+                                            base = Sys.getenv("AGENTIC_API_BASE", "https://agenticsearch.eduard-bruell.de")){
+  request(base) |>
+    req_url_path_append("stats", "dailylogs") |>
+    req_url_query(day = day) |>
+    req_headers("x-agentic-key" = Sys.getenv("AGENTIC_PASSWORD")) |>
+    req_perform() |>
+    resp_body_json() |>
+    purrr::map_dfr(tibble::as_tibble) |>
+    dplyr::mutate(day = day)
 }
 
 

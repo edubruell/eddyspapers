@@ -138,6 +138,20 @@ Fast prefix/fuzzy lookup over `persons` by name for "I know who I want." Returns
 (the classic "which J. Smith?" — now resolved by `short_id`). Backs a typeahead
 later; usable directly now.
 
+## 4b. Telemetry — `GET /person/stats/searches` + `GET /person/dailylogs` (admin)
+
+Mirrors the paper-search logging machinery one-to-one. Every `POST /person/search`
+writes a row to `person_search_logs` (IP, 8-char query hash — never the query
+text, result count, top-3 `short_id`s, scoring mode, filter flags, response time;
+the write is wrapped in `tryCatch` so a logging failure can't fail the search).
+`GET /person/stats/searches?days=N` returns aggregates (`total_searches`,
+`avg_results`, `avg_response_ms`, per-`scoring_mode` counts, filter usage);
+`GET /person/dailylogs?day=YYYY-MM-DD` returns the raw rows for one day. Both sit
+behind the global `X-API-Key` filter and are defined *before* the dynamic
+`/person/<short_id>` route so plumber's in-order matching can't shadow them.
+Polled by `get_person_stats_from_api()` / `get_person_day_tibble_from_api()` in
+`get_stats_from_api.R`.
+
 ## 5. `GET /person/{short_id}/similar` — authors with similar work *(v1.1)*
 
 "Researchers like this one," by *research* not coauthorship. Reuses the same
