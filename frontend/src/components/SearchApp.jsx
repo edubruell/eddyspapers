@@ -184,6 +184,18 @@ export default function SearchApp() {
     }
 
     return (
+        <>
+        <div className="text-center text-xs text-stone-600 mb-3">
+            Check out the new semantic economist search on{" "}
+            <a
+                href="https://econpeople.eduard-bruell.de"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline hover:text-stone-800"
+            >
+                econpeople.eduard-bruell.de
+            </a>
+        </div>
         <div
             className={
                 hasSearched
@@ -257,6 +269,7 @@ export default function SearchApp() {
 
 
         </div>
+        </>
     );
 }
 

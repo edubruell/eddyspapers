@@ -5,11 +5,17 @@ import PersonResults from "./PersonResults.jsx";
 
 function Logo({ compact = false }) {
   return (
-    <img
-      src="/logo_econpeople.png"
-      alt="Econ People — Economist Search by Eduard Brüll"
-      className={compact ? "h-auto w-full" : "h-auto w-full max-w-[340px]"}
-    />
+    <a
+      href="https://www.eduard-bruell.de/"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <img
+        src="/logo_econpeople.png"
+        alt="Econ People — Economist Search by Eduard Brüll"
+        className={compact ? "h-auto w-full" : "h-auto w-full max-w-[340px]"}
+      />
+    </a>
   );
 }
 
