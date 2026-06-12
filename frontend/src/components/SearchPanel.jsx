@@ -72,14 +72,23 @@ export default function SearchPanel({
                 <button
                     type="button"
                     onClick={() => setShowAdvanced(v => !v)}
+                    aria-expanded={showAdvanced}
                     className="
-            text-xs text-stone-600 rounded-md border border-r-2 border-b-2
-            border-stone-600 flex items-center gap-2 pl-3 pr-2 py-1
+            self-start flex items-center gap-1.5 py-1
+            text-xs font-semibold text-stone-600 hover:text-stone-800
           "
                 >
-          <span className="text-[20px] leading-none">
-            {showAdvanced ? "▼" : "►"}
-          </span>
+                    <svg
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? "rotate-90" : ""}`}
+                    >
+                        <path d="M6 4l4 4-4 4" />
+                    </svg>
                     {showAdvanced ? "Hide advanced filters" : "Show advanced filters"}
                 </button>
 
@@ -163,7 +172,7 @@ export default function SearchPanel({
             </div>
 
             {/* Fixed action row */}
-            <div className="pt-3 mt-3 border-t border-stone-300 bg-white/80 flex flex-col gap-2">
+            <div className="pt-3 mt-3 border-t border-stone-300 flex flex-col gap-2">
                 <div className="flex justify-end">
                     <button
                         onClick={onSearch}
