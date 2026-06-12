@@ -64,6 +64,18 @@ emit_person_section <- function(title, df, n = 10, note = NULL) {
   }
   col <- function(row, name) if (name %in% names(row)) na_null(row[[name]]) else NULL
 
+  # List-column cells (citizenships, advisors, students, ...) must stay JSON arrays:
+  # I() blocks auto_unbox from collapsing a length-1 vector to a scalar.
+  arr_col <- function(row, name) {
+    if (!name %in% names(row)) return(NULL)
+    x <- row[[name]]
+    if (is.null(x) || length(x) == 0) return(NULL)
+    x <- x[[1]]
+    x <- x[!is.na(x)]
+    if (length(x) == 0) return(NULL)
+    I(x)
+  }
+
   make_evidence <- function(row) {
     ev_cols <- c("evidence_handles", "evidence_titles", "evidence_journals",
                  "evidence_years", "evidence_scores")
@@ -95,6 +107,18 @@ emit_person_section <- function(title, df, n = 10, note = NULL) {
     last_year        = col(row, "last_year"),
     primary_category = col(row, "primary_category"),
     n_matched        = col(row, "n_matched"),
+    birth_year        = col(row, "birth_year"),
+    birth_place       = col(row, "birth_place"),
+    citizenships      = arr_col(row, "citizenships"),
+    educated_at       = arr_col(row, "educated_at"),
+    doctoral_advisors = arr_col(row, "doctoral_advisors"),
+    doctoral_students = arr_col(row, "doctoral_students"),
+    memberships       = arr_col(row, "memberships"),
+    awards            = arr_col(row, "awards"),
+    google_scholar_id = col(row, "google_scholar_id"),
+    ssrn_author_id    = col(row, "ssrn_author_id"),
+    math_genealogy_id = col(row, "math_genealogy_id"),
+    website           = col(row, "website"),
     evidence         = make_evidence(row)
   )
 

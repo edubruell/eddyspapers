@@ -79,6 +79,19 @@ const rawPersonEventSchema = z.object({
   last_year: z.number().nullable().optional(),
   primary_category: z.string().nullable().optional(),
   n_matched: z.number().nullable().optional(),
+  // Wikidata extras — present for ~9% of people, explicit null/absent otherwise.
+  birth_year: z.number().nullable().optional(),
+  birth_place: z.string().nullable().optional(),
+  citizenships: z.array(z.string()).nullable().optional(),
+  educated_at: z.array(z.string()).nullable().optional(),
+  doctoral_advisors: z.array(z.string()).nullable().optional(),
+  doctoral_students: z.array(z.string()).nullable().optional(),
+  memberships: z.array(z.string()).nullable().optional(),
+  awards: z.array(z.string()).nullable().optional(),
+  google_scholar_id: z.string().nullable().optional(),
+  ssrn_author_id: z.string().nullable().optional(),
+  math_genealogy_id: z.string().nullable().optional(),
+  website: z.string().nullable().optional(),
   evidence: z.array(rawPersonEvidenceSchema).nullable().optional(),
 });
 

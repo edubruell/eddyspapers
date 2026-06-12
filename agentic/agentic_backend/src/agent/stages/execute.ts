@@ -103,6 +103,18 @@ export async function executeScript(
             last_year: raw.last_year ?? null,
             primary_category: raw.primary_category ?? null,
             n_matched: raw.n_matched ?? null,
+            birth_year: raw.birth_year ?? null,
+            birth_place: raw.birth_place ?? null,
+            citizenships: raw.citizenships ?? [],
+            educated_at: raw.educated_at ?? [],
+            doctoral_advisors: raw.doctoral_advisors ?? [],
+            doctoral_students: raw.doctoral_students ?? [],
+            memberships: raw.memberships ?? [],
+            awards: raw.awards ?? [],
+            google_scholar_id: raw.google_scholar_id ?? null,
+            ssrn_author_id: raw.ssrn_author_id ?? null,
+            math_genealogy_id: raw.math_genealogy_id ?? null,
+            website: raw.website ?? null,
             evidence: raw.evidence ?? [],
           };
           persons[raw.short_id] = person;

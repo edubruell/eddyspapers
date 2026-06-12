@@ -72,6 +72,19 @@ export interface Person {
   last_year: number | null;
   primary_category: string | null;
   n_matched: number | null;
+  // Wikidata extras — null/empty for most people.
+  birth_year: number | null;
+  birth_place: string | null;
+  citizenships: string[];
+  educated_at: string[];
+  doctoral_advisors: string[];
+  doctoral_students: string[];
+  memberships: string[];
+  awards: string[];
+  google_scholar_id: string | null;
+  ssrn_author_id: string | null;
+  math_genealogy_id: string | null;
+  website: string | null;
   evidence: PersonEvidence[];
 }
 

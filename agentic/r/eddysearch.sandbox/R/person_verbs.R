@@ -74,7 +74,10 @@ person_search <- function(query, max_k = 25, k_papers = 600,
     SELECT r.*, p.name_full, p.workplace_name, p.homepage,
            ps.n_works_in_corpus, ps.total_citations,
            ps.first_year, ps.last_year, ps.primary_category,
-           w.image_url, w.wikipedia_url, w.orcid
+           w.image_url, w.wikipedia_url, w.orcid,
+           w.birth_year, w.birth_place, w.citizenships, w.educated_at,
+           w.doctoral_advisors, w.doctoral_students, w.memberships, w.awards,
+           w.google_scholar_id, w.ssrn_author_id, w.math_genealogy_id, w.website
     FROM rolled r
     JOIN persons p ON p.short_id = r.short_id
     LEFT JOIN person_stats ps ON ps.short_id = r.short_id
