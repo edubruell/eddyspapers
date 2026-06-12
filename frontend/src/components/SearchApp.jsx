@@ -185,15 +185,25 @@ export default function SearchApp() {
 
     return (
         <>
-        <div className="text-center text-xs text-stone-600 mb-3">
-            Check out the new semantic economist search on{" "}
+        <div className="flex justify-center mb-3 px-4">
             <a
                 href="https://econpeople.eduard-bruell.de"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold underline hover:text-stone-800"
+                className="
+                    inline-flex items-center gap-2 flex-wrap justify-center
+                    rounded-full border border-green-300 bg-green-100/80
+                    px-4 py-1.5 text-xs text-green-900
+                    hover:bg-green-100 hover:border-green-400 transition-colors
+                "
             >
-                econpeople.eduard-bruell.de
+                <span className="rounded-full bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 tracking-wide">
+                    NEW
+                </span>
+                <span>
+                    Check out the new semantic economist search on{" "}
+                    <span className="font-semibold underline">econpeople.eduard-bruell.de</span>
+                </span>
             </a>
         </div>
         <div
