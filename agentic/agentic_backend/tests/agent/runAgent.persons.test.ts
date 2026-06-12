@@ -49,6 +49,18 @@ function mkPerson(short_id: string): Person {
     last_year: 2026,
     primary_category: "C",
     n_matched: 2,
+    birth_year: null,
+    birth_place: null,
+    citizenships: [],
+    educated_at: [],
+    doctoral_advisors: [],
+    doctoral_students: [],
+    memberships: [],
+    awards: [],
+    google_scholar_id: null,
+    ssrn_author_id: null,
+    math_genealogy_id: null,
+    website: null,
     evidence: [],
   };
 }

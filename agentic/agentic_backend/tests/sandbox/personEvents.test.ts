@@ -120,6 +120,98 @@ describe("person event null tolerance", () => {
     });
     expect(e).toBeNull();
   });
+
+  // Wikidata enrichment fields (genealogy / education / awards / external profile ids).
+  // Present for ~9% of people; the rest carry explicit null or omit the keys entirely.
+  it("accepts a person carrying the full wikidata enrichment block", () => {
+    const e = parseRawEvent({
+      type: "person",
+      short_id: "pkr12",
+      name: "Paul Krugman",
+      url: "https://ideas.repec.org/e/pkr12.html",
+      birth_year: 1953,
+      birth_place: "Albany",
+      citizenships: ["United States"],
+      educated_at: ["MIT", "Yale University"],
+      doctoral_advisors: ["Rudi Dornbusch"],
+      doctoral_students: ["Steven Brakman", "Gordon Hanson", "Marc Melitz"],
+      memberships: ["Econometric Society"],
+      awards: ["Nobel Memorial Prize in Economic Sciences", "John Bates Clark Medal"],
+      google_scholar_id: "abc123",
+      ssrn_author_id: "98765",
+      math_genealogy_id: "55555",
+      website: "https://krugman.example",
+    });
+    expect(e).not.toBeNull();
+    if (e?.type === "person") {
+      expect(e.birth_year).toBe(1953);
+      expect(e.birth_place).toBe("Albany");
+      expect(e.citizenships).toEqual(["United States"]);
+      expect(e.educated_at).toEqual(["MIT", "Yale University"]);
+      expect(e.doctoral_advisors).toEqual(["Rudi Dornbusch"]);
+      expect(e.doctoral_students).toHaveLength(3);
+      expect(e.memberships).toEqual(["Econometric Society"]);
+      expect(e.awards).toHaveLength(2);
+      expect(e.google_scholar_id).toBe("abc123");
+      expect(e.ssrn_author_id).toBe("98765");
+      expect(e.math_genealogy_id).toBe("55555");
+      expect(e.website).toBe("https://krugman.example");
+    }
+  });
+
+  it("accepts a single-element wikidata array (I()-wrapped, never collapsed to scalar)", () => {
+    const e = parseRawEvent({
+      type: "person",
+      short_id: "psolo1",
+      url: "https://e/psolo1",
+      awards: ["Lone Award"],
+      citizenships: ["Germany"],
+    });
+    expect(e).not.toBeNull();
+    if (e?.type === "person") {
+      expect(e.awards).toEqual(["Lone Award"]);
+      expect(e.citizenships).toEqual(["Germany"]);
+    }
+  });
+
+  it("rejects a wikidata array that arrived as a bare scalar string", () => {
+    // arr_col() wraps every list-column with I() so the wire is array-only; a scalar
+    // here would mean the collapse bug regressed.
+    const e = parseRawEvent({
+      type: "person",
+      short_id: "pbad1",
+      url: "https://e/pbad1",
+      awards: "Nobel",
+    });
+    expect(e).toBeNull();
+  });
+
+  it("accepts a person with wikidata fields explicitly null (no enrichment row)", () => {
+    const e = parseRawEvent({
+      type: "person",
+      short_id: "pnoenr",
+      url: "https://e/pnoenr",
+      birth_year: null,
+      birth_place: null,
+      citizenships: null,
+      educated_at: null,
+      doctoral_advisors: null,
+      doctoral_students: null,
+      memberships: null,
+      awards: null,
+      google_scholar_id: null,
+      ssrn_author_id: null,
+      math_genealogy_id: null,
+      website: null,
+    });
+    expect(e).not.toBeNull();
+    if (e?.type === "person") {
+      expect(e.birth_year ?? null).toBeNull();
+      expect(e.citizenships ?? null).toBeNull();
+      expect(e.awards ?? null).toBeNull();
+      expect(e.website ?? null).toBeNull();
+    }
+  });
 });
 
 describe("person_section event", () => {

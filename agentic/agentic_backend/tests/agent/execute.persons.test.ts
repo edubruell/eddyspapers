@@ -129,6 +129,93 @@ describe("executeScript — person translation", () => {
     expect(sectionEvents).toHaveLength(1);
   });
 
+  it("maps the full wikidata enrichment block onto the Person", async () => {
+    mockRun([
+      {
+        ...personRaw,
+        short_id: "pkr12",
+        birth_year: 1953,
+        birth_place: "Albany",
+        citizenships: ["United States"],
+        educated_at: ["MIT", "Yale University"],
+        doctoral_advisors: ["Rudi Dornbusch"],
+        doctoral_students: ["Steven Brakman", "Gordon Hanson"],
+        memberships: ["Econometric Society"],
+        awards: ["Nobel", "Clark Medal"],
+        google_scholar_id: "abc123",
+        ssrn_author_id: "98765",
+        math_genealogy_id: "55555",
+        website: "https://krugman.example",
+      },
+      { type: "person_section", title: "S", short_ids: ["pkr12"] },
+    ]);
+    const { executeScript } = await import("../../src/agent/stages/execute.js");
+    const r = await executeScript("x <- 1", "/fake/db.duckdb", () => undefined);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const p = r.persons.pkr12;
+    expect(p.birth_year).toBe(1953);
+    expect(p.birth_place).toBe("Albany");
+    expect(p.citizenships).toEqual(["United States"]);
+    expect(p.educated_at).toEqual(["MIT", "Yale University"]);
+    expect(p.doctoral_advisors).toEqual(["Rudi Dornbusch"]);
+    expect(p.doctoral_students).toEqual(["Steven Brakman", "Gordon Hanson"]);
+    expect(p.memberships).toEqual(["Econometric Society"]);
+    expect(p.awards).toEqual(["Nobel", "Clark Medal"]);
+    expect(p.google_scholar_id).toBe("abc123");
+    expect(p.ssrn_author_id).toBe("98765");
+    expect(p.math_genealogy_id).toBe("55555");
+    expect(p.website).toBe("https://krugman.example");
+  });
+
+  it("defaults absent wikidata arrays to [] and absent scalars to null", async () => {
+    // personRaw / personSectionRaw carry no enrichment keys at all.
+    mockRun([personRaw, personSectionRaw]);
+    const { executeScript } = await import("../../src/agent/stages/execute.js");
+    const r = await executeScript("x <- 1", "/fake/db.duckdb", () => undefined);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const p = r.persons.pne16;
+    expect(p.citizenships).toEqual([]);
+    expect(p.educated_at).toEqual([]);
+    expect(p.doctoral_advisors).toEqual([]);
+    expect(p.doctoral_students).toEqual([]);
+    expect(p.memberships).toEqual([]);
+    expect(p.awards).toEqual([]);
+    expect(p.birth_year).toBeNull();
+    expect(p.birth_place).toBeNull();
+    expect(p.google_scholar_id).toBeNull();
+    expect(p.ssrn_author_id).toBeNull();
+    expect(p.math_genealogy_id).toBeNull();
+    expect(p.website).toBeNull();
+  });
+
+  it("coerces explicit-null wikidata arrays to [] (not null)", async () => {
+    mockRun([
+      {
+        type: "person",
+        short_id: "pnull",
+        url: "https://e/pnull",
+        citizenships: null,
+        awards: null,
+        doctoral_students: null,
+        birth_year: null,
+        website: null,
+      },
+      { type: "person_section", title: "S", short_ids: ["pnull"] },
+    ]);
+    const { executeScript } = await import("../../src/agent/stages/execute.js");
+    const r = await executeScript("x <- 1", "/fake/db.duckdb", () => undefined);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const p = r.persons.pnull;
+    expect(p.citizenships).toEqual([]);
+    expect(p.awards).toEqual([]);
+    expect(p.doctoral_students).toEqual([]);
+    expect(p.birth_year).toBeNull();
+    expect(p.website).toBeNull();
+  });
+
   it("normalizes all-null person optionals to nulls / empty evidence", async () => {
     mockRun([
       {

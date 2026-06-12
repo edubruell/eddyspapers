@@ -11,6 +11,13 @@ function handleToIdeasUrl(handle) {
   return `https://ideas.repec.org/${path}`;
 }
 
+// Only http(s) hrefs from free-text Wikidata fields (homepage, website) — blocks a
+// javascript:/data: scheme sneaking into a live link.
+function httpUrl(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  return url;
+}
+
 function LinkPill({ href, label }) {
   if (!href) return null;
   return (
@@ -141,7 +148,7 @@ export default function PersonCard({ person }) {
 
   const links = [
     { href: person.url, label: "IDEAS" },
-    { href: person.homepage || person.website, label: "Homepage" },
+    { href: httpUrl(person.homepage) || httpUrl(person.website), label: "Homepage" },
     {
       href: person.google_scholar_id
         ? `https://scholar.google.com/citations?user=${person.google_scholar_id}`
@@ -291,7 +298,7 @@ export default function PersonCard({ person }) {
 
         <footer className="mt-1 flex flex-wrap items-center gap-1.5">
           <LinkPill href={person.url} label="IDEAS" />
-          <LinkPill href={person.homepage || person.website} label="Homepage" />
+          <LinkPill href={httpUrl(person.homepage) || httpUrl(person.website)} label="Homepage" />
           {hasMore && (
             <button
               type="button"
