@@ -1,8 +1,9 @@
-const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "/api";
 const API_KEY = import.meta.env.PUBLIC_API_KEY;
 
 function apiHeaders(json = true) {
-  const h = { "X-API-Key": API_KEY };
+  const h = {};
+  if (API_KEY) h["X-API-Key"] = API_KEY;
   if (json) h["Content-Type"] = "application/json";
   return h;
 }
