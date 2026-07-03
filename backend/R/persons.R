@@ -508,6 +508,7 @@ search_persons <- function(query,
     WHERE p.short_id IN (%s)
   ", ids_sql))
 
+  meta <- dplyr::distinct(meta, short_id, .keep_all = TRUE)
   results <- dplyr::inner_join(person_scores, meta, by = "short_id")
 
   if (!is.null(filters$institution) && nchar(filters$institution) > 0)
