@@ -1142,15 +1142,27 @@ apply_parquet_diffs <- function(base_stamp,
     
     insert_cols <- DBI::dbGetQuery(con, sprintf("DESCRIBE %s", tbl))$column_name
     insert_cols_str <- paste(insert_cols, collapse = ", ")
-    
-    new_sql <- sprintf("
-      INSERT INTO %s (%s)
-      SELECT %s FROM temp_diff
-      WHERE operation = 'NEW'
-    ", tbl, insert_cols_str, insert_cols_str)
-    
-    inserted <- DBI::dbExecute(con, new_sql)
-    info("  Inserted ", inserted, " new rows")
+
+    if ("NEW" %in% op_counts$operation) {
+      new_key_where <- if (length(keys) == 1) {
+        sprintf("%s IN (SELECT %s FROM temp_diff WHERE operation = 'NEW')",
+                keys, keys)
+      } else {
+        sprintf("(%s) IN (SELECT %s FROM temp_diff WHERE operation = 'NEW')",
+                paste(keys, collapse = ", "),
+                paste(keys, collapse = ", "))
+      }
+      DBI::dbExecute(con, sprintf("DELETE FROM %s WHERE %s", tbl, new_key_where))
+
+      new_sql <- sprintf("
+        INSERT INTO %s (%s)
+        SELECT %s FROM temp_diff
+        WHERE operation = 'NEW'
+      ", tbl, insert_cols_str, insert_cols_str)
+
+      inserted <- DBI::dbExecute(con, new_sql)
+      info("  Inserted ", inserted, " new rows")
+    }
     
     if ("UPDATE" %in% op_counts$operation) {
       if (tbl %in% c("articles", "handle_stats")) {
