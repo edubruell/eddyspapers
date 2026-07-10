@@ -47,6 +47,24 @@ takes effect immediately (the server refreshes its registry on the mutation).
 > **Bootstrap note.** Always keep `AGENTIC_PASSWORD` set in prod: it is the admin credential
 > the CLI uses, and it prevents locking yourself out if you never mint an `admin`-scoped key.
 
+## Issuing keys — admin web page
+
+The same three `/admin/keys` routes back a small operator page in `agentic_frontend` at
+**`/admin`**. It lists issued keys (label, scopes, id, created, state), mints new ones (label
++ scope pills), reveals the plaintext **once** in a copy-to-clipboard modal, and revokes with
+an inline confirm. The admin token is entered on the page and stored in `localStorage` under a
+key **separate** from the search-app token, so a colleague using the search UI never carries
+admin rights.
+
+- The label is free text — write *whom* the key is for (e.g. `Alice Müller (ZEW) — alice@…`);
+  the list reads it straight back so you can see who holds what.
+- Same bootstrap rule as the CLI: on 401/403 the page shows a lock screen asking for an
+  admin-scoped key (the prod `AGENTIC_PASSWORD` works here). In dev with no password the page
+  opens freely until the first key exists — mint that first key with `admin` scope (or set a
+  password) so you don't lock yourself out of the page.
+- Scope the `/admin` route to a trusted operator origin at deploy time; it is a key-minting
+  console, not a public page.
+
 ## Connecting a coding agent (MCP over HTTP)
 
 Bearer auth on the streamable-HTTP endpoint. Header-capable clients (Claude Code, VS Code,

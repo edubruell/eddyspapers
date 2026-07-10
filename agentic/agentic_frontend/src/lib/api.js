@@ -89,6 +89,90 @@ export async function exportXlsx(papers) {
   return res.blob();
 }
 
+// ── Admin: API-key registry (/admin/keys, requireKey('admin')) ────────────────────────
+// The admin token is stored separately from the search-app key so a colleague using the
+// search UI never carries admin rights. In dev (no password, no keys) the backend passes
+// requireKey('admin') through, so listAdminKeys returns 200 with an empty list and the page
+// opens without a token.
+
+const ADMIN_KEY_STORAGE = "agentic_admin_key";
+
+export function getAdminKey() {
+  try {
+    return localStorage.getItem(ADMIN_KEY_STORAGE) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function setAdminKey(key) {
+  try {
+    if (key) localStorage.setItem(ADMIN_KEY_STORAGE, key);
+    else localStorage.removeItem(ADMIN_KEY_STORAGE);
+  } catch {
+    /* private mode / storage disabled — the token simply won't persist */
+  }
+}
+
+async function adminReq(method, path, { token = getAdminKey(), body, signal } = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal,
+  });
+  const text = await res.text().catch(() => "");
+  // Tolerate a non-JSON body (e.g. an HTML 502/504 from the reverse proxy) — the caller keys
+  // on `status`, and JSON.parse throwing here would mask it with a "Unexpected token" error.
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {};
+  }
+  return { ok: res.ok, status: res.status, data };
+}
+
+// Attach the HTTP status to a thrown admin error so callers can drop to the lock screen on
+// 401/403 (an admin token can be revoked between the initial list and a later mint/revoke).
+function adminError(status, data, fallback) {
+  const err = new Error(data?.error ? JSON.stringify(data.error) : fallback);
+  err.status = status;
+  return err;
+}
+
+// List keys. Returns { scopes, keys } on success; throws with a 401/403 marker so the page
+// can drop to its lock screen. `all` includes revoked keys.
+export async function listAdminKeys({ token, all = false, signal } = {}) {
+  const { ok, status, data } = await adminReq("GET", `/admin/keys${all ? "?all=1" : ""}`, {
+    token,
+    signal,
+  });
+  if (!ok) throw adminError(status, data, `list failed (${status})`);
+  return data; // { scopes, keys: [{ id, label, scopes, rate_limit_overrides, created_at, revoked_at }] }
+}
+
+// Mint a key. The plaintext in the response is the ONLY time it exists — never recoverable.
+export async function createAdminKey({ label, scopes, token } = {}) {
+  const { ok, status, data } = await adminReq("POST", "/admin/keys", {
+    token,
+    body: { label, ...(scopes && scopes.length ? { scopes } : {}) },
+  });
+  if (!ok) throw adminError(status, data, `create failed (${status})`);
+  return data; // { key, key_hash, id, label, scopes }
+}
+
+export async function revokeAdminKey(prefix, { token } = {}) {
+  const { ok, status, data } = await adminReq("DELETE", `/admin/keys/${encodeURIComponent(prefix)}`, {
+    token,
+  });
+  if (!ok) throw adminError(status, data, `revoke failed (${status})`);
+  return data; // { revoked }
+}
+
 // Phase B — answer a blocking clarifier question; the run resumes on the same SSE stream.
 export async function replyChat(id, answer) {
   const res = await fetch(`${API_BASE}/chat/${encodeURIComponent(id)}/reply`, {

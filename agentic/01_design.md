@@ -718,6 +718,15 @@ Stdio transport (local) bypasses auth — the key is "you have shell on this mac
 > opens the exclusively-locked `appdata.duckdb`); revocation forces a registry refresh, so a
 > revoked key 401s immediately. No per-IP limiting (ZEW NATs through one address). nginx (not
 > Caddy) fronts the public endpoint.
+>
+> **Admin UI (2026-07-11).** The same three `/admin/keys` routes back an operator page in
+> `agentic_frontend` at `/admin` (`components/admin/KeyAdmin.jsx`) — list / mint (free-text
+> label + scope pills, plaintext revealed once) / revoke. No new backend surface. The admin
+> token is stored in `localStorage` under a key separate from the search-app token, so a
+> search-UI user never carries admin rights; on 401/403 the page shows a lock screen. Scope
+> `/admin` to a trusted operator origin at deploy time. Keeping keys an **MCP-only** concern
+> once the web product is password-free (drop `requireKey('rest')` from web routes, keep
+> `mcp`/`admin`) is a Phase-5 rewiring, tracked in FINDINGS.
 
 ### 7.10 Migration from the current R MCP server
 

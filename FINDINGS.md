@@ -288,3 +288,40 @@ concretisation: appdata table, `requireKey(scope)` matrix, rate-limit classes, s
 fail-closed reload, CLI-over-`/admin`), operator-telemetry note (`requireKey('admin')`). New
 `agentic/agentic_backend/API_KEYS.md` (client-setup guide). PLAN.md progress log extended with the
 Phase 4 entry.
+
+### Follow-ups (raised + resolved 2026-07-11)
+
+- **Key admin UI — BUILT.** A small operator page ships at **`agentic_frontend/src/pages/admin.astro`**
+  (`/admin`) backed by `components/admin/KeyAdmin.jsx`, over the existing three `requireKey('admin')`
+  routes — **no new backend surface**. It lists keys (label/scopes/id/created/state, revoked hidden by
+  default), mints with a free-text label + scope pills, reveals the plaintext **once** in a copy modal,
+  and revokes with an inline confirm. The admin token lives in `localStorage` under a key separate from
+  the search-app token (`getAdminKey`/`setAdminKey` in `lib/api.js`), so a search-UI user never carries
+  admin rights. On 401/403 the page drops to a lock screen. Verified end-to-end via `app.request()`
+  (401 no-token · 201 mint · 403 wrong-scope · revoke · active/all counts · CORS preflight allows
+  `DELETE` + `Authorization`) and a Playwright e2e (`tests/e2e/admin.spec.mjs`, green). `API_KEYS.md`
+  gained an "admin web page" section. **Bootstrap caveat** (inherent to the global `isEnabled()` gate,
+  not new): minting the first key enables the gate, so keep `AGENTIC_PASSWORD` set (prod) or make the
+  first key `admin`-scoped (dev) or you lock yourself out of the page.
+  - *Design note:* keeping API keys an **MCP-only** concern once the web product goes password-free is a
+    separate Phase-5 rewiring — drop `requireKey('rest')` from the web routes (public + per-IP limit),
+    keep `requireKey('mcp')`/`requireKey('admin')`. Not done here; flagged for the deploy window.
+  - *Code-quality review (fresh-context sub-agent) — no blockers, security clean* (token only ever in the
+    `Authorization` header, never a URL; stored under `agentic_admin_key`, separate from the search-app
+    `agentic_key`; minted plaintext shown once, list never returns `key`). Three warnings **fixed**:
+    (W1) a mint/revoke that 401/403s now drops to the lock screen — `createAdminKey`/`revokeAdminKey`
+    attach `.status` and the handlers branch on it (an admin token can be revoked mid-session);
+    (W2) unlock now populates the table from the probe response instead of firing a second list request;
+    (W3) `adminReq` guards `JSON.parse` so an HTML 502/504 from the reverse proxy surfaces as the status,
+    not a "Unexpected token" crash. E2e extended: reveal-is-one-shot (plaintext gone + absent from the
+    table), the `?all=1` request contract, and sign-out clears storage + re-locks — 2 specs green.
+
+- **Pre-existing e2e failure in `run.spec.mjs` — FIXED (subagent pass, out-of-scope by request).**
+  Root cause was two-fold: (1) a real harness gap — the mock server (`tests/mock-server.mjs`) had **no
+  `GET /auth/check` route**, so the `Gate` mount-probe fell through to the 404 catch-all and the app
+  stuck on the lock screen (no task box ever rendered); (2) a stale selector — the first assertion
+  looked for a `getByText("AGENTIC SEARCH")` text node, but the wordmark is now baked into the logo
+  image (`LogoAgentic.jsx` → `logo_agentic.webp`), so there is no such text node. Fixes: added a
+  `GET /auth/check → 200 {ok:true}` route to the mock (the mock backend is open), and switched the
+  assertion to `getByRole("img", { name: /Agentic Search/i })`; every other assertion in the spec is
+  unchanged. Full e2e suite now **3 passed** (`run.spec` 1/1, `admin.spec` 2/2).

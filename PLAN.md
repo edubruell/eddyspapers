@@ -429,6 +429,19 @@ Notes from the build:
    `tests/routes/admin.test.ts`, `tests/mcp/{litSearch,tools}.limits.test.ts` — full suite (after
    the test-extender pass) **527 passed / 4 skipped, 41 files**; clean `tsc` + build.
 
+**Follow-up (2026-07-11): key admin web page.** Small standalone add on top of Phase 4 (not a
+numbered phase). `agentic_frontend/src/pages/admin.astro` (`/admin`) +
+`components/admin/KeyAdmin.jsx` drive the existing three `requireKey('admin')` `/admin/keys`
+routes — list / mint (free-text label + scope pills, plaintext revealed once) / revoke — with
+**no new backend surface**. Admin token stored in `localStorage` apart from the search-app token;
+401/403 → lock screen. `lib/api.js` gained `getAdminKey`/`setAdminKey`/`listAdminKeys`/
+`createAdminKey`/`revokeAdminKey`. Verified via `app.request()` (401/201/403/revoke/CORS) + a new
+`tests/e2e/admin.spec.mjs` (green, mock registry added to `tests/mock-server.mjs`). Docs:
+`API_KEYS.md` "admin web page" section, `01_design.md` §7.9, FINDINGS follow-up. Design decision
+recorded: making API keys **MCP-only** once the web goes password-free (drop `requireKey('rest')`
+from web routes, keep `mcp`/`admin`) is deferred to Phase 5. (Pre-existing `run.spec.mjs` e2e
+failure noted in FINDINGS — predates this change, out of scope.)
+
 ## 12. Local testing & deployment
 
 ### 12.1 Local test rig
