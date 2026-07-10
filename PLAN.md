@@ -363,6 +363,36 @@ Notes from the build:
 4. Doc pass (§10): `01_design.md` §7.2 (two-doors → six tools), §7.6 (`?limit=N` dropped), §7.8 (TTL
    wording → snapshot-swap, not nightly), §7.9 (Phase-2 shared-password gate + nginx note) updated.
 
+**Phase 3 — built 2026-07-10, phase-exit reviews passed (no implementation blockers).** Wired
+`lit_search` — the full agentic pipeline over MCP. New: `src/agent/bundle.ts` (a pure run-events →
+§7.5 bundle reducer shared by the tool and the searches resources), `src/mcp/litSearch.ts` (the
+`lit_search` tool). Modified: `src/mcp/resources.ts` (+ the `agenticsearch://searches/{id}[/script|
+/bibtex|/papers|/sections/{sid}]` run resources), `src/mcp/server.ts` (register `lit_search`),
+`instructions.ts` + `prompts.ts` (`lit_review` now drives `lit_search`). The six-tool surface (§C1)
+is complete. Acceptance met: one call returns a synthesis + BibTeX + CSV + structured payload; an
+identical brief hits the persisted cache without re-running R/LLM; with `skip_clarify=false` an
+ambiguous brief returns a non-error `needs_clarification` result (no pause/resume over MCP);
+`skip_clarify` defaults **true**.
+
+Notes from the build:
+1. The MCP tool reuses the same `computeSearchId` cache + `searches` store + `runAgent` as the web
+   `/chat` path — a completed run is rebuilt from its stored events, so the cache, the share-links,
+   and the run resources all share one source of truth. MCP-initiated runs persist to the store but
+   are not published to the in-memory SSE bus (no web client is watching).
+2. Progress notifications (§7.4) stream over stdio and any SSE-mode HTTP path; under the hosted
+   streamable-HTTP transport's buffered JSON mode (`enableJsonResponse`) they return with the reply
+   rather than live.
+3. Review fixes folded in before commit: finalize now mirrors the web `hasDone` guard (never cache a
+   truncated run as `done`); the search-section resource decodes `{sid}` (SDK doesn't decode path
+   segments); dropped an unused `runHasContent` helper.
+4. **Deferred to Phase 4:** the shared cache key (`src/agent/cache.ts`) still omits `must_include`
+   and `refine` — widen it with the key registry. Per-key rate limits + single-concurrent
+   `lit_search` (§7.9) also land in Phase 4; `/mcp` is behind shared-password `requireAuth` today.
+5. Doc pass (§10): `01_design.md` §7.2/§7.4/§7.5/§7.6/§7.8 updated (see FINDINGS.md Phase 3).
+6. Tests: 23 review-added tests (`tests/agent/bundle.test.ts`, `tests/mcp/{litSearch,searchResources}.test.ts`)
+   — full suite **473 passed / 4 skipped, 35 files**. All hermetic (stages mocked, resources seeded
+   through the store — no live LLM/R/Ollama).
+
 ## 12. Local testing & deployment
 
 ### 12.1 Local test rig

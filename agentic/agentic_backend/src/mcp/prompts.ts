@@ -3,9 +3,10 @@ import { z } from "zod";
 
 // Named MCP prompt templates (01_design.md §7.7) — they keep small calling models
 // on-pattern without re-deriving the lit-search heuristics. Each expands its args
-// into a well-shaped brief. The briefs are written to drive the cheap Phase 2 tools
-// (find_papers / keyword_search / find_people); Phase 3 upgrades them to hand the
-// same brief to the lit_search pipeline in one call.
+// into a well-shaped brief. lit_review hands the brief to the lit_search pipeline in
+// one call (§7.7); find_referees and journal_scan stay on the cheap tools because
+// person-overlap and exhaustive single-journal sweeps are genuinely better served by
+// find_people / paged keyword_search than by the synthesising pipeline.
 
 const userText = (text: string) => ({
   messages: [{ role: "user" as const, content: { type: "text" as const, text } }],
@@ -26,11 +27,10 @@ export function registerPrompts(server: McpServer): void {
       userText(
         `Do a literature review on: ${topic}.` +
           (purpose ? ` Intended purpose: ${purpose}.` : "") +
-          ` First call corpus_context for valid category/journal filters. Then run find_papers with ` +
-          `the query written as 3-6 sentences of abstract-style prose describing the mechanism, ` +
-          `method, and context — not keyword labels. Follow up with keyword_search for any exact ` +
-          `terms or named results that must be covered exhaustively. Synthesise the findings with ` +
-          `citations to the returned handles.`,
+          ` Call lit_search with a brief written as a few sentences of abstract-style prose describing ` +
+          `the mechanism, method, and context of interest — not keyword labels. It returns a finished ` +
+          `synthesis, a BibTeX bundle, and a CSV in one call; present the synthesis and cite the ` +
+          `returned handles. If lit_search reports needs_clarification, sharpen the brief and re-call it.`,
       ),
   );
 

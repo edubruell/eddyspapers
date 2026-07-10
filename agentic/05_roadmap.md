@@ -329,25 +329,28 @@ opens without warnings, verified ZIP magic + content-type); PDF prints from the 
 
 ---
 
-## Phase 9 — MCP adapter ⏸ deferred (2026-06-07)
+## Phase 9 — MCP adapter ✅ done — rescoped into PLAN.md Phases 2–3 (2026-07-10)
 
-> **Deferred for the MVP.** The frontend is sufficient for the ZEW preview; the MCP
-> adapter is postponed until after first feedback. The existing R MCP server keeps running
-> in the meantime (see CLAUDE.md "What this project does NOT touch").
+> **Un-deferred and delivered.** Superseded by `PLAN.md` (the backend-port programme), which
+> splits the MCP work across its **Phase 2** (cheap tools + resources + prompts) and **Phase 3**
+> (`lit_search`). Both shipped 2026-07-10 on the `backend_port` branch. The old R MCP server was
+> already retired on prod (2026-06-11); its files are dead code folded into PLAN Phase 5 for
+> deletion (this roadmap's Phase 11). Per-key auth + rate limits (below) are PLAN Phase 4.
 
-Per `01 §7` and `02 §2 mcp/`.
+Per `01 §7` and `02 §2 mcp/`. Delivered under `src/mcp/` (single-file `tools.ts` + `litSearch.ts`,
+not the `tools/` sub-dir sketched below):
 
-- [ ] `src/mcp/server.ts` — `@modelcontextprotocol/sdk` server bootstrap with both stdio + streamable HTTP transports.
-- [ ] `src/mcp/tools/findPapers.ts` — direct passthrough to `POST /search` on the existing backend (`01 §7.2`).
-- [ ] `src/mcp/tools/litSearch.ts` — wraps `runAgent`, maps `StreamEvent`s to MCP progress notifications (`01 §7.4`).
-- [ ] `src/mcp/resources.ts` — `agenticsearch://searches/{id}/*` + `agenticsearch://papers/{handle}/*` resolvers (`01 §7.6`).
-- [ ] `src/mcp/prompts.ts` — `lit_review`, `find_referees`, `journal_scan` templates (`01 §7.7`).
-- [ ] Bearer-token auth on the HTTP transport; stdio bypasses (`01 §7.9`).
-- [ ] Per-key rate limits per `01 §7.9`.
-- [ ] `skip_clarify` default-true behaviour with `needs_clarification` surfacing (`01 §7.3`).
-- [ ] CSV output for `lit_search` per the `01 §7.5` columns.
+- [x] `src/mcp/server.ts` — `@modelcontextprotocol/sdk` server bootstrap; streamable HTTP (`routes/mcp.ts`) + stdio (`mcp-stdio.ts`) transports.
+- [x] `find_papers` (+ `keyword_search`, `find_people`, `verify_references`, `corpus_context`) — call the internal `src/search/*` service fns, not HTTP self-calls (`01 §7.2`, PLAN §C1).
+- [x] `src/mcp/litSearch.ts` — wraps `runAgent`, maps `StreamEvent`s to MCP progress notifications (`01 §7.4`).
+- [x] `src/mcp/resources.ts` — `agenticsearch://searches/{id}/*` + `agenticsearch://papers/{handle}/*` resolvers (`01 §7.6`).
+- [x] `src/mcp/prompts.ts` — `lit_review`, `find_referees`, `journal_scan` templates (`01 §7.7`).
+- [x] `skip_clarify` default-true behaviour with `needs_clarification` surfacing (`01 §7.3`).
+- [x] CSV output for `lit_search` per the `01 §7.5` columns.
+- [ ] Bearer-token auth on the HTTP transport; stdio bypasses (`01 §7.9`) — **PLAN Phase 4** (shared-password `requireAuth` today).
+- [ ] Per-key rate limits per `01 §7.9` — **PLAN Phase 4**.
 
-**Acceptance:** Claude Code with the new MCP server config gets a working `lit_search` call returning synthesis + CSV + BibTeX; `find_papers` returns top-K rows under 1s.
+**Acceptance:** met — Claude Code connects to `/mcp` and gets a working `lit_search` call returning synthesis + CSV + BibTeX; the cheap tools return rows without an LLM.
 
 ---
 

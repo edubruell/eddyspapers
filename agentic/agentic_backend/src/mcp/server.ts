@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { MCP_INSTRUCTIONS } from "./instructions.js";
 import { registerTools } from "./tools.js";
+import { registerLitSearch } from "./litSearch.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
 
@@ -16,6 +17,7 @@ export function buildMcpServer(): McpServer {
     { instructions: MCP_INSTRUCTIONS },
   );
   registerTools(server);
+  registerLitSearch(server);
   registerResources(server);
   registerPrompts(server);
   return server;
@@ -27,9 +29,10 @@ export function buildMcpServer(): McpServer {
 // heavy state, the DuckDB pool, is a shared singleton behind getCorpusDb()).
 // enableJsonResponse buffers each JSON-RPC reply into one Response instead of an
 // SSE stream, which lets us tear the transport down deterministically once the body
-// is read. Server-initiated progress streaming (lit_search, Phase 3) will need a
-// session-aware path; the cheap Phase 2 tools are pure request/response. Auth is
-// handled upstream by the Hono route.
+// is read. lit_search emits progress notifications during the call (§7.4); in this
+// buffered JSON mode they are collected and returned with the reply rather than
+// streamed live — stdio and any future SSE-mode path deliver them incrementally. Auth
+// is handled upstream by the Hono route.
 export async function handleMcpRequest(req: Request): Promise<Response> {
   const server = buildMcpServer();
   const transport = new WebStandardStreamableHTTPServerTransport({

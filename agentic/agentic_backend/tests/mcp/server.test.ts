@@ -43,11 +43,11 @@ describe("MCP initialize", () => {
 });
 
 describe("tools/list", () => {
-  it("lists the five cheap tools with input schemas", async () => {
+  it("lists all six tools with input schemas", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
-      ["corpus_context", "find_papers", "find_people", "keyword_search", "verify_references"].sort(),
+      ["corpus_context", "find_papers", "find_people", "keyword_search", "lit_search", "verify_references"].sort(),
     );
     const findPapers = tools.find((t) => t.name === "find_papers");
     expect(findPapers?.inputSchema?.properties).toHaveProperty("query");
@@ -162,7 +162,7 @@ describe("prompts", () => {
     });
     const text = (res.messages[0].content as { text: string }).text;
     expect(text).toMatch(/monopsony in labor markets/);
-    expect(text).toMatch(/find_papers/);
+    expect(text).toMatch(/lit_search/);
   });
 
   it("journal_scan turns comma-separated keywords into a keyword array", async () => {

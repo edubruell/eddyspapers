@@ -518,8 +518,8 @@ Transports: **stdio** for local launches (a coding agent spawns the binary) and 
 > without the fat pipeline. The shipped surface is **six tools**: `lit_search` (the
 > full pipeline) plus five cheap tools — `find_papers`, `keyword_search`,
 > `find_people`, `verify_references`, `corpus_context`. The five cheap tools shipped
-> in **Phase 2** (2026-07-10); `lit_search` is **Phase 3**. Versions/citations/stats
-> remain resources (§7.6), not tools — that decision below still holds.
+> in **Phase 2** (2026-07-10); `lit_search` shipped in **Phase 3** (2026-07-10).
+> Versions/citations/stats remain resources (§7.6), not tools — that decision below still holds.
 
 Reading the current `mcp_server.R`, the surface is per-endpoint (`search_papers`, `get_versions`, …). We collapse that to **two intents**:
 
@@ -559,15 +559,26 @@ Mapping:
 
 | Internal event       | MCP notification                                                |
 |----------------------|-----------------------------------------------------------------|
-| `stage enter/exit`   | `progress` with `progress` 1/5..5/5 and `message`               |
+| `stage enter`        | `progress` with `progress` 1/5..5/5 and `message` (stage exit is not forwarded) |
+| `strategy`           | `progress` with `message: "Strategy: <plan…>"`                  |
 | `progress`           | `progress` with `message` (no numeric advance)                  |
 | `validate ok=false`  | `progress` with `message: "Script rejected — retrying"`         |
+| `revise`             | `progress` with `message: "Refining (<mode>): <reason>"`        |
 | `section`            | `progress` with `message: "Section ready: <title> (N papers)"`  |
 | `synthesis delta`    | not forwarded (would flood); synthesis is delivered whole at the end |
 | `error`              | `CallToolResult { isError: true, content: [...] }`              |
 | `done`               | terminal — return final `CallToolResult`                        |
 
 The caller doesn't need to know our internal event taxonomy — they see prose progress lines that read naturally in a terminal.
+
+> **Phase 3 status (2026-07-10):** `lit_search` is wired (`src/mcp/litSearch.ts`).
+> Progress notifications stream over stdio and any SSE-mode HTTP path; under the hosted
+> streamable-HTTP transport's buffered JSON mode (`enableJsonResponse`) they are collected
+> and returned with the reply rather than delivered live. `skip_clarify` defaults **true**;
+> with `skip_clarify=false` an ambiguous brief returns a non-error `needs_clarification`
+> structured result and stops (no pause/resume over MCP). Identical briefs hit the persisted
+> cache (§7.8). Per-key rate limits and the single-concurrent-`lit_search` cap (§7.9) remain
+> Phase 4.
 
 ### 7.5 Output shape
 
@@ -587,7 +598,9 @@ The CSV is deliberately *not* the Excel workbook: one flat table is what `awk`, 
     "bibtex":         "string",        // entire .bib, deduped, sorted by year/author
     "papers_csv":     "string",        // see columns below
     "papers":         { /* { [handle]: Paper } — same data as CSV but structured */ },
+    "persons":        { /* { [short_id]: Person } — present only when the run produced person sections (Phase 15); omitted otherwise */ },
     "sections":       [ /* Section[] from §4.4 */ ],
+    "strategy":       "string",        // the plain-language search plan (last strategy event; user-facing, not the R script)
     "search_id":      "string",        // hash-keyed; identical brief returns same id
     "script":         "string",        // the R script that produced this run
     "resource_uri":   "agenticsearch://searches/{search_id}",
@@ -628,11 +641,11 @@ The calling agent's typical use: write `synthesis_md` to `suggested_paths.report
 
 A completed search registers a set of MCP resources the caller can read later (within the session or via the persistent URI):
 
-- `agenticsearch://searches/{id}` — overview (brief + synthesis + sections summary)
-- `agenticsearch://searches/{id}/script` — the R script
-- `agenticsearch://searches/{id}/bibtex` — `.bib` text
-- `agenticsearch://searches/{id}/papers` — full paper records as JSON
-- `agenticsearch://searches/{id}/sections/{section_id}` — one section's full row set
+- `agenticsearch://searches/{id}` — overview (brief + status + synthesis + per-section summary + `n_papers`/`n_persons`) **[Phase 3]**
+- `agenticsearch://searches/{id}/script` — the R script (text/plain) **[Phase 3]**
+- `agenticsearch://searches/{id}/bibtex` — `.bib` text (application/x-bibtex) **[Phase 3]**
+- `agenticsearch://searches/{id}/papers` — full paper records + the flat CSV, as JSON **[Phase 3]**
+- `agenticsearch://searches/{id}/sections/{section_id}` — one section's full row set **[Phase 3]**
 - `agenticsearch://papers/{handle}` — canonical paper record (resolves via existing `/handlestats`, `/versions`, `/citedby`)
 - `agenticsearch://papers/{handle}/citedby` — papers citing this one
 - `agenticsearch://papers/{handle}/cites` — references of this one
@@ -661,6 +674,13 @@ These help small calling models stay on-pattern without re-deriving the lit-sear
 `search_id` is a stable hash over `{brief, modes, year_range, categories, must_include, db_snapshot_date}`. Identical briefs against the same snapshot return the cached result without re-running R or the synthesiser. This matters because coding agents retry tool calls more than humans do, and because the same brief recurring across sessions (e.g. each time someone reopens a paper) should be free.
 
 Cache TTL: until the next snapshot rotation (no nightly rotation — the swap happens after each `update_repec.R` run; PLAN.md §11 decision 4). Stored as one row in a `searches` DuckDB table (separate from `articles` snapshot — read-write, but tiny).
+
+> **Phase 3 status (2026-07-10):** the shipped key (`src/agent/cache.ts`, shared with the web
+> `/chat` path) hashes only `{brief, categories, min_year, db_snapshot_date}` — it does **not**
+> yet include `must_include` or `refine`. Two `lit_search` calls that differ only in those
+> collide on `search_id`, and the second is served the first's cached result. Harmless on the
+> web (those weren't first-class inputs there), but Phase 3 exposes both as tool arguments, so
+> widening the hash to match the spec above is queued for **Phase 4** (alongside the key registry).
 
 ### 7.9 Auth and limits
 

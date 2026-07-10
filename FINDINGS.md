@@ -157,3 +157,87 @@ against the fixture (Ollama-free — `find_papers`/`find_people` asserted at sch
   over the HTTP transport returns a JSON-RPC frame.
 - `tests/mcp/server.test.ts` (smoke): initialize/capabilities/instructions, `tools/list`, SQL-only
   tool calls, resource reads, prompt expansion, plus the `?limit` "not found" pin.
+
+---
+
+## Phase 3 — `lit_search` over MCP (reviewed 2026-07-10)
+
+Two fresh-context sub-agent reviews (code-quality + test-extender) per §12.4. **No implementation
+blockers** — the code-quality reviewer confirmed the production code correct against §7.3–7.8 on
+first read. The only blocker was a transiently-red suite (test-harness defects), which the
+test-extender fixed while extending coverage.
+
+### Blockers
+
+None in the shipped code. Delivered: `src/agent/bundle.ts` (the run-events → §7.5 bundle reducer,
+shared by the tool and the searches resources), `src/mcp/litSearch.ts` (the `lit_search` tool), the
+`agenticsearch://searches/{id}[/script|/bibtex|/papers|/sections/{sid}]` resources in
+`src/mcp/resources.ts`, and `lit_review` re-pointed at `lit_search`. Full suite green:
+**473 passed / 4 skipped (35 files)**.
+
+### Fixed during the review pass
+
+- **`litSearch.ts` finalize now mirrors the web `/chat` `hasDone` guard.** Was `errored ? "error" :
+  "done"`; a future `runAgent` path that returns without a `done`/`error` would have cached a
+  truncated run as `done` and served it forever from the §7.8 cache. Now a run is finalized (and
+  cacheable) as `done` **only** if a terminal `done` was emitted and no non-recoverable error.
+- **`resources.ts` search-section handler now decodes `{sid}`** (`decodeHandle`, mirroring the paper
+  resource). The SDK's `ResourceTemplate` does not percent-decode path segments, so a client that
+  encoded a reserved char in a section id (`+` → `%2B`) could not reach the section. Latent only —
+  our generated ids (`sem-1`, `kw-1`, …) never need encoding — but fixed and pinned by a test the
+  extender had filed as a `.skip` product-gap.
+- **Dropped the unused `runHasContent` export** (and its test) flagged as dead code — the cache-serve
+  decision keys on `status === "done"`, which correctly includes legitimately-empty completed runs
+  (re-running them would yield the same empty result).
+- **Test-harness fixes** (test-extender): a naive `split(",")` CSV helper that broke on the quoted
+  multi-author cell, and a zero-result assertion that expected a synthesiser call runAgent
+  short-circuits.
+
+### Warnings (deferred)
+
+- **Cache key omits `must_include` and `refine`** (`src/agent/cache.ts`, shared with `/chat`). §7.8
+  specifies both in the hash; the shipped key hashes only `{brief, categories, min_year,
+  db_snapshot_date}`, so two `lit_search` calls differing only in those collide on `search_id`.
+  Pre-existing and harmless on the web path, but Phase 3 is the first surface exposing both as tool
+  inputs. Widen the hash in **Phase 4** (with the key registry); `01_design.md` §7.8 now documents
+  the narrower shipped key.
+- **Progress notifications buffer under the hosted HTTP transport.** With `enableJsonResponse`
+  (server.ts) the streamable-HTTP path returns notifications with the reply rather than streaming
+  them live; stdio and any SSE-mode path deliver them incrementally. Acceptable; a session-aware
+  streaming HTTP path is a later revisit if live progress over hosted HTTP is wanted.
+- **Per-key rate limits + single-concurrent `lit_search` cap (§7.9) are Phase 4**, correctly absent
+  here — `/mcp` sits behind the shared-password `requireAuth` for now.
+
+### Nits
+
+- **`getSearchDb` singleton has a first-call race** (`db/singleton.ts`, instance-cached unlike the
+  promise-cached `getCorpusDb`). Pre-existing, idempotent `CREATE TABLE IF NOT EXISTS`, low-impact.
+  Align with the corpus pattern when next touching the file.
+
+### Doc updates applied (§10)
+
+`01_design.md` §7.2 (`lit_search` shipped Phase 3), §7.4 (progress table gains `strategy`/`revise`
+rows + a Phase-3 status note on buffered HTTP + skip_clarify default + needs_clarification), §7.5
+(structuredContent gains `strategy` always + optional `persons`), §7.6 (searches resources marked
+shipped, with mime types), §7.8 (narrower shipped cache key documented, widening deferred to Phase 4).
+PLAN.md progress log extended with the Phase 3 entry.
+
+### Tests added by the test-extender review
+
+23 new tests (Phase 3 total 47 pass; full suite 473 passed / 4 skipped, 35 files), all hermetic
+(pipeline stages mocked like `runAgent.clarify.test.ts`; resources seeded through `getSearchDb` — no
+live LLM/R/Ollama):
+
+- `tests/agent/bundle.test.ts` (+10): `max_similarity` = MIN across sections / picked from the
+  section that has it / `0` treated as real / empty for keyword-only & orphan papers; `sections` cell
+  empty for a paper in no section; year/percentile emitted unquoted; unicode preserved; all-empty
+  bundle; person-only run stays paper-CSV-empty; a section referencing a handle with no paper is
+  crash-safe.
+- `tests/mcp/litSearch.test.ts` (+7): progress steps within 1..5, non-decreasing, reach 5, total
+  always 5; distinct `categories`/`min_year` → distinct `search_id`s (no cache collision); an errored
+  prior run is **not** served from cache; `must_include`/`categories`/`min_year` reach the writer;
+  `assess` consulted only when `refine=true`; zero-result run returns a terminal non-error bundle
+  with a header-only CSV.
+- `tests/mcp/searchResources.test.ts` (+6): overview of a still-`running` run; `/script` of a running
+  run; regex-metachar section id matched literally (not as a pattern); percent-encoded section id now
+  resolves; CSV quotes/commas/newlines round-trip through `/papers`.
