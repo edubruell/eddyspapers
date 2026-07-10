@@ -70,6 +70,14 @@ describe("getStats", () => {
   });
 });
 
+// DuckDB now() stamps created_at in local time, so "today" must be computed in
+// local time as well — new Date().toISOString() is UTC and made this test fail
+// between midnight and 0+offset local (found 2026-07-10).
+const localToday = (): string => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 describe("getDailyLogs", () => {
   it("returns rows for today with event counts and flags", async () => {
     await db.upsertSearch("a", input("logged brief", { refine: true }));
@@ -79,7 +87,7 @@ describe("getDailyLogs", () => {
     ]);
     await db.finalizeSearch("a", "done", "## review");
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     const rows = await db.getDailyLogs(today);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -237,7 +245,7 @@ describe("clarifier lifecycle in stats", () => {
     expect(stats.clarified).toBe(1);
     expect(stats.by_status).toEqual({ done: 1 });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     const rows = await db.getDailyLogs(today);
     expect(rows[0]?.clarified).toBe(true);
   });

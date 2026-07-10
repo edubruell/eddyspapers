@@ -527,14 +527,23 @@ search_persons <- function(query,
 
   if (nrow(results) == 0) return(tibble::tibble())
 
-  max_log_cit  <- max(log1p(results$total_citations), na.rm = TRUE)
+  max_log_cit  <- max(log1p(dplyr::coalesce(as.numeric(results$total_citations), 0)), na.rm = TRUE)
   max_overlap  <- max(results$overlap_weight,          na.rm = TRUE)
 
+  # Scalar `if () ... else` — NOT ifelse(): with a length-1 condition, ifelse()
+  # returns only the first element, which mutate recycles into a constant. That
+  # made quality_weight inert and collapsed "blended" into best_match in prod
+  # (found 2026-07-10 by the Hono parity harness).
+  # coalesce: persons without a person_stats row must score with 0 citations, not
+  # propagate NA through the blend into an NA score (matches the sandbox verb and
+  # the Node port).
   results <- results |>
     dplyr::mutate(
-      quality_norm  = ifelse(max_log_cit > 0, log1p(total_citations) / max_log_cit, 0),
+      quality_norm  = if (max_log_cit > 0)
+        log1p(dplyr::coalesce(as.numeric(total_citations), 0)) / max_log_cit
+      else 0,
       quality_blend = 1 + quality_weight * quality_norm,
-      overlap_norm  = ifelse(max_overlap  > 0, overlap_weight / max_overlap, 0),
+      overlap_norm  = if (max_overlap  > 0) overlap_weight / max_overlap else 0,
       score = dplyr::case_when(
         scoring_mode == "best_match" ~ best_score  * quality_blend,
         scoring_mode == "blended"    ~ (0.5 * overlap_norm + 0.5 * best_score) * quality_blend,

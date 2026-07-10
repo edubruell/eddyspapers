@@ -10,7 +10,8 @@
     "test": "vitest run",
     "eyeball": "tsx --env-file=.env scripts/eyeball.ts",
     "benchmark": "tsx --env-file=.env scripts/benchmark.ts",
-    "qual": "tsx --env-file=.env scripts/qual.ts"
+    "qual": "tsx --env-file=.env scripts/qual.ts",
+    "build:fixture": "tsx scripts/build_fixture.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "1.5.3-r.1",
