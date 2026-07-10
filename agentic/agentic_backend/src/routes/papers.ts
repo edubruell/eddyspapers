@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { getCorpusDb } from "../db/singleton.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireKey } from "../middleware/requireKey.js";
 import { keywordSearch, verifyReferences } from "../search/papers.js";
 
 // Keyword + reference-verification endpoints (PLAN.md §B1/§B2) — the first
@@ -47,9 +47,9 @@ const parseBody = async (c: { req: { json(): Promise<unknown> } }): Promise<unkn
 
 export const papersRoute = new Hono();
 
-// Both routes sit behind the shared gate like the other POST surface; Phase 4
-// replaces this with scoped API keys (PLAN.md §D1).
-papersRoute.post("/keyword", requireAuth, async (c) => {
+// Both routes sit behind a 'rest'-scoped API key (PLAN.md §D1); the grandfathered
+// shared password still satisfies it during the transition.
+papersRoute.post("/keyword", requireKey("rest"), async (c) => {
   const body = await parseBody(c);
   if (body === null) return c.json({ error: "Invalid JSON body" }, 400);
 
@@ -78,7 +78,7 @@ papersRoute.post("/keyword", requireAuth, async (c) => {
   return c.json(result);
 });
 
-papersRoute.post("/verify", requireAuth, async (c) => {
+papersRoute.post("/verify", requireKey("rest"), async (c) => {
   const body = await parseBody(c);
   if (body === null) return c.json({ error: "Invalid JSON body" }, 400);
 

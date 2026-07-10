@@ -241,3 +241,50 @@ live LLM/R/Ollama):
 - `tests/mcp/searchResources.test.ts` (+6): overview of a still-`running` run; `/script` of a running
   run; regex-metachar section id matched literally (not as a pattern); percent-encoded section id now
   resolves; CSV quotes/commas/newlines round-trip through `/papers`.
+
+---
+
+## Phase 4 — Keys & limits (reviewed 2026-07-10)
+
+### Code-quality review — no blockers
+
+The reviewer confirmed correctness against §D1/§7.9 on every load-bearing axis: SHA-256-only
+storage (plaintext never logged/listed/errored), 401 unknown/revoked vs 403 wrong-scope, the
+empty-registry-plus-no-password pass-through, the grandfathered legacy password (constant-time
+compare, never hashed), cache-hit-before-quota, the concurrency gauge released in `finally`,
+single-opener appdata, and both `computeSearchId` call sites widened. Warnings/nits resolved:
+
+- **W1 (fixed).** `lit_search` served a cached result *before* the `lit_search` scope check, so
+  an `mcp`-only key could read back another caller's completed run (cache is keyed on
+  brief+snapshot, not on key). Moved the scope check **above** the cache lookup; the rate-limit
+  acquire stays after it, so cache hits remain quota-free. §7.9 updated.
+- **W2 (fixed).** The grandfathered password was frozen at `env.ts` import while the appdata path
+  was read live — an asymmetry that made the gate un-toggleable at runtime/tests. `keys.ts` now
+  reads `process.env.AGENTIC_PASSWORD` live, matching `appdata.ts`.
+- **W3 (documented).** A registry reload failure is fail-closed (the awaiting request errors,
+  never opens the gate); noted in §7.9. No stale-serve fallback — acceptable for the preview.
+- **N1 (fixed).** Dropped the redundant `satisfies … as` double-cast for a module-scope
+  `DEFAULT_SCOPES: Scope[]`. **N4 (fixed).** `keys list` CLI now prints `rate_limit_overrides`.
+- **N2/N3 (by-design, left):** overrides accept arbitrary keys (a typo'd class silently no-ops)
+  and adjust only `perHour` — both match §7.9/API_KEYS.md wording.
+
+### Test extender
+
+Added edge-case coverage (all hermetic — search layer + corpus/appdata mocked, no live
+LLM/R/Ollama/network): timing-safe compare (same-length-wrong vs wrong-length both 401, through
+the app and the registry); the empty-string-is-not-legacy case; the registry TTL staleness
+contract (a key written straight to the store is invisible until force-refresh; a revoked key
+still resolves from a warm cache until the next refresh); `x-api-key`/`x-agentic-key`/Bearer all
+accepted with Bearer preferred; scope escalation across routes (mcp-only key → rest route 403);
+a cache HIT consuming no `lit_search` quota even with the concurrency slot held; the cheap-tool
+hourly cap at the boundary (Nth allowed, N+1th blocked, no downstream query on block) per key;
+appdata list ordering + revoke-nothing → 0. Final suite: **527 passed / 4 skipped, 41 files**;
+clean `tsc` + build. No product bugs surfaced beyond the reviewer's W1 (already fixed).
+
+### Doc updates applied (§10)
+
+`01_design.md` §7.4 (single-concurrent cap shipped), §7.8→§7.9 cross-ref, §7.9 (full key-registry
+concretisation: appdata table, `requireKey(scope)` matrix, rate-limit classes, scope-before-cache,
+fail-closed reload, CLI-over-`/admin`), operator-telemetry note (`requireKey('admin')`). New
+`agentic/agentic_backend/API_KEYS.md` (client-setup guide). PLAN.md progress log extended with the
+Phase 4 entry.

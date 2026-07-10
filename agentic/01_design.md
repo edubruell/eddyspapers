@@ -489,7 +489,7 @@ Concrete model picks and the OpenRouter-caching constraints behind them live in 
 
 The concrete repo layout is owned by **`02_implementation_plan.md` §1–§2**. In short: a top-level `agentic/` folder alongside the existing `backend/` and `frontend/`, containing `agentic_backend/` (TypeScript + Hono, also hosts the MCP server), `agentic_frontend/` (Astro + React), and `r/` (the `eddysearch.sandbox` package + `check.R` AST allowlist + `run.R` entrypoint). Infra (systemd unit + sandbox slice + Caddy reverse proxy for `agenticsearch.eduard-bruell.de`) co-locates on the same box as the existing eddyspapers service; the sandbox slice is the only thing that needs careful systemd hardening (see §3.5).
 
-**Operator telemetry.** Two admin routes behind `requireAuth` (same password as the costly POST routes, sent as `x-agentic-key` or `Bearer`) expose run statistics from the persistent `searches` store, mirroring the semantic-search `/stats/searches` contract so the operator's existing R poller works across all three products: `GET /stats/searches?days=N` (total runs, status breakdown, clarifier/refine usage) and `GET /stats/dailylogs?day=YYYY-MM-DD` (one row per run: id, created_at, status, brief, flags, event count). The DB file path is overridable via `AGENTIC_DB_PATH` (tests, deployment). The static `/faq` page (FAQ + imprint + GDPR, including the hallucination disclaimer and the third-party LLM-processing notice) ships with the frontend and stays outside the gate.
+**Operator telemetry.** Two admin routes behind `requireKey('admin')` (Phase 4; the grandfathered shared password carries every scope, so the operator's existing poller keeps working) expose run statistics from the persistent `searches` store, mirroring the semantic-search `/stats/searches` contract so the operator's existing R poller works across all three products: `GET /stats/searches?days=N` (total runs, status breakdown, clarifier/refine usage) and `GET /stats/dailylogs?day=YYYY-MM-DD` (one row per run: id, created_at, status, brief, flags, event count). The DB file path is overridable via `AGENTIC_DB_PATH` (tests, deployment). The static `/faq` page (FAQ + imprint + GDPR, including the hallucination disclaimer and the third-party LLM-processing notice) ships with the frontend and stays outside the gate.
 
 ---
 
@@ -577,8 +577,8 @@ The caller doesn't need to know our internal event taxonomy — they see prose p
 > and returned with the reply rather than delivered live. `skip_clarify` defaults **true**;
 > with `skip_clarify=false` an ambiguous brief returns a non-error `needs_clarification`
 > structured result and stops (no pause/resume over MCP). Identical briefs hit the persisted
-> cache (§7.8). Per-key rate limits and the single-concurrent-`lit_search` cap (§7.9) remain
-> Phase 4.
+> cache (§7.8). Per-key rate limits and the single-concurrent-`lit_search` cap (§7.9) shipped
+> in Phase 4 (2026-07-10).
 
 ### 7.5 Output shape
 
@@ -692,11 +692,32 @@ Bearer-token auth (`Authorization: Bearer <key>`) on the streamable-HTTP transpo
 
 Stdio transport (local) bypasses auth — the key is "you have shell on this machine."
 
-> **Phase 2 status (2026-07-10):** the HTTP `/mcp` endpoint is gated by the existing
-> shared-password `requireAuth` middleware (Bearer or `x-agentic-key`), the same gate
-> as the costly REST routes — not yet per-key scoped. Scoped `requireKey('mcp')` with
-> the `api_keys` registry and the per-key rate limits above lands in **Phase 4**
-> (PLAN.md §D). nginx (not Caddy) fronts the public endpoint.
+> **Phase 4 status (2026-07-10) — shipped.** The `api_keys` registry lives in a new
+> Hono-owned read-write `appdata.duckdb` (`src/db/appdata.ts`): `key_hash` (SHA-256 of the
+> `esk_`-prefixed plaintext, never stored raw), `label`, `scopes` (`rest`/`mcp`/`lit_search`/
+> `admin`), `rate_limit_overrides`, `created_at`, `revoked_at`. `requireKey(scope)`
+> (`src/middleware/requireKey.ts`) replaces the shared-password `requireAuth` on every costly
+> route — `rest` on `/chat`, `/papers/*`, `/export/*`; `mcp` on `/mcp`; `admin` on `/stats/*`
+> and `/admin/*`. It is a TTL-cached (30 s) lookup: an unknown/revoked token → 401, a known
+> key missing the scope → 403, and — crucially — an **empty registry with no password → open
+> pass-through** (dev), so the gate only bites once a password or key exists. The legacy
+> `AGENTIC_PASSWORD` is grandfathered as an all-scope `legacy` identity (constant-time
+> compared, never hashed into the registry) so the ZEW preview keeps working.
+>
+> Rate limits are in-process, keyed by key id (`src/auth/rateLimit.ts`): `lit_search`
+> 30/h + 300/day + **1 concurrent** (fixed windows + a concurrency gauge acquired before the
+> pipeline runs and released in a `finally`); `find_papers`/`find_people` 600/h; the SQL-only
+> tools a generous 6000/h abuse backstop. A cache hit consumes **no** quota, but the
+> `lit_search` scope is still checked *before* the cache lookup — a completed run (keyed on
+> brief+snapshot, not on key) is never served to a key that lacks the scope. A registry reload
+> failure is fail-closed (the awaiting request errors rather than opening the gate). The MCP route
+> gates with `mcp` scope, then threads the identity into the per-request server so
+> `lit_search` enforces the finer `lit_search` scope + its own limit at call time; `null`
+> identity (dev / local stdio) skips scope + limiting entirely. Keys are minted/revoked/listed
+> over `/admin/keys` (the `scripts/keys.ts` CLI is a thin HTTP client — only the server process
+> opens the exclusively-locked `appdata.duckdb`); revocation forces a registry refresh, so a
+> revoked key 401s immediately. No per-IP limiting (ZEW NATs through one address). nginx (not
+> Caddy) fronts the public endpoint.
 
 ### 7.10 Migration from the current R MCP server
 

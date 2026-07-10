@@ -5,6 +5,8 @@ import { getCorpusDb } from "../db/singleton.js";
 import { corpusGuide } from "../search/guide.js";
 import { keywordSearch, semanticSearch, verifyReferences } from "../search/papers.js";
 import { personSearch } from "../search/persons.js";
+import { withRateLimit } from "./guard.js";
+import type { KeyIdentity } from "../auth/keys.js";
 import type { BibEntry, KeywordField } from "../search/types.js";
 
 // The five cheap MCP tools (PLAN.md §C1). Each is a thin adapter over the same
@@ -45,7 +47,7 @@ const guarded =
 const splitJournalName = (s: string | undefined): string[] | null =>
   s == null ? null : s.split(",").map((v) => v.trim()).filter(Boolean);
 
-export function registerTools(server: McpServer): void {
+export function registerTools(server: McpServer, key: KeyIdentity | null = null): void {
   server.registerTool(
     "find_papers",
     {
@@ -68,6 +70,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async (a) =>
+      withRateLimit(key, "find_papers", () =>
       guarded(async () => {
         const db = await getCorpusDb();
         const papers = await semanticSearch(db, {
@@ -80,7 +83,7 @@ export function registerTools(server: McpServer): void {
           authorKeyword: a.author_keyword,
         });
         return ok({ count: papers.length, papers });
-      })(),
+      })()),
   );
 
   server.registerTool(
@@ -107,6 +110,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async (a) =>
+      withRateLimit(key, "keyword_search", () =>
       guarded(async () => {
         const db = await getCorpusDb();
         const result = await keywordSearch(db, {
@@ -122,7 +126,7 @@ export function registerTools(server: McpServer): void {
           offset: a.offset,
         });
         return ok({ total: result.total, count: result.results.length, results: result.results });
-      })(),
+      })()),
   );
 
   server.registerTool(
@@ -148,6 +152,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async (a) =>
+      withRateLimit(key, "find_people", () =>
       guarded(async () => {
         const db = await getCorpusDb();
         const people = await personSearch(db, {
@@ -161,7 +166,7 @@ export function registerTools(server: McpServer): void {
           minCitations: a.min_citations,
         });
         return ok({ count: people.length, people });
-      })(),
+      })()),
   );
 
   server.registerTool(
@@ -191,6 +196,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async (a) =>
+      withRateLimit(key, "verify_references", () =>
       guarded(async () => {
         const db = await getCorpusDb();
         const results = await verifyReferences(db, a.entries as BibEntry[]);
@@ -199,7 +205,7 @@ export function registerTools(server: McpServer): void {
           return acc;
         }, {});
         return ok({ count: results.length, summary, results });
-      })(),
+      })()),
   );
 
   server.registerTool(
@@ -214,9 +220,10 @@ export function registerTools(server: McpServer): void {
       inputSchema: {},
     },
     async () =>
+      withRateLimit(key, "corpus_context", () =>
       guarded(async () => {
         const db = await getCorpusDb();
         return ok({ ...(await corpusGuide(db)) });
-      })(),
+      })()),
   );
 }

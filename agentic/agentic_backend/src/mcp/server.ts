@@ -5,19 +5,24 @@ import { registerTools } from "./tools.js";
 import { registerLitSearch } from "./litSearch.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
+import type { KeyIdentity } from "../auth/keys.js";
 
 // One agent core, two faces (01_design.md §7.1): the same tool/resource/prompt
 // registrations feed both the hosted streamable-HTTP transport (this file) and the
 // local stdio binary (mcp-stdio.ts). Business logic lives in src/search/* service
 // functions — this layer is pure transport wiring.
+//
+// `key` is the authenticated API-key identity (null when the gate is disabled or for the
+// keyless local stdio build). It rides into the tool registrations so per-key rate limits
+// and the finer 'lit_search' scope can be enforced at call time.
 
-export function buildMcpServer(): McpServer {
+export function buildMcpServer(key: KeyIdentity | null = null): McpServer {
   const server = new McpServer(
     { name: "eddysearch", version: "0.2.0" },
     { instructions: MCP_INSTRUCTIONS },
   );
-  registerTools(server);
-  registerLitSearch(server);
+  registerTools(server, key);
+  registerLitSearch(server, key);
   registerResources(server);
   registerPrompts(server);
   return server;
@@ -33,8 +38,8 @@ export function buildMcpServer(): McpServer {
 // buffered JSON mode they are collected and returned with the reply rather than
 // streamed live — stdio and any future SSE-mode path deliver them incrementally. Auth
 // is handled upstream by the Hono route.
-export async function handleMcpRequest(req: Request): Promise<Response> {
-  const server = buildMcpServer();
+export async function handleMcpRequest(req: Request, key: KeyIdentity | null = null): Promise<Response> {
+  const server = buildMcpServer(key);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

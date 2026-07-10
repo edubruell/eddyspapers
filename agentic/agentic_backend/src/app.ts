@@ -8,6 +8,7 @@ import { exportRoute } from "./routes/export.js";
 import { papersRoute } from "./routes/papers.js";
 import { corpusRoute } from "./routes/corpus.js";
 import { mcpRoute } from "./routes/mcp.js";
+import { adminRoute } from "./routes/admin.js";
 import { requireAuth } from "./middleware/auth.js";
 
 // App construction is separate from serving (index.ts) so route tests can drive
@@ -34,6 +35,7 @@ export function buildApp(): Hono {
   app.route("/papers", papersRoute);
   app.route("/corpus", corpusRoute);
   app.route("/mcp", mcpRoute);
+  app.route("/admin", adminRoute);
 
   return app;
 }

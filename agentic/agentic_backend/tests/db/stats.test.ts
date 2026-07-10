@@ -281,6 +281,10 @@ describe("stats routes", () => {
 
   const loadRoute = async (password: string) => {
     vi.resetModules();
+    // requireKey reads the grandfathered password live from process.env (parity with the
+    // appdata path), so stub it there — not just in the env.js mock (which only feeds
+    // /last_updated's SEMANTIC_API_BASE / EDDYPAPERS_API_KEY).
+    vi.stubEnv("AGENTIC_PASSWORD", password);
     vi.doMock("../../src/env.js", () => ({
       env: {
         AGENTIC_PASSWORD: password,
@@ -290,6 +294,9 @@ describe("stats routes", () => {
     }));
     vi.doMock("../../src/db/singleton.js", () => ({
       getSearchDb: async () => ({ getStats, getDailyLogs }),
+      // requireKey('admin') resolves keys through the registry → getAppDataDb; no keys
+      // provisioned here, so the grandfathered password is the only admission path.
+      getAppDataDb: async () => ({ activeKeys: async () => [] }),
     }));
     const { statsRoute } = await import("../../src/routes/stats.js");
     return statsRoute;
@@ -298,6 +305,7 @@ describe("stats routes", () => {
   afterEach(() => {
     getStats.mockClear();
     getDailyLogs.mockClear();
+    vi.unstubAllEnvs();
     vi.doUnmock("../../src/env.js");
     vi.doUnmock("../../src/db/singleton.js");
     vi.resetModules();

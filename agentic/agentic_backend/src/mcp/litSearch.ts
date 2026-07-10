@@ -6,6 +6,8 @@ import { runAgent } from "../agent/runAgent.js";
 import { buildBundle, collectSynthesis, type SearchBundle } from "../agent/bundle.js";
 import { resolveSnapshot } from "../sandbox/snapshot.js";
 import { getSearchDb } from "../db/singleton.js";
+import { getRateLimiter } from "../auth/rateLimit.js";
+import type { KeyIdentity } from "../auth/keys.js";
 import type { AgentInput, Stage, StreamEvent } from "../agent/types.js";
 
 // lit_search — the full agentic pipeline over MCP (01_design.md §7.2-§7.5, PLAN.md §C1,
@@ -135,7 +137,7 @@ function fail(message: string): CallToolResult {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
-export function registerLitSearch(server: McpServer): void {
+export function registerLitSearch(server: McpServer, key: KeyIdentity | null = null): void {
   server.registerTool(
     "lit_search",
     {
@@ -179,20 +181,6 @@ export function registerLitSearch(server: McpServer): void {
             ? new Date(Date.now() - snapshot.ageMs).toISOString().slice(0, 10)
             : "unknown";
 
-        const searchId = computeSearchId({
-          brief: a.brief,
-          categories: a.categories,
-          minYear: a.min_year,
-          dbSnapshotDate,
-        });
-        const db = await getSearchDb();
-
-        // Cache hit (§7.8): a completed run is rebuilt from its stored events — no R, no LLM.
-        const existing = await db.getSearch(searchId);
-        if (existing?.status === "done") {
-          return litResult(buildBundle(searchId, a.brief, existing.events));
-        }
-
         const input: AgentInput = {
           brief: a.brief,
           categories: a.categories,
@@ -201,40 +189,70 @@ export function registerLitSearch(server: McpServer): void {
           refine: a.refine,
           skipClarify: a.skip_clarify ?? true,
         };
-        await db.upsertSearch(searchId, { ...input, dbSnapshotDate });
 
-        const events: StreamEvent[] = [];
-        const forward = progressForwarder(extra);
-        const result = await runAgent(searchId, input, snapshot.path, (e) => {
-          events.push(e);
-          forward(e);
-        });
-        await db.appendEvents(searchId, events);
+        const searchId = computeSearchId({ ...input, dbSnapshotDate });
 
-        // skip_clarify=false and the clarifier asked → surface the questions as a non-error
-        // structured result (§7.3). The run is left awaiting_clarification in the store, but
-        // MCP has no resume path — the caller re-invokes lit_search with a sharper brief.
-        if (result.paused) {
-          const clar = events.find((e) => e.type === "clarify");
-          const question = clar && "question" in clar ? clar.question : "";
-          const options = clar && "options" in clar ? clar.options : [];
-          await db.setAwaitingClarification(searchId, question);
-          return needsClarificationResult(searchId, question, options);
+        // Enforce the finer 'lit_search' scope up front — before even the cache lookup —
+        // so a key that lacks it can't read back another caller's completed run (the cache
+        // is keyed on brief+snapshot, not on key). A null key means the gate is disabled
+        // (dev / local stdio) — no scope check, no limiting.
+        if (key && !key.scopes.includes("lit_search")) {
+          return fail("This API key lacks the 'lit_search' scope.");
         }
 
-        // Only a run that emitted a terminal `done` is finalized (and cached) as done —
-        // mirrors the web /chat path (chat.ts) so a truncated run that returned without a
-        // done/error is never persisted as a complete, cache-servable result.
-        const errored = events.find((e) => e.type === "error" && !e.recoverable);
-        const hasDone = events.some((e) => e.type === "done");
-        const synthesis = collectSynthesis(events);
-        const status = !errored && hasDone ? "done" : "error";
-        await db.finalizeSearch(searchId, status, synthesis);
-        if (status === "error") {
-          const message = errored && "message" in errored ? errored.message : "Search ended without a result.";
-          return fail(`Search failed: ${message}`);
+        const db = await getSearchDb();
+
+        // Cache hit (§7.8): a completed run is rebuilt from its stored events — no R, no LLM,
+        // and no rate-limit quota consumed (a repeat is free). Scope is already enforced above.
+        const existing = await db.getSearch(searchId);
+        if (existing?.status === "done") {
+          return litResult(buildBundle(searchId, a.brief, existing.events));
         }
-        return litResult(buildBundle(searchId, a.brief, events));
+
+        // A real run costs model tokens: apply the per-key rate limit + single-concurrent
+        // cap (PLAN.md §D1). Cache hits skip this — a repeat is free.
+        const limiter = getRateLimiter();
+        const gate = key ? limiter.tryAcquire(key.id, "lit_search", key.rateLimitOverrides) : ({ ok: true } as const);
+        if (!gate.ok) return fail(gate.reason);
+
+        try {
+          await db.upsertSearch(searchId, { ...input, dbSnapshotDate });
+
+          const events: StreamEvent[] = [];
+          const forward = progressForwarder(extra);
+          const result = await runAgent(searchId, input, snapshot.path, (e) => {
+            events.push(e);
+            forward(e);
+          });
+          await db.appendEvents(searchId, events);
+
+          // skip_clarify=false and the clarifier asked → surface the questions as a non-error
+          // structured result (§7.3). The run is left awaiting_clarification in the store, but
+          // MCP has no resume path — the caller re-invokes lit_search with a sharper brief.
+          if (result.paused) {
+            const clar = events.find((e) => e.type === "clarify");
+            const question = clar && "question" in clar ? clar.question : "";
+            const options = clar && "options" in clar ? clar.options : [];
+            await db.setAwaitingClarification(searchId, question);
+            return needsClarificationResult(searchId, question, options);
+          }
+
+          // Only a run that emitted a terminal `done` is finalized (and cached) as done —
+          // mirrors the web /chat path (chat.ts) so a truncated run that returned without a
+          // done/error is never persisted as a complete, cache-servable result.
+          const errored = events.find((e) => e.type === "error" && !e.recoverable);
+          const hasDone = events.some((e) => e.type === "done");
+          const synthesis = collectSynthesis(events);
+          const status = !errored && hasDone ? "done" : "error";
+          await db.finalizeSearch(searchId, status, synthesis);
+          if (status === "error") {
+            const message = errored && "message" in errored ? errored.message : "Search ended without a result.";
+            return fail(`Search failed: ${message}`);
+          }
+          return litResult(buildBundle(searchId, a.brief, events));
+        } finally {
+          if (key) limiter.release(key.id, "lit_search");
+        }
       } catch (err) {
         return fail(err instanceof Error ? err.message : String(err));
       }

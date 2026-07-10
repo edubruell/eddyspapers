@@ -393,6 +393,42 @@ Notes from the build:
    — full suite **473 passed / 4 skipped, 35 files**. All hermetic (stages mocked, resources seeded
    through the store — no live LLM/R/Ollama).
 
+**Phase 4 — built 2026-07-10, phase-exit reviews passed.** Scoped API keys, per-key rate
+limits, and the key CLI. New: `src/db/appdata.ts` (Hono-owned read-write `appdata.duckdb` with
+the `api_keys` table + CRUD — the Phase-5 user-table store, seeded here with keys), `src/auth/
+keys.ts` (`esk_`-prefixed key mint, SHA-256 storage, TTL-cached `KeyRegistry` with the
+grandfathered password as an all-scope `legacy` identity), `src/auth/rateLimit.ts` (in-process
+fixed-window + concurrency-gauge limiter), `src/middleware/requireKey.ts` (`requireKey(scope)`
+→ 401 unknown/revoked · 403 wrong-scope · open pass-through when no password/keys),
+`src/routes/admin.ts` (`/admin/keys` create/list/revoke), `src/mcp/guard.ts` (cheap-tool rate
+wrapper), `scripts/keys.ts` (HTTP-client CLI), `API_KEYS.md` (client-setup doc). Modified: every
+costly route swapped `requireAuth` → `requireKey` (`rest` on chat/papers/export, `mcp` on `/mcp`,
+`admin` on `/stats/*`); the MCP server threads the key identity into `registerTools`/
+`registerLitSearch` so `lit_search` enforces its `lit_search` scope + 1-concurrent cap and the
+cheap tools their hourly caps; `src/agent/cache.ts` widened to include `must_include` + `refine`
+(the deferred Phase-3 warning). Acceptance met: old password still authenticates (all scopes);
+a revoked key 401s on the next request (mutation forces a registry refresh); the `lit_search`
+per-key limit + single-concurrent cap are enforced (cache hits cost no quota); keys are issuable
+via `npm run keys -- new`.
+
+Notes from the build:
+1. DuckDB's cross-process file lock is exclusive (spiked: a second opener — even read-only —
+   fails while the server holds the handle). So `appdata.duckdb` is a server-only persistent
+   singleton and the CLI manages keys over `/admin/keys` rather than opening the file. This also
+   makes revocation instant (the admin route calls `registry.ensureFresh(true)`).
+2. `requireAuth` (password-only) is kept solely for the frontend `/auth/check` login probe; all
+   spend-bearing routes moved to `requireKey`. The web `/chat` path is auth-gated but **not**
+   class-rate-limited — the per-tool limits target the MCP surface (the reverse-proxy concurrency
+   cap in Phase 5 covers the web path).
+3. A vitest `setupFiles` hook points `AGENTIC_APPDATA_PATH` at a per-worker temp file so parallel
+   test files don't collide on the appdata lock; key-inspecting tests override it themselves.
+4. Widening the cache key invalidates old `search_id`s (data unchanged — they simply recompute);
+   both call sites (`chat.ts`, `litSearch.ts`) now pass `mustInclude`/`refine` through.
+5. Doc pass (§10): `01_design.md` §7.4/§7.8/§7.9 + operator-telemetry note updated; `API_KEYS.md`
+   added. Tests: `tests/auth/{keys,rateLimit}.test.ts`, `tests/middleware/requireKey.test.ts`,
+   `tests/routes/admin.test.ts`, `tests/mcp/{litSearch,tools}.limits.test.ts` — full suite (after
+   the test-extender pass) **527 passed / 4 skipped, 41 files**; clean `tsc` + build.
+
 ## 12. Local testing & deployment
 
 ### 12.1 Local test rig
