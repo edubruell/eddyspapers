@@ -336,6 +336,33 @@ Bugs found & fixed along the way (all pre-existing, surfaced by the harness/fixt
 4. `tests/db/stats.test.ts` computed "today" in UTC while DuckDB `now()` is local — suite failed
    between midnight and 02:00 CEST. Fixed.
 
+**Phase 2 — built 2026-07-10, phase-exit reviews passed (no blockers).** Delivered the MCP adapter
+and the five cheap tools. New: `src/mcp/{server,tools,resources,prompts,instructions}.ts`,
+`src/routes/mcp.ts` (streamable-HTTP `/mcp`, wildcard-mounted so `/mcp` and `/mcp/` both route, behind
+`requireAuth`), `src/mcp-stdio.ts` (`dist/mcp-stdio.js` stdio binary, auth-bypassed per §7.9,
+stderr-only), and `src/search/citations.ts` (read-only ports of the sandbox cites/citedby/handle_stats/
+versions verbs, reused by the Phase 5 REST citation routes). `src/search/papers.ts` gained exported
+`PAPER_COLS` + `rowToPaper` for reuse. Tool/resource/prompt surface matches §C1/§7.6/§7.7 exactly:
+tools `find_papers`, `keyword_search`, `find_people`, `verify_references`, `corpus_context`; resources
+`corpus://guide` + `agenticsearch://papers/{handle}[/cites|/citedby]`; prompts `lit_review`,
+`find_referees`, `journal_scan`; server `instructions`. Each tool returns both a JSON text block and
+`structuredContent` (no `outputSchema` declared — deliberate). `lit_search` stays Phase 3.
+
+Notes from the build:
+1. Installed `@modelcontextprotocol/sdk` resolves to **1.29.0** (not the 1.12.1 pinned in
+   `package.json`). Its stateless web-standard transport **refuses reuse** ("cannot be reused across
+   requests"), so `/mcp` builds a fresh server+transport per request with `enableJsonResponse: true`
+   and deterministic teardown after the body is buffered. Registration is cheap (the DuckDB pool is a
+   shared singleton); revisit only if HTTP MCP QPS grows.
+2. `?limit=N` on the cites/citedby resources (§7.6) is **not wired** — the SDK `ResourceTemplate`
+   matcher rejects URIs with an undeclared query string, and `{?limit}` would make the param
+   mandatory. Resources return the default cap (50); §7.6 updated to drop `?limit=N`.
+3. Test suite: 34 review-added tests (`tests/mcp/{server,edgecases}.test.ts`, `tests/routes/mcp.test.ts`)
+   — full suite **426 passed / 4 skipped, 32 files**. Both faces validated end-to-end (HTTP initialize
+   over `app.request`; stdio `initialize` handshake returns `serverInfo eddysearch 0.2.0`).
+4. Doc pass (§10): `01_design.md` §7.2 (two-doors → six tools), §7.6 (`?limit=N` dropped), §7.8 (TTL
+   wording → snapshot-swap, not nightly), §7.9 (Phase-2 shared-password gate + nginx note) updated.
+
 ## 12. Local testing & deployment
 
 ### 12.1 Local test rig

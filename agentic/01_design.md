@@ -511,7 +511,15 @@ The MCP server is a thin transport adapter in the same Node service, importing `
 
 Transports: **stdio** for local launches (a coding agent spawns the binary) and **streamable HTTP** for the hosted variant at `agenticsearch.eduard-bruell.de/mcp` (one URL, bearer-token auth). The streamable-HTTP path is the right default — same TLS endpoint as the web UI, no per-machine install required.
 
-### 7.2 Tool surface — two doors, not seven
+### 7.2 Tool surface — six tools
+
+> **Superseded (2026-07-10, PLAN.md §5/§C1 is canonical).** The original "two doors"
+> framing below predates the requirement that simple searches also work over MCP
+> without the fat pipeline. The shipped surface is **six tools**: `lit_search` (the
+> full pipeline) plus five cheap tools — `find_papers`, `keyword_search`,
+> `find_people`, `verify_references`, `corpus_context`. The five cheap tools shipped
+> in **Phase 2** (2026-07-10); `lit_search` is **Phase 3**. Versions/citations/stats
+> remain resources (§7.6), not tools — that decision below still holds.
 
 Reading the current `mcp_server.R`, the surface is per-endpoint (`search_papers`, `get_versions`, …). We collapse that to **two intents**:
 
@@ -626,8 +634,15 @@ A completed search registers a set of MCP resources the caller can read later (w
 - `agenticsearch://searches/{id}/papers` — full paper records as JSON
 - `agenticsearch://searches/{id}/sections/{section_id}` — one section's full row set
 - `agenticsearch://papers/{handle}` — canonical paper record (resolves via existing `/handlestats`, `/versions`, `/citedby`)
-- `agenticsearch://papers/{handle}/citedby?limit=N` — papers citing this one
-- `agenticsearch://papers/{handle}/cites?limit=N` — references of this one
+- `agenticsearch://papers/{handle}/citedby` — papers citing this one
+- `agenticsearch://papers/{handle}/cites` — references of this one
+
+> **Phase 2 note (2026-07-10):** the `?limit=N` originally shown on the two lines
+> above is not wired. The MCP SDK's `ResourceTemplate` matcher rejects any URI
+> carrying a query string the template doesn't declare, and its `{?limit}` form
+> makes the param mandatory (breaking the common no-limit read). The cites/citedby
+> resources return the default cap (50); callers wanting a different N use the search
+> tools. Revisit only if a client needs deeper citation reads over MCP.
 
 Resources are listable so the calling agent can discover what's available without guessing URIs. The paper-level resources subsume the role of the old `get_versions`, `get_citations`, `get_handle_stats` tools without forcing them into the top-level tool list.
 
@@ -645,7 +660,7 @@ These help small calling models stay on-pattern without re-deriving the lit-sear
 
 `search_id` is a stable hash over `{brief, modes, year_range, categories, must_include, db_snapshot_date}`. Identical briefs against the same snapshot return the cached result without re-running R or the synthesiser. This matters because coding agents retry tool calls more than humans do, and because the same brief recurring across sessions (e.g. each time someone reopens a paper) should be free.
 
-Cache TTL: until the next snapshot rotation (nightly). Stored as one row in a `searches` DuckDB table (separate from `articles` snapshot — read-write, but tiny).
+Cache TTL: until the next snapshot rotation (no nightly rotation — the swap happens after each `update_repec.R` run; PLAN.md §11 decision 4). Stored as one row in a `searches` DuckDB table (separate from `articles` snapshot — read-write, but tiny).
 
 ### 7.9 Auth and limits
 
@@ -656,6 +671,12 @@ Bearer-token auth (`Authorization: Bearer <key>`) on the streamable-HTTP transpo
 - Single concurrent `lit_search` per key (queue the second).
 
 Stdio transport (local) bypasses auth — the key is "you have shell on this machine."
+
+> **Phase 2 status (2026-07-10):** the HTTP `/mcp` endpoint is gated by the existing
+> shared-password `requireAuth` middleware (Bearer or `x-agentic-key`), the same gate
+> as the costly REST routes — not yet per-key scoped. Scoped `requireKey('mcp')` with
+> the `api_keys` registry and the per-key rate limits above lands in **Phase 4**
+> (PLAN.md §D). nginx (not Caddy) fronts the public endpoint.
 
 ### 7.10 Migration from the current R MCP server
 

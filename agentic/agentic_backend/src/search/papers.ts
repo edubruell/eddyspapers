@@ -14,7 +14,9 @@ import type {
   VerifyMismatch,
 } from "./types.js";
 
-const PAPER_COLS =
+// Exported so citations.ts (paper-level MCP resources + Phase 5 citation route
+// ports) selects and maps the same article columns without redefining them.
+export const PAPER_COLS =
   "a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.bib_tex, a.abstract";
 
 // Filter fragments carry their bind values with them so WHERE assembly stays a
@@ -48,7 +50,7 @@ const whereClause = (fragments: Fragment[]): Fragment =>
         params: fragments.flatMap((f) => f.params),
       };
 
-const rowToPaper = (r: Record<string, unknown>): PaperResult => ({
+export const rowToPaper = (r: Record<string, unknown>): PaperResult => ({
   Handle: String(r.Handle),
   title: (r.title as string | null) ?? null,
   year: r.year == null ? null : Number(r.year),

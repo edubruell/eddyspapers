@@ -89,3 +89,71 @@ or deferred with a note.
   weak-descending + deterministic, score ≥ `overlap_weight` when quality weight > 0, evidence
   handles are lowercase, `n_matched ≥ evidence.length`.
 - Two pre-existing test failures fixed: `%`-keyword count assertion and limit-test anchor keyword.
+
+---
+
+## Phase 2 — MCP adapter + cheap tools (reviewed 2026-07-10)
+
+Two fresh-context sub-agent reviews (code-quality + test-extender) per §12.4. **No blockers.**
+
+### Blockers
+
+None. The implementation is correct against the documented wire shapes; the known hazard classes
+(handle-case SQL joins, LIKE-wildcard escaping, empty-input guards, stdout purity on stdio) are all
+handled. Full suite green: **426 passed / 4 skipped (32 files)**.
+
+### Fixed during the review pass
+
+- **`resources.ts` — `?limit=N` on cites/citedby (§7.6) can't be wired cleanly.** The SDK
+  `ResourceTemplate` matcher rejects any URI carrying a query string the template doesn't declare, and
+  the `{?limit}` form makes the param mandatory (breaking the common no-limit read). Reverted the
+  passthrough; resources return the default cap (50). `01_design.md` §7.6 updated to drop `?limit=N`;
+  a test now pins the "query string ⇒ resource not found" behaviour so it isn't mistaken for a bug.
+- **`routes/mcp.ts:14` — `.all("/")` served only `/mcp`, not `/mcp/`.** Some MCP clients normalise to
+  a trailing slash. Switched to `.all("*")`; both paths verified to complete the initialize handshake.
+- **`tools.ts` — `corpusGuide(db) as unknown as Record<…>` double-cast.** Replaced with an object
+  spread (`ok({ ...guide })`) so the guide shape stays type-checked.
+- **Stale test comment** in `tests/routes/mcp.test.ts` ("streams as SSE") corrected to
+  `enableJsonResponse` mode.
+
+### Warnings (deferred)
+
+- **`server.ts` builds a full MCP server (tool/resource/prompt registration) per request.** Required
+  by the SDK's stateless transport (it refuses reuse); cheap in absolute terms since the DuckDB pool is
+  a shared singleton, but zod schema construction re-runs each call. Acceptable at Phase-2 volumes;
+  revisit if HTTP MCP QPS grows and the SDK offers a registration/transport split.
+- **`tools.ts` — `a.fields as KeywordField[]` / `a.entries as BibEntry[]` casts.** Safe narrowing (the
+  zod enums match the service unions exactly) but compiler-unverifiable. Acceptable — the schemas are
+  the source of truth. Align if the service types and schemas ever drift.
+- **`routes/mcp.ts` auth is the shared password (`requireAuth`), not scoped keys.** Phase 4 swaps in
+  `requireKey('mcp')` + per-key rate limits (PLAN §D); the route comment already flags this.
+
+### Nits (low priority)
+
+- **`verifyReferences` (papers.ts) uses a `for…of` accumulator** — the one imperative loop, justified
+  and commented (sequential per-entry semantics; parallelising would contend for the small pool). Keep.
+- **`guarded` in `tools.ts` doubly covers zod validation** (the SDK already turns a schema throw into
+  an `isError` result before the handler runs). Harmless.
+
+### Doc updates applied (§10)
+
+`01_design.md` §7.2 (two-doors → six-tool surface, with Phase 2/3 split), §7.6 (`?limit=N` dropped),
+§7.8 (cache TTL: snapshot-swap, not nightly), §7.9 (Phase-2 shared-password gate + nginx note).
+PLAN.md progress log extended with the Phase 2 entry.
+
+### Tests added by the test-extender review
+
+34 new tests (suite now 426 passed / 4 skipped, 32 files), all driven over the in-memory MCP transport
+against the fixture (Ollama-free — `find_papers`/`find_people` asserted at schema level only):
+
+- `tests/mcp/edgecases.test.ts` (30): per-tool `inputSchema`/`required` round-trips; malformed
+  payloads → `isError:true` (missing/mistyped `query`, empty/oversized `entries`, out-of-range
+  limit/offset, unknown enums, unknown tool name); SQL-only parity (`match:"all"`⊆`"any"`,
+  `order_by:"citations"`, disjoint offset pages, text ⇄ `structuredContent` equality, summary counts);
+  resource-URI parsing (colon handles round-trip, missing handle ⇒ null/empty not crash, `/cites`
+  doesn't collide with the base template, unregistered scheme rejects); prompt arg handling + unknown
+  prompt name.
+- `tests/routes/mcp.test.ts` (+4): Accept-header 406 cases, malformed JSON body ≥400, `tools/list`
+  over the HTTP transport returns a JSON-RPC frame.
+- `tests/mcp/server.test.ts` (smoke): initialize/capabilities/instructions, `tools/list`, SQL-only
+  tool calls, resource reads, prompt expansion, plus the `?limit` "not found" pin.
