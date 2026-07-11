@@ -442,9 +442,11 @@ recorded: making API keys **MCP-only** once the web goes password-free (drop `re
 from web routes, keep `mcp`/`admin`) is deferred to Phase 5. (Pre-existing `run.spec.mjs` e2e
 failure noted in FINDINGS — predates this change, out of scope.)
 
-**Phase 5 — Plumber retirement — local build (M1–M4) done 2026-07-11; M5/M6 pending.** Split into
+**Phase 5 — Plumber retirement — local build (M1–M5) done 2026-07-11; M6/M7 pending.** Split into
 reviewable milestones (M1–M5 local, M6 the prod window, M7 the post-soak R-package strip). All
-Plumber routes now have Hono ports; the local suite is green (583 tests) and the src build is clean.
+Plumber routes now have Hono ports; the local suite is green (619 tests / 4 skipped, 54 files) and
+the src build is clean. **The entire local build of the backend-port is complete** — M6 and M7 are
+prod-ops/deletion, not coding.
 
 - **M1 — classic search + user-table appdata + telemetry split** (`5314149`). `appdata.duckdb` gains
   the four user tables (`saved_searches`, `search_logs`, `person_search_logs`,
@@ -475,6 +477,20 @@ Plumber routes now have Hono ports; the local suite is green (583 tests) and the
   CHECKPOINT + atomic snapshot rename; `deploy_diffs.sh` v2 (no service stop; cp+mv; curl
   `/admin/reload`; `EDDY_STOP_SERVICE=1` escape hatch); `env.ts` drops `SEMANTIC_API_BASE` /
   `EDDYPAPERS_API_KEY`.
+- **M5 — parity harness, phase-exit reviews, doc sync** (`d1e97cc`). `scripts/parity.ts` gains an
+  `sql` battery (citations / stats / person profile-papers-lookup) recorded from Plumber and checked
+  by driving the real Hono app via `buildApp().request()`; new unit-tested `scripts/parityNormalize.ts`
+  collapses the two systematic Plumber↔Hono differences on both sides — `auto_unbox=FALSE` boxing
+  (recursively unwrap one-element arrays) and jsonlite `digits=4` (round numbers to 4) — and drops
+  volatile keys, so SQL routes compare exact-after-normalisation while embedding routes stay
+  rank-tolerant. The record+check run is the **M6 deploy gate** (exact SQL parity needs local corpus
+  == recorded snapshot). Two fresh-context phase-exit reviews passed with no blockers: code-quality
+  (ports byte-faithful; 3 warnings addressed — defensive `boxRow` JSON.stringify, `/cites` limit-cap
+  doc, `deploy_diffs.sh` WAL-rm POSIX comment) and test-extender (+33 tests across 5
+  `*.extended.test.ts` files; no product bugs). Doc pass (§10): this progress log, `claude.md` "does
+  NOT touch" superseded, `agentic/01_design.md` §6, `econpeople/02_api.md` + `roadmap.md` serving
+  layer → Hono, `FINDINGS.md` phase-5 section. (`ops_notes/PHASE5_CUTOVER.md` — the M6 window
+  checklist — is gitignored.)
 
 Decisions made during the build (refining §6/§11): (1) classic + person telemetry stay **`rest`**-scoped
 (not `admin`) — parity with Plumber's single-key model and works through nginx frontend-key injection;
@@ -482,10 +498,11 @@ no `EDDY_ADMIN_KEY` needed for the poller. (2) The agentic `searches.duckdb` sto
 (unchanged from decision 3). (3) jsonlite serialises Plumber doubles at `digits=4`, so the M5
 comparator must round doubles to 4 before the exact-SQL diff (e.g. `/handlestats` `citations_per_year`).
 
-Remaining: **M5** — extend `scripts/parity.ts` + battery to every ported route (record vs local
-Plumber → check via `buildApp().request()`), the phase-exit reviews (§12.4), and the doc pass; then
-**M6** the prod cutover window (`ops_notes/PHASE5_CUTOVER.md`, §12.3 runbook) and **M7** the
-post-soak R-package strip.
+Remaining (prod-ops, not coding): **M6** — the prod cutover window
+(`ops_notes/PHASE5_CUTOVER.md`, §12.3 runbook): run the parity record+check gate against prod,
+migrate the user tables into `appdata.duckdb`, repoint nginx (classic + econpeople), rename the
+service, two-week soak — then **M7**, the post-soak R-package strip (delete `inst/plumber/`, the
+HTTP parts of `R/api.R`/`R/persons.R`, `R/mcp_server.R`, `run_api.R`, `run_mcp_server*.R`).
 
 ## 12. Local testing & deployment
 

@@ -27,6 +27,9 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   "qwen/qwen3.6-35b-a3b":       { input: 0.15, output: 1.00 },
   "anthropic/claude-haiku-4-5": { input: 1.00, output: 5.00 },
   "google/gemini-3.5-flash":    { input: 1.50, output: 9.00 },
+  "z-ai/glm-4.5-air":           { input: 0.13, output: 0.85 },
+  "qwen/qwen3-coder-next":      { input: 0.11, output: 0.80 },
+  "openai/gpt-5.6-luna":        { input: 1.00, output: 6.00 },
 };
 
 const DEFAULT_MODELS = Object.keys(MODEL_PRICING);
