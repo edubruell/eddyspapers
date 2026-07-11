@@ -1,156 +1,100 @@
-# Semantic Economics Paper Search Engine - Status and Plan
+# Eddy's Papers — Project Guide
 
-## Project Overview
+## What this is
 
-This is a semantic economics paper search engine that:
-- Syncs academic papers from RePEc archives
-- Parses RDF/ReDIF metadata files
-- Generates semantic embeddings using Ollama (via tidyllm)
-- Stores data in a DuckDB database with vector search (VSS extension)
-- Provides a Plumber REST API for search queries
+Three related products sharing one DuckDB corpus (~479k economics papers from RePEC):
 
-## Current State (as of 2025-12-11)
+| Product | URL | Status |
+|---|---|---|
+| Classic semantic search | `econpapers.eduard-bruell.de` | Live |
+| EconPeople person finder | `econpeople.eduard-bruell.de` | Live |
+| Agentic literature review | `agenticsearch.eduard-bruell.de` | Live (ZEW preview) |
 
-### Existing Structure
-- `/backend` folder: Started package refactor
-  - `DESCRIPTION`: Package metadata (eddyspapersbackend)
-  - `R/config.R`: Configuration functions
-  - `R/folders.R`: Folder reference factory
-  - `R/sync.R`: RePEc RSync synchrosnisation
-  - `R/parse.R`: RDF file parsing using Perl backend
-  - `R/database.R`: Embedding and database operations
-  - `NAMESPACE`: Package exports
+All three are served by **one Node/Hono service** at `:8001` (`agentic/agentic_backend/`). R/Plumber is retired on prod (stopped 2026-07-11); dead code stripped in M7 (~2026-07-25). See `localwip/notes/PLAN.md` for the full architecture record.
 
-## Design Layout
+## Folder map
 
-### 1. Backend Package Structure (`/backend`)
-
-The backend package should contain:
-
-**Core Functions**:
-- RePEc sync utilities 
-- RDF parsing utilities 
-- Embedding generation 
-- Database utilities
-
-**Plumber API**:
-- Search endpoint with semantic similarity
-- Stats endpoints (journals, categories, total count, last updated)
-- Database connection pooling
-- Filter capabilities (year, journal, category, title/author keywords)
-- Save endpoint (saves a search and its hash to the database)
-- Search retrieve end (get a search with its inputs and outputs from the save table)
-
-**Package Structure**:
 ```
-backend/
-├── DESCRIPTION
-├── NAMESPACE
-├── R/
-│   ├── config.R         
-│   ├── folders.R        
-│   ├── sync.R           
-│   ├── parse.R          
-│   ├── embed.R          
-│   ├── database.R       
-│   └── api.R            
-├── inst/
-│   └── plumber/
-│       └── api.R        
-└── man/                 
+/
+├── update_repec.R          ← cron entry point: sync → parse → embed → diff → deploy
+├── deploy_diffs.sh         ← manual diff upload + /admin/reload
+├── server_apply_diff.R     ← runs on server inside deploy_diffs.sh
+│
+├── backend/                ← R package `eddyspapersbackend` (pipeline-only after M7)
+│   └── R/                  ← config, folders, sync, parse, database, handle_stats,
+│                              persons, persons_wikidata, update_logs
+│
+├── agentic/
+│   ├── 00–08_*.md          ← design docs (canonical — read before changing a subsystem)
+│   ├── agentic_backend/    ← Node/Hono API service (serves ALL three products)
+│   │   ├── src/            ← routes, search, auth, db, mcp, sandbox
+│   │   ├── tests/
+│   │   └── scripts/        ← parity harness, key CLI, migration tools
+│   ├── agentic_frontend/   ← Astro+React UI for agenticsearch
+│   └── r/                  ← eddysearch.sandbox R package + subprocess runner
+│
+├── frontend/               ← Astro+React UI for classic search (econpapers)
+├── econpeople_frontend/    ← Astro+React UI for EconPeople
+├── econpeople/             ← EconPeople design docs (00–03_*.md)
+│
+├── stats/                  ← analysis scripts and cached data
+├── maintenance/            ← static maintenance page
+├── ops_notes/              ← gitignored server-ops notes
+└── localwip/               ← gitignored scratch
+    ├── notes/              ← PLAN.md, FINDINGS.md, roadmap.md, M7_restructure.md
+    ├── lit-search/         ← skill WIP
+    └── lit-check/
 ```
 
-### 2. Main Folder Scripts
+**Post-M7 restructure planned** (~2026-07-25): rename `backend/` → `pipeline/`, `agentic/agentic_backend/` → `api/`, group UIs under `frontends/`. See `localwip/notes/M7_restructure.md`.
 
-The main project folder should have lightweight scripts that:
-- Load the backend package
-- Configure folder paths
-- Invoke package functions
+## Service architecture
 
-### 3. Frontend Structure (`/frontend`)
+```
+R pipeline (cron / update_repec.R)
+  └─ writes articles.duckdb  ──atomic swap──▶  articles_agentic.duckdb (read-only snapshot)
+                                                        │
+                                              eddyspapers-api (Node/Hono :8001)
+                                                   ├─ /search, /person/*, /stats/*
+                                                   ├─ /cites, /citedby, /handlestats
+                                                   ├─ /mcp  (MCP-over-HTTP)
+                                                   └─ /chat, /export/*  (agentic pipeline)
+                                                        └─ R sandbox subprocess (lit_search)
 
-The frontend is built with Astro and React components. On desktop, it has a two-phase UI:
-- Landing state: centered logo and wider search box.
-- Results state: left sidebar with logo + search controls; right pane with results.
+nginx
+  ├─ econpapers.* → /api/* → :8001
+  ├─ econpeople.* → /api/* → :8001
+  └─ agenticsearch.* → /api/*, /mcp → :8001
 
-Key components (React):
-- `SearchApp.jsx`: top-level state and layout; orchestrates search.
-- `SearchPanel.jsx`: query textarea, category pills, min-year, search button.
-- `CategoryPills.jsx`: selectable journal category chips.
-- `Results.jsx`: renders results only after a search was triggered.
-- `ResultCard.jsx`: individual paper card with copy-to-clipboard BibTeX and expand/collapse abstract.
-- `SearchBox.jsx`: autosizing textarea input.
-- `HandleDeatil.jsx`: Detailed expanded view info for `ResultCard`
-- `StatsBadges.jsx`: Statistics Badges and a citation time histogram shown in `HandleDeatil`
+User data (saved searches, API keys, logs) lives in a separate appdata.duckdb
+owned by the Hono service — never touched by the pipeline.
+```
 
-Astro layout:
-- `src/layouts/AppLayout.astro`: global page layout and styles.
+## API endpoints
 
-API client:
-- `src/lib/api.js`: posts to the R Plumber backend at `http://127.0.0.1:8000/search` and implements saved searchers, database update data retrieval and other API features. 
+| Verb + path | Description |
+|---|---|
+| `POST /search` | Semantic search with filters (year, journal, title, author) |
+| `POST /search/save` | Save a search; returns deterministic hash |
+| `GET /search/{hash}` | Load a saved search |
+| `GET /versions?handle=` | All known versions of a paper |
+| `GET /cites?handle=&limit=` | Papers referenced by handle (internal) |
+| `GET /citedby?handle=&limit=` | Papers citing handle (internal) |
+| `GET /citationcounts?handle=` | Total vs internal citation counts |
+| `GET /handlestats?handle=` | Full precomputed citation + impact stats |
+| `GET /stats/journals` | Article counts by journal/category |
+| `GET /stats/last_updated` | Date of last pipeline run |
+| `POST /person/search` | Two-stage author search (semantic → rollup) |
+| `GET /person/{short_id}` | Person profile |
+| `GET /person/{short_id}/papers` | Papers by person |
+| `POST /chat` | Start agentic literature review (SSE stream) |
+| `POST /chat/{id}/reply` | Reply to clarifying question |
+| `POST /export/xlsx` | Export results as Excel |
+| `POST /admin/reload` | Hot-swap corpus snapshot (requires admin key) |
 
-## Technical Details
+## Pipeline (update_repec.R)
 
-### Configuration
-- Folder structure:
-  - `data/RePEc/`: Downloaded RePEc archives
-  - `data/rds_archivep/`: Parsed RDF data (RDS files)
-  - `data/pqt/`: Parquet exports (optional)
-  - `data/db/`: DuckDB database
-  - `data/journals.csv`: Journal metadata
-
-### Dependencies
-- **Data Processing**: tidyverse, here, fs
-- **Database**: DuckDB, pool, DBI
-- **Embeddings**: tidyllm (Ollama integration)
-- **API**: plumber
-- **Utilities**: rprojroot, withr, arrow, jsonlite
-
-### Key External Requirements
-- Perl with ReDIF-perl modules (for parsing)
-- Ollama with mxbai-embed-large model (for embeddings)
-- rsync (for RePEc synchronization)
-
-## Implementation Plan
-
-
-
-
-
-### Phase 4: Citation Integration (IN PROGRESS)
-
-**Goal:** Integrate RePEc citation data (iscited.txt) into backend with three-table design for performance.
-
-#### Citation Architecture
-
-**Three-Table Design:**
-
-1. **`cit_all`** - Full citation graph (all edges from iscited.txt)
-   - Columns: `citing VARCHAR`, `cited VARCHAR`
-   - Indices: on both citing and cited
-   - Purpose: Complete citation counts, includes papers outside our DB
-   - Size: ~34M rows
-
-2. **`cit_internal`** - Internal citation graph (both ends in our articles DB)
-   - Columns: `citing VARCHAR`, `cited VARCHAR`
-   - Indices: on both citing and cited
-   - Purpose: Network analysis, metadata-rich queries
-   - Derived from `cit_all` filtered to our corpus (If we ever scale to all of RePEc anything we do for `cit_internal` has to scale to `cit_all`)
-
-3. **`handle_stats`** - Precomputed citation statistics
-   - Purpose: Fast runtime queries, no joins needed
-   - Updated during sync pipeline, not at query time
-   - Includes first-order metrics (citations, references, percentiles)
-   - Includes second-order metrics (citer quality, Top 5 share, weighted citations)
-   - Includes time-series data (citations by year) and category breakdowns
-
-4. **`bib_coupling`** - Precomputed table for bibliographic coupling (Work in Progres)
-   - Purpose: Show the top 5 or 10 papers with the most similar references
-
-#### Update Pipeline (with citations)
-
-```r
-# update_repec.R order:
+```
 1. Sync journals (rsync)
 2. Parse RDF files
 3. Embed & populate articles table
@@ -158,132 +102,80 @@ API client:
 5. Sync iscited.txt
 6. Parse & populate cit_all
 7. Build cit_internal
-8. Compute handle_stats         
-9. Dump to parquet
+8. Compute handle_stats
+9. Refresh persons + Wikidata
+10. Dump to parquet (full + diff)
+11. Deploy diff → server (deploy_diffs.sh) if EDDY_DEPLOY=1
 ```
 
-#### API Endpoints
+## DuckDB tables
 
-## API Endpoints
+**Corpus (articles_agentic.duckdb — read-only for Hono):**
+- `articles` — papers with embeddings (HNSW index)
+- `cit_all` — full citation graph (~36M edges)
+- `cit_internal` — both-ends-in-corpus subgraph
+- `handle_stats` — precomputed citation + impact metrics
+- `version_links` — paper version relationships
+- `journals` — journal metadata
+- `bib_coupling` — precomputed bibliographic coupling
+- `persons`, `person_works`, `person_stats`, `person_wikidata` — EconPeople tables
 
-- POST `/search`  
-  Semantic search with vector similarity and filters (year, journal, title, author).
+**Appdata (appdata.duckdb — Hono read-write):**
+- `saved_searches`, `search_logs`, `person_search_logs`, `api_keys`
 
-- POST `/search/save`  
-  Save a search request and its results; returns deterministic hash.
+## Agentic search design docs
 
-- GET `/search/{hash}`  
-  Load a previously saved search by hash.
-
-- GET `/versions?handle=...`  
-  Retrieve all known versions of a paper.
-
-- GET `/cites?handle=...&limit=50`  
-  Papers referenced by a given handle (internal citations only).
-
-- GET `/citedby?handle=...&limit=50`  
-  Papers citing a given handle (internal citations only).
-
-- GET `/citationcounts?handle=...`  
-  Total vs internal citation counts (precomputed).
-
-- GET `/handlestats?handle=...`  
-  Full precomputed citation and impact statistics for a handle.
-  
-- GET `/stats/journals`  
-  Article counts by journal or category.
-  
-- GET `/stats/last_updated`  
-  Date of last successful RePEc update.
-
-
-### Main Scripts to work with the packaged backend
-- **`run_api.R`**: Production API server startup (tested/works)
-- **`update_repec.R`**: Complete update pipeline for cron jobs (tested/works)
-
-## Notes
-
-- No code comments unless requested
-- Focus on clean, functional code (Preference for purrr over loops)
-- Use folder factory for all path operations
-- Work within the database when possible but avoid SQL-Spaghetti 
-- Separate Tables when possible
-- Ensure backward compatibility with existing data
-
-## Development workflow rules
-
-After every implementation step:
-
-1. **Spawn a fresh-context sub-agent to extend tests and evaluate code quality.** Do not re-use the main conversation context for this — use `Agent` with `subagent_type: general-purpose`. The sub-agent should: read the files just written, assess correctness and style (R: purrr/functional, no loops; TS: effect/pipe, no mutation, no `any`), identify missing edge cases, and write additional tests.
-2. **Update the todo list / roadmap.** Mark completed tasks in `agentic/05_roadmap.md` (or the relevant phase checklist) and note any sub-tasks discovered during implementation.
-3. **Update design docs if the implementation diverges.** If code differs from what a design doc says, update the doc — code and docs must stay in sync.
-
-## Frontend Usage Notes
-
-- Development: `cd frontend && npm install && npm run dev` (Astro dev server)
-- API endpoint: by default the frontend points to `http://127.0.0.1:8000` in `frontend/src/lib/api.js` (`API_BASE`). Adjust if your backend runs elsewhere.
-
----
-
-## Agentic Search (`/agentic`, base product working)
-
-A second product, **`agenticsearch.eduard-bruell.de`**, is being designed alongside the existing semantic search. It is a hosted, multi-turn web + MCP service that takes a natural-language brief, writes a tailored R script against the same DuckDB, runs it in a hardened sandbox, and synthesises a literature review. It is modelled on the `lit-search` Claude Code skill (`~/.claude/skills/lit-search/`) but productised so it works without filesystem assumptions.
-
-**Status:** base product works end-to-end (2026-06-07) — the full clarify→write→validate→execute→synthesize pipeline runs locally, streams over SSE, returns synthesised reviews with cited evidence + PDF/Excel/BibTeX/Markdown exports + shareable read-only permalinks, behind an optional shared-password gate for the ZEW preview. Phases 0–8, 13, 14 and the auth slice of 10 are built; next is the rest of Phase 10 (deploy). The numbered design notes remain canonical — read the relevant one before changing a subsystem.
-
-### Design corpus (read in order)
+Read in order; lower-numbered doc wins on system decisions.
 
 | # | File | Owns |
 |---|---|---|
-| 00 | `agentic/00_overview.md` | high-level direction, doc map, glossary, hard decisions, non-goals |
-| 01 | `agentic/01_design.md` | system architecture: pipeline, defused-R sandbox, SSE protocol, wire schemas, MCP server, failure modes |
-| 02 | `agentic/02_implementation_plan.md` | repo layout (`agentic_backend/` TS+Hono, `agentic_frontend/` Astro+React, `r/` for `eddysearch.sandbox`), model selection + OpenRouter caching allowlist |
-| 03 | `agentic/03_interface.md` | UX: palette/primitives shared with `frontend/`, two-phase layout, stepper, reading order, microcopy, branding |
-| 04 | `agentic/04_prompts.md` | context engineering: cached corpus, per-stage prompts, retry-with-rejection-reason, MCP variant |
-| 05 | `agentic/05_roadmap.md` | 12-phase plan of attack with acceptance criteria + dependency graph |
-| 06 | `agentic/06_clarifier.md` | blocking-clarifier feature design: one-shot toggle, pause/resume state machine, reply endpoint, wire/UX/prompt changes (extends 01/03/04) |
-| 07 | `agentic/07_multistage.md` | multistage feature design: results-aware re-running — assess step + bounded loop (≤3 rounds) that revises strategy when a pass underperforms; resolves 01 §9.5 (extends 01/03/04) |
-| 08 | `agentic/08_sharelinks.md` | share-links feature design: read-only `/c?s=<id>` permalink served from the persistent store (not the in-memory bus), client-side event replay, ungated view with Excel hidden (extends 01/03) |
+| 00 | `agentic/00_overview.md` | direction, glossary, hard decisions, non-goals |
+| 01 | `agentic/01_design.md` | pipeline, sandbox, SSE protocol, wire schemas, MCP, failure modes |
+| 02 | `agentic/02_implementation_plan.md` | repo layout, model selection, OpenRouter caching |
+| 03 | `agentic/03_interface.md` | UX: palette, layout, stepper, microcopy, branding |
+| 04 | `agentic/04_prompts.md` | context engineering, per-stage prompts, retry strategy |
+| 05 | `agentic/05_roadmap.md` | phase plan with acceptance criteria |
+| 06 | `agentic/06_clarifier.md` | blocking-clarifier design (extends 01/03/04) |
+| 07 | `agentic/07_multistage.md` | results-aware re-run loop (extends 01/03/04) |
+| 08 | `agentic/08_sharelinks.md` | read-only share-link permalinks (extends 01/03) |
 
-**When working on the agentic project, the lower-numbered doc wins for system decisions; the higher-numbered doc wins for surface decisions.** The numbered design docs are canonical — if you disagree with a decision there, update the doc rather than diverging in code. (06–08 are feature designs layered on 00–05; on conflict they defer to the docs they extend.)
+## EconPeople design docs
 
-### What's been built (through 2026-06-07)
+`econpeople/00_overview.md` → `01_data_model.md` → `02_api.md` → `03_profile_tiers.md`
 
-The base product is functional end-to-end and was validated against real briefs.
+## Pending work (next up)
 
-- **Core pipeline (Phases 0–8):** `clarify → write → validate → execute → synthesize`, streamed over SSE through a typed `StreamEvent` union; `runAgent` orchestrates, the writer emits an allow-listed R script run in the `eddysearch.sandbox`, and only the synth stage streams tokens. Two-phase web UI (landing → sidebar+results) with a 5-step stepper, strategy panel, evidence section cards, and `PaperCard`s.
-- **Optional per-run features:** the **blocking clarifier** (Phase 13 — a real pause/resume round-trip with a "Skip clarifying questions" toggle) and the **single refine pass** (Phase 14 — an opt-in advisor that runs one corrective/broadening pass after a weak first round; the general ≤3-round loop stays out of scope).
-- **Exports:** evidence-rich **Markdown** (review + a `Sources` section, one field row per paper), **BibTeX**, server-rendered **Excel** (`exceljs`, `POST /export/xlsx`), and **PDF** via browser print-to-PDF (no Typst/LaTeX dependency). File-type icons in the toolbar; exports surface once a run is terminal *with content* — including a long synthesis that aborts mid-write.
-- **Access gate:** optional shared password (`AGENTIC_PASSWORD`) via `requireAuth`, bound to the costly POST routes (`/chat`, `/chat/:id/reply`, `/export/*`); the SSE stream + `/searches/:id` stay open. `GET /auth/check` login probe; frontend `Gate.jsx` auto-detects whether the backend enforces it. In use for the ZEW preview (unset = open for dev).
-- **Share links (Phase 12):** read-only `/c?s=<id>` permalinks served from the **persistent** store (`GET /searches/:id`), replayed client-side through the same reducer — restart-proof, unlike the in-memory event bus. Share button at the top of the results list.
-- **Reliability fixes:** writer-stage LLM exceptions now escalate to the retry model instead of aborting on attempt 1 (the Qwen "response did not match schema" flake); synth stream timeout raised 120 s → 300 s; `.synthesis h1` heading CSS added (Tailwind preflight had left review titles looking like body text).
+- **M7 strip** (~2026-07-25): delete dead Plumber code from `backend/`; see `localwip/notes/M7_restructure.md` for the full strip + restructure plan.
+- **HNSW cosine index**: rebuild `WITH (metric='cosine')` in `create_indices()` — current index uses l2sq.
+- **Phase 6**: rewrite `lit-search` + `lit-check` skills against the MCP server (currently in `localwip/`).
+- **Quality-weight parity cases**: re-add to parity battery after confirming blended mode matches (vectorised-ifelse bug was fixed locally; not yet golden-recorded).
 
-### Next steps
+## Technical stack
 
-1. **Deployment (the rest of Phase 10) — the immediate priority.** Stand the preview up at a ZEW-reachable URL: Caddy reverse proxy + TLS for `agenticsearch.eduard-bruell.de`, per-IP rate limit + 1-concurrent-run cap (cost protection beyond the password), a **systemd sandbox slice** for the R subprocess (`01 §3.5` — the real OS-level security boundary, not yet wired), `/healthz` with DB-copy age, the clarifier 24 h expiry sweeper, and a reverse-proxy rewrite for the pretty `/c/<id>` form. Pair with a live ZEW eval + cost sign-off (Phases 5/14 acceptance). MCP (Phase 9) stays deferred.
-2. **EconPeople — the person finder (third product, design done, build pending).** A person finder for economists at `econpeople.eduard-bruell.de` ("Diogenes meerkat" branding), making the *person* the unit of search instead of the paper. Its design corpus already exists in **`econpeople/`** (`00_overview.md` vision/scope, `01_data_model.md` ingestion + tables, `02_api.md` endpoints; `03_enrichment.md` is the later Phase B). Headline capability: find authors by topic via **two-stage overlap retrieval** — a hidden paper-level semantic search rolled up to authors through `person_works` (no author-vector averaging), with matched papers shown as evidence. Built on the RePEc Author Service (`pers`) archive (~84k authors) joined to the existing corpus on `handle` (no name disambiguation for registered authors). Decided stack (`econpeople` D-3): **person endpoints extend the existing R/Plumber `eddyspapersbackend`** (shared DuckDB, max infra reuse), with a **separate** Astro/React frontend deferred (ships API-first, no MCP). Read the `econpeople/` docs before any code; a few `[OPEN]` calls remain there. This is the candidate **first fully-public** surface.
-3. ~~Later: fold EconPeople into Agentic Search.~~ **Done (2026-06-11, Phase 15 in `agentic/05_roadmap.md`).** The sandbox now has person verbs (`person_search` two-stage rollup as a CTE chain, `person_lookup`, `person_profile`, `person_papers`) + `emit_person_section`; the wire schema gained a `Person` record, `person` events and `Section.kind`; prompts cover person-finder briefs end-to-end; the frontend renders `PersonCard`s and colour-coded mode chips (person green / semantic blue / keyword grey). Person-finder briefs in the live ZEW eval remain open.
+**Pipeline (R):** tidyverse, tidyllm (Ollama/mxbai-embed-large), DuckDB, arrow, jsonlite, rprojroot
 
-### Things the agentic build needs from the existing backend
+**API service (Node/Hono):** TypeScript, Hono, @duckdb/node-api, @modelcontextprotocol/sdk, exceljs, vitest
 
-- **DuckDB file:** read-only copy of `articles.duckdb` repointed by `update_repec.R` after each weekly/monthly sync. The sandbox reads this directly; the REST API is a fallback for the rare lookup outside a script run.
-- **Existing tables used by the sandbox verbs:** `articles`, `cit_all`, `cit_internal`, `handle_stats`, `journals`, `version_links` (columns `source`, `target`, `type`), `bib_coupling`, plus the EconPeople person tables `persons`, `person_works`, `person_stats`, `person_wikidata` (since 2026-06-11).
-- **Existing REST endpoints reused:** `/search` (for the MCP `find_papers` passthrough), `/handlestats`, `/versions`, `/cites`, `/citedby`. No new endpoints needed.
-- **Deferred backend change:** adding a `doi VARCHAR` column to `articles` would improve agentic citation links. Deferred (parse side is trivial; backfilling the existing corpus needs care). Revisit when another initiative wants a clean DOI column anyway.
+**Frontends:** Astro + React (all three UIs share the same palette)
 
-### What this project does NOT touch
+**Infra:** nginx reverse proxy, systemd (`eddyspapers-api.service`), Ollama local embeddings
 
-> **Superseded by the backend-port programme (root `PLAN.md`, in progress 2026-07).** The
-> "zero edits" rules below held for the agentic build; they no longer hold now that Plumber is
-> being retired. See `PLAN.md` for the live picture: every Plumber route now has a Hono port
-> (phase-5 M1–M4, local + green), and the R `backend/` package becomes pipeline-only.
+**External requirements:** Perl + ReDIF-perl modules (parsing), rsync (sync)
 
-- `backend/` — ~~zero edits planned~~ **being retired.** `eddyspapersbackend` keeps only its
-  sync/parse/embed/database/persons pipeline code; the Plumber HTTP layer (`inst/plumber/`,
-  the HTTP parts of `R/api.R`/`R/persons.R`, `run_api.R`) is deleted in phase-5 M7, after the
-  two-week prod soak.
-- `frontend/` — still zero *code* edits. The classic + econpeople UIs keep working unchanged;
-  the phase-5 cutover only repoints their nginx `/api/` block from Plumber (`:8000`) to Hono
-  (`:8001`). (The future "Detective mode →" cross-link banner remains out of scope here.)
-- The existing R MCP server (`backend/R/mcp_server.R`) — already retired on prod; deleted with
-  the rest of the Plumber layer in phase-5 M7 (folds in the old Phase-11 task).
+## Code style
+
+- R: purrr/functional, no loops; folder factory for all paths; work in DB, avoid SQL spaghetti
+- TypeScript: functional/pipe style, no mutation, no `any`
+- No comments unless the WHY is non-obvious
+- No backwards-compat shims
+
+## Development workflow
+
+After every implementation step:
+1. Spawn a fresh sub-agent (`Agent` with `subagent_type: general-purpose`) to review code quality and extend tests.
+2. Update `agentic/05_roadmap.md` (or relevant phase checklist).
+3. If implementation diverges from a design doc, update the doc — code and docs must stay in sync.
+
+**Frontend dev:** `cd frontend && npm install && npm run dev`  
+**API dev:** `cd agentic/agentic_backend && pnpm install && pnpm dev`  
+**API endpoint (local):** `http://127.0.0.1:8001`
