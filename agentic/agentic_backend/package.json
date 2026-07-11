@@ -14,7 +14,8 @@
     "benchmark": "tsx --env-file=.env scripts/benchmark.ts",
     "qual": "tsx --env-file=.env scripts/qual.ts",
     "build:fixture": "tsx scripts/build_fixture.ts",
-    "keys": "tsx scripts/keys.ts"
+    "keys": "tsx scripts/keys.ts",
+    "migrate:appdata": "tsx scripts/migrate_appdata.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "1.5.3-r.1",

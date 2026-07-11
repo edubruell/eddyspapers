@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { getAppDataDb } from "../db/singleton.js";
+import { getAppDataDb, reloadCorpusDb } from "../db/singleton.js";
 import { getKeyRegistry, generateKey } from "../auth/keys.js";
 import { requireKey } from "../middleware/requireKey.js";
 import { ALL_SCOPES, type Scope } from "../db/appdata.js";
@@ -58,6 +58,17 @@ adminRoute.delete("/keys/:prefix", async (c) => {
   await getKeyRegistry().ensureFresh(true);
   if (revoked === 0) return c.json({ error: "No active key matched that prefix" }, 404);
   return c.json({ revoked });
+});
+
+// Reopen the corpus after a pipeline snapshot swap (PLAN.md §6 decision 4). The deploy
+// script curls this once the atomic rename is in place; a failed reopen keeps the old pool
+// serving and surfaces as a 500 so the operator notices.
+adminRoute.post("/reload", async (c) => {
+  const snapshot = await reloadCorpusDb();
+  return c.json({
+    reloaded: true,
+    snapshot: { path: snapshot.path, ageMs: snapshot.ageMs, stale: snapshot.stale },
+  });
 });
 
 adminRoute.get("/keys", async (c) => {

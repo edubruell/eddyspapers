@@ -88,3 +88,10 @@ export function corpusGuide(db: CorpusDb): Promise<CorpusGuide> {
   }
   return cached;
 }
+
+// Drop the memoised guide so the next request rebuilds it against a freshly-swapped corpus
+// snapshot. Called by reloadCorpusDb() (POST /admin/reload) — the snapshot's article/journal
+// counts and last_updated date change on a pipeline swap.
+export function clearGuideCache(): void {
+  cached = null;
+}
