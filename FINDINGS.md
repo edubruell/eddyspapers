@@ -325,3 +325,20 @@ Phase 4 entry.
   `GET /auth/check → 200 {ok:true}` route to the mock (the mock backend is open), and switched the
   assertion to `getByRole("img", { name: /Agentic Search/i })`; every other assertion in the spec is
   unchanged. Full e2e suite now **3 passed** (`run.spec` 1/1, `admin.spec` 2/2).
+
+---
+
+## Known pre-existing issues (to deal with later)
+
+- **~113 `tsc --noEmit` errors, all in test files — pre-existing, tracked for a cleanup pass.**
+  Confirmed present on a clean tree (git-stash isolation) *before* any Phase-5 work, so not introduced
+  by the backend-port. `vitest` transpiles via esbuild without a type-check, so the full suite still
+  runs green — this is a `tsc`-gate-only dirtiness, not a runtime failure. Breakdown by file:
+  `tests/agent/bundle.test.ts` (56), `tests/mcp/searchResources.test.ts` (26),
+  `tests/mcp/edgecases.test.ts` (15), `tests/mcp/server.test.ts` (6),
+  `tests/mcp/tools.limits.test.ts` (1). Dominant cause: the `StreamEvent` discriminated union rejects
+  the test fixtures' object literals under `Omit<StreamEvent, "seq">` (TS2353 "may only specify known
+  properties" — 68×; plus TS2345 24×, TS2339 11×, TS2556 1×), i.e. the test event builders need a
+  per-variant type or a discriminant so the union narrows. **Action:** fold a dedicated
+  fix into the Phase-5 M5 test-extender pass (or a standalone cleanup) — do NOT let it block a phase's
+  `tsc` gate in the meantime; re-baseline the count so any *new* Phase-5 tsc error is visible against it.

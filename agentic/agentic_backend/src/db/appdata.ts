@@ -38,6 +38,11 @@ export interface AppDataDb {
   listKeys(includeRevoked: boolean): Promise<ApiKeyRow[]>;
   // Only the non-revoked rows, for the auth registry's in-memory cache.
   activeKeys(): Promise<ApiKeyRow[]>;
+  // Generic primitives for the ported classic/person user-table logic (src/db/classic.ts).
+  // Kept low-level here so the domain SQL lives beside its wire contract, not in this file;
+  // both share the one exclusive handle (never open appdata twice — DuckDB locks it).
+  query(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]>;
+  run(sql: string, params?: unknown[]): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -81,6 +86,72 @@ export async function openAppDataDb(): Promise<AppDataDb> {
     )
   `);
 
+  // The four user-generated tables ported out of the regen-able corpus file (PLAN.md §A1,
+  // Phase 5). Schemas mirror backend/R/api.R + backend/R/persons.R verbatim, except the
+  // `results JSON` columns become TEXT here — the payload is a JSON string either way, and
+  // TEXT avoids taking a dependency on DuckDB's json extension in this small store. The
+  // offline migration (scripts/migrate_appdata.ts) recreates the sequences at max(id)+1;
+  // `IF NOT EXISTS START 1` here only seeds a fresh dev/test file and never resets them.
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS saved_searches (
+      hash VARCHAR PRIMARY KEY,
+      query TEXT NOT NULL,
+      max_k INTEGER,
+      min_year INTEGER,
+      journal_filter TEXT,
+      journal_name TEXT,
+      title_keyword TEXT,
+      author_keyword TEXT,
+      results TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS search_logs (
+      search_id INTEGER PRIMARY KEY,
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ip VARCHAR,
+      query_hash VARCHAR(8),
+      result_count INTEGER,
+      top3_handles VARCHAR[],
+      has_year_filter BOOLEAN,
+      has_journal_filter BOOLEAN,
+      has_journal_name_filter BOOLEAN,
+      has_title_keyword BOOLEAN,
+      has_author_keyword BOOLEAN,
+      response_time_ms INTEGER
+    )
+  `);
+  await conn.run("CREATE SEQUENCE IF NOT EXISTS search_logs_seq START 1");
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS person_search_logs (
+      search_id INTEGER PRIMARY KEY,
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ip VARCHAR,
+      query_hash VARCHAR(8),
+      result_count INTEGER,
+      top3_short_ids VARCHAR[],
+      scoring_mode VARCHAR,
+      has_min_year BOOLEAN,
+      has_category BOOLEAN,
+      has_institution BOOLEAN,
+      has_active_since BOOLEAN,
+      has_min_citations BOOLEAN,
+      response_time_ms INTEGER
+    )
+  `);
+  await conn.run("CREATE SEQUENCE IF NOT EXISTS person_search_logs_seq START 1");
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS saved_person_searches (
+      hash VARCHAR PRIMARY KEY,
+      query TEXT NOT NULL,
+      scoring_mode VARCHAR,
+      quality_weight DOUBLE,
+      results TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   return {
     async createKey(row) {
       await conn.run(
@@ -112,6 +183,15 @@ export async function openAppDataDb(): Promise<AppDataDb> {
     async activeKeys() {
       const rows = await rowsToObjects(conn, "SELECT * FROM api_keys WHERE revoked_at IS NULL");
       return rows.map(toRow);
+    },
+
+    async query(sql, params) {
+      return rowsToObjects(conn, sql, params);
+    },
+
+    async run(sql, params) {
+      if (params) await conn.run(sql, params as never);
+      else await conn.run(sql);
     },
 
     async close() {

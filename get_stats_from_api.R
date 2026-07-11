@@ -217,7 +217,7 @@ get_person_day_tibble_from_api <- function(day = lubridate::today()){
 get_agentic_stats_from_api <- function(days = 1,
                                        base = Sys.getenv("AGENTIC_API_BASE", "https://agenticsearch.eduard-bruell.de")){
   request(base) |>
-    req_url_path_append("api", "stats", "searches") |>
+    req_url_path_append("api", "stats", "agentic", "searches") |>
     req_url_query(days = days) |>
     req_headers("x-agentic-key" = Sys.getenv("AGENTIC_PASSWORD")) |>
     req_perform() |>
@@ -227,7 +227,7 @@ get_agentic_stats_from_api <- function(days = 1,
 get_agentic_day_tibble_from_api <- function(day = lubridate::today(),
                                             base = Sys.getenv("AGENTIC_API_BASE", "https://agenticsearch.eduard-bruell.de")){
   request(base) |>
-    req_url_path_append("api", "stats", "dailylogs") |>
+    req_url_path_append("api", "stats", "agentic", "dailylogs") |>
     req_url_query(day = day) |>
     req_headers("x-agentic-key" = Sys.getenv("AGENTIC_PASSWORD")) |>
     req_perform() |>

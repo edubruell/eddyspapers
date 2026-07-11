@@ -313,14 +313,14 @@ describe("stats routes", () => {
 
   it("rejects /searches without a key when the gate is enabled", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/searches");
+    const res = await route.request("/agentic/searches");
     expect(res.status).toBe(401);
     expect(getStats).not.toHaveBeenCalled();
   });
 
   it("rejects /dailylogs with a wrong key when the gate is enabled", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/dailylogs?day=2026-06-11", {
+    const res = await route.request("/agentic/dailylogs?day=2026-06-11", {
       headers: { "x-agentic-key": "nope" },
     });
     expect(res.status).toBe(401);
@@ -329,7 +329,7 @@ describe("stats routes", () => {
 
   it("serves /searches with the x-agentic-key header and defaults days to 30", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/searches", {
+    const res = await route.request("/agentic/searches", {
       headers: { "x-agentic-key": "s3cret" },
     });
     expect(res.status).toBe(200);
@@ -339,7 +339,7 @@ describe("stats routes", () => {
 
   it("serves /searches with a Bearer token and passes days through", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/searches?days=7", {
+    const res = await route.request("/agentic/searches?days=7", {
       headers: { authorization: "Bearer s3cret" },
     });
     expect(res.status).toBe(200);
@@ -348,14 +348,14 @@ describe("stats routes", () => {
 
   it.each(["0", "-3", "2.5", "abc"])("rejects days=%s with 400", async (days) => {
     const route = await loadRoute("");
-    const res = await route.request(`/searches?days=${days}`);
+    const res = await route.request(`/agentic/searches?days=${days}`);
     expect(res.status).toBe(400);
     expect(getStats).not.toHaveBeenCalled();
   });
 
   it("serves /dailylogs for a well-formed day", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/dailylogs?day=2026-06-11", {
+    const res = await route.request("/agentic/dailylogs?day=2026-06-11", {
       headers: { "x-agentic-key": "s3cret" },
     });
     expect(res.status).toBe(200);
@@ -367,7 +367,7 @@ describe("stats routes", () => {
     "rejects malformed day=%s with 400",
     async (day) => {
       const route = await loadRoute("");
-      const res = await route.request(`/dailylogs?day=${day}`);
+      const res = await route.request(`/agentic/dailylogs?day=${day}`);
       expect(res.status).toBe(400);
       expect(getDailyLogs).not.toHaveBeenCalled();
     },
@@ -375,8 +375,8 @@ describe("stats routes", () => {
 
   it("leaves both routes open when the gate is disabled", async () => {
     const route = await loadRoute("");
-    const statsRes = await route.request("/searches");
-    const logsRes = await route.request("/dailylogs?day=2026-06-11");
+    const statsRes = await route.request("/agentic/searches");
+    const logsRes = await route.request("/agentic/dailylogs?day=2026-06-11");
     expect(statsRes.status).toBe(200);
     expect(logsRes.status).toBe(200);
   });

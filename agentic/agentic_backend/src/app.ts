@@ -3,7 +3,9 @@ import { cors } from "hono/cors";
 import { chatRoute } from "./routes/chat.js";
 import { streamRoute } from "./routes/stream.js";
 import { searchesRoute } from "./routes/searches.js";
+import { searchRoute } from "./routes/search.js";
 import { statsRoute } from "./routes/stats.js";
+import { dailyLogsRoute } from "./routes/dailylogs.js";
 import { exportRoute } from "./routes/export.js";
 import { papersRoute } from "./routes/papers.js";
 import { corpusRoute } from "./routes/corpus.js";
@@ -21,7 +23,12 @@ export function buildApp(): Hono {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  app.use("*", cors({ origin: corsOrigins }));
+  // X-API-Key is allowed so the classic/econpeople frontends (which send it) work when
+  // developing cross-origin against :8001; behind nginx everything is same-origin.
+  app.use(
+    "*",
+    cors({ origin: corsOrigins, allowHeaders: ["Content-Type", "Authorization", "X-API-Key", "Last-Event-ID"] }),
+  );
 
   app.get("/healthz", (c) => c.json({ status: "ok", service: "agentic_backend" }));
   // Login probe: 200 when the presented password is valid (or the gate is disabled),
@@ -30,7 +37,9 @@ export function buildApp(): Hono {
   app.route("/chat", chatRoute);
   app.route("/chat", streamRoute);
   app.route("/searches", searchesRoute);
+  app.route("/search", searchRoute);
   app.route("/stats", statsRoute);
+  app.route("/dailylogs", dailyLogsRoute);
   app.route("/export", exportRoute);
   app.route("/papers", papersRoute);
   app.route("/corpus", corpusRoute);
