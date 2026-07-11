@@ -131,7 +131,7 @@ export async function citingPapersOf(db: CorpusDb, handle: string, limit = 50): 
      FROM cit_internal ci
      LEFT JOIN articles a ON LOWER(ci.citing) = LOWER(a.Handle)
      WHERE LOWER(ci.cited) = LOWER(?)
-     ORDER BY a.year DESC NULLS LAST
+     ORDER BY a.year DESC NULLS LAST, handle
      LIMIT ?`,
     [handle, limit],
   );
@@ -145,7 +145,7 @@ export async function citedPapersOf(db: CorpusDb, handle: string, limit = 50): P
      FROM cit_internal ci
      LEFT JOIN articles a ON LOWER(ci.cited) = LOWER(a.Handle)
      WHERE LOWER(ci.citing) = LOWER(?)
-     ORDER BY a.year DESC NULLS LAST
+     ORDER BY a.year DESC NULLS LAST, handle
      LIMIT ?`,
     [handle, limit],
   );
@@ -160,7 +160,7 @@ export async function versionLinksOf(db: CorpusDb, handle: string): Promise<Vers
      FROM version_links vl
      LEFT JOIN articles a ON LOWER(vl.target) = LOWER(a.Handle)
      WHERE LOWER(vl.source) = LOWER(?)
-     ORDER BY a.year DESC NULLS LAST`,
+     ORDER BY a.year DESC NULLS LAST, vl.target`,
     [handle],
   );
   return rows.map((r) => ({

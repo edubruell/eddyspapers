@@ -64,18 +64,52 @@ const PER_MIN_OVERLAP = 8;
 // per-query maxΔsim printout doubles as the embedding-drift guard.
 const SIM_TOLERANCE = 1e-4;
 
-// Both stacks sort cites/citedby by `year DESC NULLS LAST` with no secondary key, so row
-// order within a year is engine-nondeterministic — those cases compare as sets (sorted by
-// handle on both sides); contents stay exact.
-const ORDER_TOLERANT = /^(cites_|citedby_)/;
-const sortRowsByHandle = (v: unknown): unknown =>
-  Array.isArray(v)
-    ? [...v].sort((a, b) =>
-        String((a as Record<string, unknown>)?.handle ?? "").localeCompare(
-          String((b as Record<string, unknown>)?.handle ?? ""),
-        ),
-      )
-    : v;
+// Plumber has no secondary sort key on several routes, so tie order is engine-nondeterministic
+// and three battery cases can't be compared byte-for-byte even against an identical corpus
+// (verified 2026-07-11: citedby's LIMIT 20 cuts inside card2012's 10-paper 2023 year group;
+// pca271's top_journals ranks 3-4 tie at n=10; out_of_corpus has no ORDER BY at all):
+//  - cites/citedby: membership inside the boundary year is arbitrary — compare length + the
+//    year multiset exactly, and row contents exactly on the handles both sides returned.
+//  - person profile/papers: sort tie groups canonically on both sides, then compare exact.
+type Row = Record<string, unknown>;
+const CITATION_SET = /^(cites_|citedby_)/;
+const asRows = (v: unknown): Row[] => (Array.isArray(v) ? (v as Row[]) : []);
+
+function diffCitationSet(golden: unknown, ours: unknown): string | null {
+  const g = asRows(golden);
+  const o = asRows(ours);
+  if (g.length !== o.length) return `$: length ${g.length} vs ${o.length}`;
+  const years = (rows: Row[]): string => rows.map((r) => String(r.year ?? "null")).sort().join(",");
+  if (years(g) !== years(o)) return `$: year multiset [${years(g)}] vs [${years(o)}]`;
+  const byHandle = new Map(o.map((r) => [String(r.handle), r]));
+  for (const row of g) {
+    const other = byHandle.get(String(row.handle));
+    if (!other) continue; // boundary-year membership difference — allowed
+    const d = firstDiff(row, other, `$[${String(row.handle)}]`);
+    if (d) return d;
+  }
+  return null;
+}
+
+const byCountDescThenName = (a: Row, b: Row): number =>
+  Number(b.n ?? 0) - Number(a.n ?? 0) ||
+  String(a.journal ?? a.category ?? "").localeCompare(String(b.journal ?? b.category ?? ""));
+const byWorkHandle = (a: Row, b: Row): number =>
+  String(a.work_handle ?? "").localeCompare(String(b.work_handle ?? ""));
+const sortIf = (v: unknown, cmp: (a: Row, b: Row) => number): unknown =>
+  Array.isArray(v) ? [...(v as Row[])].sort(cmp) : v;
+
+const CANONICALISE: Record<string, (v: unknown) => unknown> = {
+  person_profile_card: (v) => ({
+    ...(v as Row),
+    top_journals: sortIf((v as Row).top_journals, byCountDescThenName),
+    category_breakdown: sortIf((v as Row).category_breakdown, byCountDescThenName),
+  }),
+  person_papers_card: (v) => ({
+    ...(v as Row),
+    out_of_corpus: sortIf((v as Row).out_of_corpus, byWorkHandle),
+  }),
+};
 
 const battery = JSON.parse(await readFile(BATTERY_PATH, "utf8")) as Battery;
 const mode = process.argv[2];
@@ -216,10 +250,10 @@ async function check(): Promise<void> {
         body: c.method === "POST" ? JSON.stringify(c.body ?? {}) : undefined,
       });
       const ours = await res.json();
-      const prep = ORDER_TOLERANT.test(c.id)
-        ? (x: unknown): unknown => sortRowsByHandle(normalizeForParity(x))
-        : normalizeForParity;
-      const diff = firstDiff(prep(g.response), prep(ours));
+      const canon = CANONICALISE[c.id] ?? ((x: unknown): unknown => x);
+      const gN = canon(normalizeForParity(g.response));
+      const oN = canon(normalizeForParity(ours));
+      const diff = CITATION_SET.test(c.id) ? diffCitationSet(gN, oN) : firstDiff(gN, oN);
       const ok = res.status === 200 && diff === null;
       console.log(`${ok ? "PASS" : "FAIL"} ${c.id}${diff ? "  " + diff : ""}`);
       if (!ok) failures.push(c.id);

@@ -106,13 +106,13 @@ export async function personProfile(db: CorpusDb, shortId: string): Promise<Pers
     db.query(
       `SELECT a.category, COUNT(*) AS n
        FROM person_works pw JOIN articles a ON LOWER(a.Handle) = pw.work_handle
-       WHERE pw.short_id = ? GROUP BY a.category ORDER BY n DESC`,
+       WHERE pw.short_id = ? GROUP BY a.category ORDER BY n DESC, a.category`,
       [shortId],
     ),
     db.query(
       `SELECT a.journal, COUNT(*) AS n
        FROM person_works pw JOIN articles a ON LOWER(a.Handle) = pw.work_handle
-       WHERE pw.short_id = ? GROUP BY a.journal ORDER BY n DESC LIMIT 5`,
+       WHERE pw.short_id = ? GROUP BY a.journal ORDER BY n DESC, a.journal LIMIT 5`,
       [shortId],
     ),
     db.query(
@@ -212,7 +212,7 @@ export async function personPapers(
      JOIN articles a ON LOWER(a.Handle) = pw.work_handle
      LEFT JOIN handle_stats hs ON LOWER(hs.handle) = pw.work_handle
      WHERE pw.short_id = ?
-     ORDER BY ${sortCol} ${orderDir} NULLS LAST
+     ORDER BY ${sortCol} ${orderDir} NULLS LAST, a.Handle
      LIMIT ? OFFSET ?`,
     [shortId, p.limit ?? 50, p.offset ?? 0],
   );
@@ -234,7 +234,8 @@ export async function personPapers(
       `SELECT pw.work_handle, pw.work_type
        FROM person_works pw
        LEFT JOIN articles a ON LOWER(a.Handle) = pw.work_handle
-       WHERE pw.short_id = ? AND a.Handle IS NULL`,
+       WHERE pw.short_id = ? AND a.Handle IS NULL
+       ORDER BY pw.work_handle`,
       [shortId],
     );
     outOfCorpus = ooc.map((o) => ({
