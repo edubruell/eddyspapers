@@ -381,6 +381,42 @@ Full suite after M5: **54 files, 619 passed / 4 skipped**; clean `tsc -p tsconfi
 
 ---
 
+## Phase 5 — M6 prod cutover (executed 2026-07-11)
+
+Full narrative in PLAN.md progress log + `ops_notes/PHASE5_CUTOVER.md` (execution note). Findings
+surfaced by running the parity gate **on prod** (goldens from live Plumber, same corpus):
+
+1. **`@duckdb/node-api` returns `DuckDBListValue`/`DuckDBArrayValue` wrappers for LIST/ARRAY
+   columns** — they JSON-serialise as objects, not arrays. Hit `person_wikidata`'s seven `VARCHAR[]`
+   fields on `/person/:id`; the econpeople frontend (`wd.citizenships.join(", ")`) would have
+   silently dropped the wikidata block. Fixed generically in `corpus.ts` `rowsToObjects`
+   (`plainValue` unwrap); wire-level regression test in `tests/routes/person.test.ts`. Lesson: the
+   fixture-based tests validated these fields only via `app.request().json()` round-trips that never
+   asserted array-ness.
+2. **Byte-exact parity is unattainable where Plumber itself is nondeterministic.** Three battery
+   cases have no stable order: cites/citedby (`ORDER BY year DESC` + LIMIT cuts inside a year tie
+   group — membership itself is arbitrary), profile `top_journals`/`category_breakdown` (count
+   ties), `out_of_corpus` (no ORDER BY). Comparator now checks these structurally
+   (`scripts/parity.ts`); Hono queries got deterministic secondary sort keys so *our* wire is stable
+   even though Plumber's never was. Also normalised: jsonlite drops NA keys where Hono emits null.
+3. **First sandbox runs after a snapshot swap can blow the 90 s cap.** Fresh inode ⇒ zero page
+   cache for 13G; Node's corpus pool now shares the service cgroup with R children (`MemoryHigh`
+   throttling compounds it). Two real user-facing timeouts before caches warmed; steady state is
+   seconds (full brief 26 s incl. LLM stages). Mitigations applied: `MemoryHigh` 10G→14G. Queued:
+   post-swap warmup in `reloadCorpusDb()`/pipeline, HNSW cosine rebuild. Related UX note: the
+   search_id cache replays a *failed* terminal run for an identical re-brief — a user must reword
+   to retry.
+4. **Ops repro hazard:** running `bin/run-sandbox.sh` under bare `sudo` closes fd 3, and the R
+   child's event writes then land in the lowest reopened fd — which was `run.R` itself (R sources
+   incrementally, so it both corrupted the file and crashed mid-parse). Restored from git; if a
+   manual sandbox run is ever needed, open fd 3 inside the sudo shell (`sudo -u eddyspapers bash -c
+   'exec 3>/tmp/out; …'`).
+5. **nginx never proxied `/mcp`** — the §2 target architecture's MCP door was unreachable from the
+   public URL all along (only `/api/` has a location block). Adding the block was permission-gated
+   during the window; command documented in the cutover note. Until then MCP works only on-box.
+
+---
+
 ## Known pre-existing issues (to deal with later)
 
 - **~113 `tsc --noEmit` errors, all in test files — pre-existing, tracked for a cleanup pass.**

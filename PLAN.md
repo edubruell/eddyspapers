@@ -498,11 +498,44 @@ no `EDDY_ADMIN_KEY` needed for the poller. (2) The agentic `searches.duckdb` sto
 (unchanged from decision 3). (3) jsonlite serialises Plumber doubles at `digits=4`, so the M5
 comparator must round doubles to 4 before the exact-SQL diff (e.g. `/handlestats` `citations_per_year`).
 
-Remaining (prod-ops, not coding): **M6** — the prod cutover window
-(`ops_notes/PHASE5_CUTOVER.md`, §12.3 runbook): run the parity record+check gate against prod,
-migrate the user tables into `appdata.duckdb`, repoint nginx (classic + econpeople), rename the
-service, two-week soak — then **M7**, the post-soak R-package strip (delete `inst/plumber/`, the
-HTTP parts of `R/api.R`/`R/persons.R`, `R/mcp_server.R`, `run_api.R`, `run_mcp_server*.R`).
+**M6 — prod cutover EXECUTED 2026-07-11** (window ~05:20–06:50 UTC, `ops_notes/PHASE5_CUTOVER.md`
+has the ticked checklist + execution note). §12.3 runbook followed in full: backups created,
+**downloaded off-box, and verified before anything destructive** (13G on-box file copy — all 14
+table counts match; full parquet dump incl. manual exports of `person_search_logs`/`db_metadata`,
+which `dump_db_to_parquet()`'s keep-list omits; user-table parquets + config tar verified locally at
+`~/eddyspapers/backups/pre_split_20260711/`). Prod has **no `saved_person_searches` table** (never
+lazily created) — migration skipped it cleanly; 30/8655/206 rows migrated with matching counts.
+Service renamed `agentic-api` → `eddyspapers-api` (R unit preserved disabled as
+`eddyspapers-plumber.service`); nginx repointed for classic + econpeople (`.bak.pre_split_20260711`
+kept); maintenance flag (never previously wired) deployed into all three sites. **Parity gate run
+ON PROD: 46/46 PASS** (goldens recorded from live Plumber pre-stop; Hono checked on-box against the
+same corpus — semantic 25×20/20 with maxΔsim ≤5e-5, person 9/9, SQL 12/12 exact-after-normalisation).
+Two-week soak running; then M7 (R-package strip).
+
+Found & fixed during the gate (all committed on `backend_port`):
+1. **`@duckdb/node-api` LIST/ARRAY leak** — `person_wikidata`'s `VARCHAR[]` fields serialised as
+   `DuckDBListValue` wrapper objects, not JSON arrays (econpeople's `wd.citizenships.join()` would
+   silently break). `rowsToObjects` now unwraps to plain arrays; regression test added.
+2. **Nondeterministic tie order** — Plumber has no secondary sort key on cites/citedby (LIMIT cuts
+   inside year groups), `top_journals`/`category_breakdown` (count ties), `out_of_corpus` (no ORDER
+   BY at all). Hono queries gained deterministic tie-break keys; the parity comparator handles these
+   structurally (year-multiset + exact-common-rows for citations; canonical tie-group sort for the
+   person cases). jsonlite NA-drop vs Hono-null also normalised (null keys dropped on both sides).
+3. **Cold-snapshot sandbox timeouts** — the first agentic runs after the snapshot swap hit the 90 s
+   sandbox cap (fresh inode = zero page cache + Node's DuckDB pool sharing the cgroup). Raised
+   `MemoryHigh` 10G→14G (Plumber's RAM is freed) and warmed the file; steady-state runs complete in
+   seconds (full brief 26 s incl. LLM stages). Follow-up queued: post-swap corpus warmup (and the
+   HNSW cosine rebuild kills the full scan for good). Note: identical re-briefs replay the cached
+   failed run (search_id cache) — retry needs a changed brief; acceptable, documented.
+4. **`eddysearch.sandbox` reinstalled on prod** (home lib + site-library) — the 2026-07-10
+   LOWER-join fix is live; `handle_stats`/`cites`/`citedby` verbs return rows again. Also: Hono now
+   serves the **fixed** person-search scoring (prod Plumber ran the vectorised-ifelse bug until
+   today), so nonzero `quality_weight`/`blended` work in prod — re-add them to the battery.
+
+Still open after the window: nginx `location /mcp` block (permission-gated during the window —
+**MCP is unreachable from the public URL until added**; §2 target architecture wants it), the §7
+follow-up queue (`:8000` firewall hardening, HNSW cosine rebuild, quality-weight battery cases),
+and M7 after the soak.
 
 ## 12. Local testing & deployment
 
