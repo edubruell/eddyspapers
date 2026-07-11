@@ -20,6 +20,7 @@ type RolledRow = {
   short_id: string;
   name_full: string | null;
   workplace_name: string | null;
+  workplace_institution: string | null;
   homepage: string | null;
   overlap_weight: number;
   n_matched: number;
@@ -47,6 +48,7 @@ const rowToRolled = (r: Record<string, unknown>): RolledRow => {
     short_id: String(r.short_id),
     name_full: optStr(r.name_full),
     workplace_name: optStr(r.workplace_name),
+    workplace_institution: optStr(r.workplace_institution),
     homepage: optStr(r.homepage),
     overlap_weight: Number(r.overlap_weight),
     n_matched: Number(r.n_matched),
@@ -145,7 +147,7 @@ export async function personSearchWithVector(
        JOIN person_works pw ON pw.work_handle = d.work_handle
        GROUP BY pw.short_id
      )
-     SELECT r.*, p.name_full, p.workplace_name, p.homepage,
+     SELECT r.*, p.name_full, p.workplace_name, p.workplace_institution, p.homepage,
             ps.n_works_in_corpus, ps.total_citations,
             ps.first_year, ps.last_year, ps.primary_category,
             w.image_url, w.wikipedia_url, w.orcid
@@ -156,9 +158,15 @@ export async function personSearchWithVector(
     [...whereParams, p.kPapers ?? 600],
   );
 
+  // Stage-2 post-filters, applied before the score normalisation maxima so the ranking
+  // matches Plumber (institution is an exact case-insensitive equality, per search_persons).
+  const institution = p.institution && p.institution.length > 0 ? p.institution.toLowerCase() : null;
   const candidates = pipe(
     rows,
     A.map(rowToRolled),
+    A.filter(
+      (r) => institution == null || (r.workplace_institution != null && r.workplace_institution.toLowerCase() === institution),
+    ),
     A.filter((r) => p.activeSince == null || (r.last_year != null && r.last_year >= p.activeSince)),
     A.filter(
       (r) => p.minCitations == null || (r.total_citations != null && r.total_citations >= p.minCitations),
@@ -178,6 +186,7 @@ export async function personSearchWithVector(
         short_id: r.short_id,
         name_full: r.name_full,
         workplace_name: r.workplace_name,
+        workplace_institution: r.workplace_institution,
         homepage: r.homepage,
         score: scoreOf(mode, r, 1 + qualityWeight * qualityNorm, overlapNorm),
         overlap_weight: r.overlap_weight,
@@ -195,6 +204,8 @@ export async function personSearchWithVector(
       };
     }),
     (results) => R.sortBy(results, [(r) => r.score, "desc"]),
-    A.take(p.maxK ?? 25),
+    // offset+limit slice (Plumber paginates after scoring); offset defaults to 0, so the
+    // MCP/sandbox callers that omit it get the same page-one behaviour as A.take once did.
+    (results) => results.slice(p.offset ?? 0, (p.offset ?? 0) + (p.maxK ?? 25)),
   );
 }

@@ -1,6 +1,6 @@
 import type { AppDataDb } from "./appdata.js";
 import type { SemanticResult } from "../search/types.js";
-import { canonicalHash8, searchHashInput } from "../search/hash.js";
+import { canonicalHash8, searchHashInput, personSaveHashInput } from "../search/hash.js";
 
 // The ported classic user-table logic (saved searches + search logs) over the Hono-owned
 // appdata store — the Phase 5 replacement for save_search / log_search / get_search_stats
@@ -214,6 +214,194 @@ export async function searchLogsDay(db: AppDataDb, day: string): Promise<SearchL
     has_journal_name_filter: r.has_journal_name_filter == null ? null : Boolean(r.has_journal_name_filter),
     has_title_keyword: r.has_title_keyword == null ? null : Boolean(r.has_title_keyword),
     has_author_keyword: r.has_author_keyword == null ? null : Boolean(r.has_author_keyword),
+    response_time_ms: optNum(r.response_time_ms),
+  }));
+}
+
+// ── Person side (saved_person_searches + person_search_logs) — ports of save_person_search,
+// get_saved_person_search, log_person_search, get_person_search_stats in backend/R. The save
+// hash covers only {query, scoring_mode, quality_weight} (NOT the filters).
+
+export interface SavedPersonSearchParams {
+  query: string;
+  scoringMode: string;
+  qualityWeight: number;
+}
+
+export interface SavedPersonSearch extends SavedPersonSearchParams {
+  hash: string;
+  createdAt: string;
+  results: unknown[];
+}
+
+export const personSaveHash = (p: SavedPersonSearchParams): string =>
+  canonicalHash8(personSaveHashInput(p));
+
+export async function savePersonSearch(
+  db: AppDataDb,
+  p: SavedPersonSearchParams,
+  results: unknown[],
+): Promise<string> {
+  const hash = personSaveHash(p);
+  const existing = await db.query("SELECT hash FROM saved_person_searches WHERE hash = ?", [hash]);
+  if (existing.length === 0) {
+    await db.run(
+      `INSERT INTO saved_person_searches (hash, query, scoring_mode, quality_weight, results)
+       VALUES (?, ?, ?, ?, ?)`,
+      [hash, p.query, p.scoringMode, p.qualityWeight, JSON.stringify(results)],
+    );
+  }
+  return hash;
+}
+
+export async function getSavedPersonSearch(db: AppDataDb, hash: string): Promise<SavedPersonSearch | null> {
+  const rows = await db.query("SELECT * FROM saved_person_searches WHERE hash = ?", [hash]);
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    hash: String(r.hash),
+    query: String(r.query),
+    scoringMode: String(r.scoring_mode),
+    qualityWeight: Number(r.quality_weight),
+    createdAt: String(r.created_at),
+    results: JSON.parse(String(r.results)) as unknown[],
+  };
+}
+
+export interface PersonSearchLogInput {
+  ip: string;
+  queryHash: string;
+  resultCount: number;
+  top3ShortIds: string[];
+  scoringMode: string;
+  flags: {
+    hasMinYear: boolean;
+    hasCategory: boolean;
+    hasInstitution: boolean;
+    hasActiveSince: boolean;
+    hasMinCitations: boolean;
+  };
+  responseTimeMs: number;
+}
+
+export async function logPersonSearch(db: AppDataDb, i: PersonSearchLogInput): Promise<void> {
+  const idRows = await db.query("SELECT nextval('person_search_logs_seq') AS id");
+  const id = Number(idRows[0].id);
+  const ids = i.top3ShortIds.slice(0, 3);
+  const listSql = ids.length ? `list_value(${ids.map(() => "?").join(", ")})` : "[]::VARCHAR[]";
+  await db.run(
+    `INSERT INTO person_search_logs
+       (search_id, ip, query_hash, result_count, top3_short_ids, scoring_mode,
+        has_min_year, has_category, has_institution, has_active_since, has_min_citations, response_time_ms)
+     VALUES (?, ?, ?, ?, ${listSql}, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      i.ip,
+      i.queryHash,
+      i.resultCount,
+      ...ids,
+      i.scoringMode,
+      i.flags.hasMinYear,
+      i.flags.hasCategory,
+      i.flags.hasInstitution,
+      i.flags.hasActiveSince,
+      i.flags.hasMinCitations,
+      i.responseTimeMs,
+    ],
+  );
+}
+
+export interface PersonSearchStats {
+  days: number;
+  total_searches: number;
+  avg_results: number | null;
+  avg_response_ms: number | null;
+  scoring_modes: { scoring_mode: string | null; n: number }[];
+  filter_usage: {
+    min_year_filters: number;
+    category_filters: number;
+    institution_filters: number;
+    active_since_filters: number;
+    min_citations_filters: number;
+  };
+}
+
+export async function getPersonSearchStats(db: AppDataDb, days: number): Promise<PersonSearchStats> {
+  const window = "timestamp >= now() - to_days(CAST(? AS INTEGER))";
+  const [totals] = await db.query(
+    `SELECT COUNT(*) AS total, AVG(result_count) AS avg_results,
+            AVG(CASE WHEN response_time_ms IS NOT NULL THEN response_time_ms END) AS avg_ms
+     FROM person_search_logs WHERE ${window}`,
+    [days],
+  );
+  const modes = await db.query(
+    `SELECT scoring_mode, COUNT(*) AS n FROM person_search_logs WHERE ${window}
+     GROUP BY scoring_mode ORDER BY n DESC`,
+    [days],
+  );
+  const [usage] = await db.query(
+    `SELECT
+       SUM(CASE WHEN has_min_year THEN 1 ELSE 0 END)      AS min_year_filters,
+       SUM(CASE WHEN has_category THEN 1 ELSE 0 END)      AS category_filters,
+       SUM(CASE WHEN has_institution THEN 1 ELSE 0 END)   AS institution_filters,
+       SUM(CASE WHEN has_active_since THEN 1 ELSE 0 END)  AS active_since_filters,
+       SUM(CASE WHEN has_min_citations THEN 1 ELSE 0 END) AS min_citations_filters
+     FROM person_search_logs WHERE ${window}`,
+    [days],
+  );
+  return {
+    days,
+    total_searches: Number(totals?.total ?? 0),
+    avg_results: optNum(totals?.avg_results),
+    avg_response_ms: optNum(totals?.avg_ms),
+    scoring_modes: modes.map((m) => ({ scoring_mode: optStr(m.scoring_mode), n: Number(m.n) })),
+    filter_usage: {
+      min_year_filters: Number(usage?.min_year_filters ?? 0),
+      category_filters: Number(usage?.category_filters ?? 0),
+      institution_filters: Number(usage?.institution_filters ?? 0),
+      active_since_filters: Number(usage?.active_since_filters ?? 0),
+      min_citations_filters: Number(usage?.min_citations_filters ?? 0),
+    },
+  };
+}
+
+export interface PersonSearchLogRow {
+  search_id: number;
+  timestamp: string;
+  ip: string | null;
+  query_hash: string | null;
+  result_count: number | null;
+  top3_short_ids: string[];
+  scoring_mode: string | null;
+  has_min_year: boolean | null;
+  has_category: boolean | null;
+  has_institution: boolean | null;
+  has_active_since: boolean | null;
+  has_min_citations: boolean | null;
+  response_time_ms: number | null;
+}
+
+export async function personSearchLogsDay(db: AppDataDb, day: string): Promise<PersonSearchLogRow[]> {
+  const rows = await db.query(
+    `SELECT * FROM person_search_logs
+     WHERE timestamp >= CAST(? AS TIMESTAMP)
+       AND timestamp <  CAST(? AS TIMESTAMP) + INTERVAL 1 DAY
+     ORDER BY timestamp`,
+    [day, day],
+  );
+  return rows.map((r) => ({
+    search_id: Number(r.search_id),
+    timestamp: String(r.timestamp),
+    ip: optStr(r.ip),
+    query_hash: optStr(r.query_hash),
+    result_count: optNum(r.result_count),
+    top3_short_ids: toStrList(r.top3_short_ids),
+    scoring_mode: optStr(r.scoring_mode),
+    has_min_year: r.has_min_year == null ? null : Boolean(r.has_min_year),
+    has_category: r.has_category == null ? null : Boolean(r.has_category),
+    has_institution: r.has_institution == null ? null : Boolean(r.has_institution),
+    has_active_since: r.has_active_since == null ? null : Boolean(r.has_active_since),
+    has_min_citations: r.has_min_citations == null ? null : Boolean(r.has_min_citations),
     response_time_ms: optNum(r.response_time_ms),
   }));
 }

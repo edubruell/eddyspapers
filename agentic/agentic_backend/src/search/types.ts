@@ -82,10 +82,12 @@ export type PersonSearchParams = {
   query: string;
   maxK?: number;
   kPapers?: number;
+  offset?: number;
   scoringMode?: ScoringMode;
   qualityWeight?: number;
   minYear?: number | null;
   journalFilter?: string[] | null;
+  institution?: string | null;
   activeSince?: number | null;
   minCitations?: number | null;
 };
@@ -102,6 +104,7 @@ export type PersonResult = {
   short_id: string;
   name_full: string | null;
   workplace_name: string | null;
+  workplace_institution: string | null;
   homepage: string | null;
   score: number;
   overlap_weight: number;
