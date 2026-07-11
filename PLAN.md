@@ -532,10 +532,23 @@ Found & fixed during the gate (all committed on `backend_port`):
    serves the **fixed** person-search scoring (prod Plumber ran the vectorised-ifelse bug until
    today), so nonzero `quality_weight`/`blended` work in prod — re-add them to the battery.
 
-Still open after the window: nginx `location /mcp` block (permission-gated during the window —
-**MCP is unreachable from the public URL until added**; §2 target architecture wants it), the §7
-follow-up queue (`:8000` firewall hardening, HNSW cosine rebuild, quality-weight battery cases),
-and M7 after the soak.
+Still open after the window: the §7 follow-up queue (`:8000` firewall hardening, HNSW cosine
+rebuild, quality-weight battery cases) and M7 after the soak.
+
+**Same-day follow-ups (2026-07-11, later):** (1) nginx `location /mcp` block added + verified —
+public MCP live (initialize handshake OK, 401 unauthenticated). (2) Deploy-path review for the
+next RePEc update: scripts were already post-Plumber-ready; `deploy_diffs.sh` gained an
+`EDDY_ADMIN_KEY` fallback file (`~/.config/eddyspapers/admin_key`), and `eddyspapersbackend` was
+reinstalled on prod. (3) **Prod content drift found and fixed**: prod trailed the same-stamp local
+corpus by 203 articles + stale `handle_stats` rows (accumulated base drift from the pre-fix diff
+era — deltas never heal missing rows). Fix: a normal `update_repec.R` run first (users saw a
+regular 2026-07-11 update via the auto diff deploy), then a one-time full refresh — uploaded the
+10 content-table parquets at stamp `20260711_093058` (~3.1G, resumable rsync over the flaky
+uplink), `restore_db_from_parquet` on prod (user tables untouched — still the soak rollback data),
+counts verified identical to local (479,211 articles), snapshot swap + `/admin/reload`. Prod is
+now byte-derived from the local corpus; future diffs share an exact base. (Verification footnote:
+the wire field `similarity` is the cosine *distance* — Plumber misnomer kept for parity; the
+frontend renders `similarity_score = 1 − distance`. Don't re-diagnose 0.13 as a regression.)
 
 ## 12. Local testing & deployment
 
