@@ -171,6 +171,21 @@ describe("GET /person/:short_id", () => {
     expect(Array.isArray(p.category_breakdown)).toBe(true);
   });
 
+  it("serialises VARCHAR[] wikidata fields as plain JSON arrays, never wrapper objects", async () => {
+    // DuckDBListValue leaks as {"items":[...]} unless rowsToObjects unwraps it — the
+    // econpeople frontend does wd.citizenships.join(", ") and would silently break.
+    const p = (await (await app.request(`/person/${profileId}`)).json()) as {
+      wikidata: Record<string, unknown>;
+    };
+    const listFields = ["citizenships", "educated_at", "doctoral_advisors", "doctoral_students",
+      "fields_of_work", "memberships", "awards"];
+    for (const f of listFields) {
+      const v = p.wikidata[f];
+      expect(v === null || v === undefined || Array.isArray(v), `${f} must be null or a plain array`).toBe(true);
+      if (Array.isArray(v)) v.forEach((s) => expect(typeof s).toBe("string"));
+    }
+  });
+
   it("mirrors an unknown short_id as {error:'Person not found'}", async () => {
     expect(await (await app.request("/person/pnope999")).json()).toEqual({ error: "Person not found" });
   });

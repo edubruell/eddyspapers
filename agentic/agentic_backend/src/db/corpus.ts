@@ -1,4 +1,4 @@
-import { DuckDBInstance } from "@duckdb/node-api";
+import { DuckDBInstance, DuckDBListValue, DuckDBArrayValue } from "@duckdb/node-api";
 import { resolveSnapshot, type SnapshotInfo } from "../sandbox/snapshot.js";
 
 // Read-only access to the corpus snapshot (articles + citation + person tables).
@@ -19,6 +19,12 @@ export interface CorpusDb {
 // plenty while this service is the only consumer).
 const poolSize = (): number => Number(process.env.CORPUS_POOL_SIZE ?? 3);
 
+// LIST/ARRAY columns (e.g. person_wikidata's VARCHAR[] fields) come back as
+// DuckDBListValue/DuckDBArrayValue wrappers, which JSON-serialise as objects —
+// the wire (and jsonlite parity) needs plain arrays.
+const plainValue = (v: unknown): unknown =>
+  v instanceof DuckDBListValue || v instanceof DuckDBArrayValue ? v.items.map(plainValue) : v;
+
 const rowsToObjects = async (
   conn: Conn,
   sql: string,
@@ -29,7 +35,7 @@ const rowsToObjects = async (
   const reader = params ? await conn.run(sql, params as never) : await conn.run(sql);
   const names = reader.columnNames();
   const rows = await reader.getRows();
-  return rows.map((r) => Object.fromEntries(names.map((n, i) => [n, r[i]])));
+  return rows.map((r) => Object.fromEntries(names.map((n, i) => [n, plainValue(r[i])])));
 };
 
 export async function openCorpusDb(pathOverride?: string): Promise<CorpusDb> {

@@ -1,13 +1,16 @@
 // Normalisation for the SQL-route parity comparator (PLAN.md §12.1, phase-5 M5).
 //
-// Plumber and Hono disagree on two systematic, harmless things:
+// Plumber and Hono disagree on three systematic, harmless things:
 //   1. Boxing — Plumber's `@serializer json` is auto_unbox=FALSE, so LIST endpoints wrap every
 //      scalar field in a one-element array ({"handle":["x"]}); Hono returns clean scalars.
 //   2. Precision — jsonlite serialises doubles at digits=4; Hono returns full precision.
+//   3. Missing values — jsonlite drops NA fields from data.frame rows entirely; Hono emits
+//      explicit nulls. Null and absent are treated as the same thing by both frontends.
 // Applying the SAME transform to BOTH sides collapses those differences without hiding real
 // ones: recursively unwrap one-element arrays (a boxed scalar and a genuine 1-row result array
 // both unwrap identically on both sides, so a true count/shape difference still shows up), round
-// every number to 4 decimals, and drop volatile keys (timestamps, ids, hashes) that legitimately
+// every number to 4 decimals, drop null-valued keys (a value-vs-null difference still surfaces
+// as value-vs-missing), and drop volatile keys (timestamps, ids, hashes) that legitimately
 // differ between a recording and a live diff.
 
 const VOLATILE = new Set([
@@ -33,7 +36,9 @@ export function normalizeForParity(v: unknown): unknown {
     const out: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
       if (VOLATILE.has(k)) continue;
-      out[k] = normalizeForParity(val);
+      const nv = normalizeForParity(val);
+      if (nv === null) continue;
+      out[k] = nv;
     }
     return out;
   }

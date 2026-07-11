@@ -64,6 +64,19 @@ const PER_MIN_OVERLAP = 8;
 // per-query maxΔsim printout doubles as the embedding-drift guard.
 const SIM_TOLERANCE = 1e-4;
 
+// Both stacks sort cites/citedby by `year DESC NULLS LAST` with no secondary key, so row
+// order within a year is engine-nondeterministic — those cases compare as sets (sorted by
+// handle on both sides); contents stay exact.
+const ORDER_TOLERANT = /^(cites_|citedby_)/;
+const sortRowsByHandle = (v: unknown): unknown =>
+  Array.isArray(v)
+    ? [...v].sort((a, b) =>
+        String((a as Record<string, unknown>)?.handle ?? "").localeCompare(
+          String((b as Record<string, unknown>)?.handle ?? ""),
+        ),
+      )
+    : v;
+
 const battery = JSON.parse(await readFile(BATTERY_PATH, "utf8")) as Battery;
 const mode = process.argv[2];
 const baseArg = process.argv.indexOf("--base");
@@ -203,7 +216,10 @@ async function check(): Promise<void> {
         body: c.method === "POST" ? JSON.stringify(c.body ?? {}) : undefined,
       });
       const ours = await res.json();
-      const diff = firstDiff(normalizeForParity(g.response), normalizeForParity(ours));
+      const prep = ORDER_TOLERANT.test(c.id)
+        ? (x: unknown): unknown => sortRowsByHandle(normalizeForParity(x))
+        : normalizeForParity;
+      const diff = firstDiff(prep(g.response), prep(ours));
       const ok = res.status === 200 && diff === null;
       console.log(`${ok ? "PASS" : "FAIL"} ${c.id}${diff ? "  " + diff : ""}`);
       if (!ok) failures.push(c.id);

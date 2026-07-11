@@ -40,6 +40,20 @@ describe("normalizeForParity", () => {
     expect(firstDiff(normalizeForParity(plumber), normalizeForParity(honoBoxed))).toBeNull();
   });
 
+  it("treats explicit null (Hono) and an omitted key (jsonlite NA-drop) as equal", () => {
+    // jsonlite drops NA fields from data.frame rows; Hono emits explicit nulls.
+    const plumber = { journal: undefined, n: [14077] };
+    const hono = { journal: null, n: 14077 };
+    expect(firstDiff(normalizeForParity(plumber), normalizeForParity(hono))).toBeNull();
+    expect(normalizeForParity({ url: null, boxedNull: [null], title: "t" })).toEqual({ title: "t" });
+  });
+
+  it("still surfaces a value-vs-null difference after the null drop", () => {
+    expect(
+      firstDiff(normalizeForParity({ journal: "AER" }), normalizeForParity({ journal: null })),
+    ).toContain("$.journal");
+  });
+
   it("makes a boxed person row equal to the scalar person row Hono returns", () => {
     const plumber = {
       short_id: ["pne16"],
