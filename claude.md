@@ -34,7 +34,7 @@ All three are served by **one Node/Hono service** at `:8001` (`agentic/agentic_b
 │
 ├── frontend/               ← Astro+React UI for classic search (econpapers)
 ├── econpeople_frontend/    ← Astro+React UI for EconPeople
-├── econpeople/             ← assets only (logo); design docs in localwip/notes/econpeople/
+├── econpeople/             ← assets only (logo); design docs in localwip/notes/econpeople/ (→ assets/ post-M7)
 │
 ├── stats/                  ← analysis scripts and cached data
 ├── maintenance/            ← static maintenance page
@@ -45,7 +45,7 @@ All three are served by **one Node/Hono service** at `:8001` (`agentic/agentic_b
     └── lit-check/
 ```
 
-**Post-M7 restructure planned** (~2026-07-25): rename `backend/` → `pipeline/`, `agentic/agentic_backend/` → `api/`, group UIs under `frontends/`. See `localwip/notes/M7_restructure.md`.
+**Post-M7 restructure planned** (~2026-07-25): rename `backend/` → `pipeline/`, `agentic/agentic_backend/` → `api/`, `agentic/r/` → `sandbox/`, `econpeople/` → `assets/`; group UIs under `frontends/`. See `localwip/notes/M7_restructure.md`.
 
 ## Service architecture
 
