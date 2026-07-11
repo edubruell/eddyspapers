@@ -25,7 +25,6 @@ All three are served by **one Node/Hono service** at `:8001` (`agentic/agentic_b
 │                              persons, persons_wikidata, update_logs
 │
 ├── agentic/
-│   ├── 00–08_*.md          ← design docs (canonical — read before changing a subsystem)
 │   ├── agentic_backend/    ← Node/Hono API service (serves ALL three products)
 │   │   ├── src/            ← routes, search, auth, db, mcp, sandbox
 │   │   ├── tests/
@@ -35,7 +34,7 @@ All three are served by **one Node/Hono service** at `:8001` (`agentic/agentic_b
 │
 ├── frontend/               ← Astro+React UI for classic search (econpapers)
 ├── econpeople_frontend/    ← Astro+React UI for EconPeople
-├── econpeople/             ← EconPeople design docs (00–03_*.md)
+├── econpeople/             ← assets only (logo); design docs in localwip/notes/econpeople/
 │
 ├── stats/                  ← analysis scripts and cached data
 ├── maintenance/            ← static maintenance page
@@ -123,25 +122,11 @@ owned by the Hono service — never touched by the pipeline.
 **Appdata (appdata.duckdb — Hono read-write):**
 - `saved_searches`, `search_logs`, `person_search_logs`, `api_keys`
 
-## Agentic search design docs
+## Design docs
 
-Read in order; lower-numbered doc wins on system decisions.
-
-| # | File | Owns |
-|---|---|---|
-| 00 | `agentic/00_overview.md` | direction, glossary, hard decisions, non-goals |
-| 01 | `agentic/01_design.md` | pipeline, sandbox, SSE protocol, wire schemas, MCP, failure modes |
-| 02 | `agentic/02_implementation_plan.md` | repo layout, model selection, OpenRouter caching |
-| 03 | `agentic/03_interface.md` | UX: palette, layout, stepper, microcopy, branding |
-| 04 | `agentic/04_prompts.md` | context engineering, per-stage prompts, retry strategy |
-| 05 | `agentic/05_roadmap.md` | phase plan with acceptance criteria |
-| 06 | `agentic/06_clarifier.md` | blocking-clarifier design (extends 01/03/04) |
-| 07 | `agentic/07_multistage.md` | results-aware re-run loop (extends 01/03/04) |
-| 08 | `agentic/08_sharelinks.md` | read-only share-link permalinks (extends 01/03) |
-
-## EconPeople design docs
-
-`econpeople/00_overview.md` → `01_data_model.md` → `02_api.md` → `03_profile_tiers.md`
+All design docs are in `localwip/notes/` (gitignored):
+- `localwip/notes/agentic/00_overview.md` … `08_sharelinks.md` — agentic search; lower-numbered doc wins on system decisions
+- `localwip/notes/econpeople/00_overview.md` … `03_profile_tiers.md` — EconPeople person finder
 
 ## Pending work (next up)
 
