@@ -7,6 +7,7 @@ agentic/node_modules/
 .RData
 .Ruserdata
 local_ai/
+localwip/
 .positai
 
 # Per-machine Claude Code settings
@@ -20,6 +21,5 @@ repec_wip.R
 # Contains a plaintext API key — never commit
 SKILL.md
 
-# local server-ops notes (never publish)
-PRE_DEPLOY_TODO.md
-WINDOW3_TODO.md
+# local server-ops notes — setup + functionality (never publish)
+ops_notes/

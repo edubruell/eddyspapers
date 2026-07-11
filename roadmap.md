@@ -23,6 +23,7 @@
   - OpenWebUI (ZEW)
 - No UI changes required
 - **Note:** this R MCP server will be retired and replaced by the Node-based MCP adapter inside the agentic project (see `agentic/01_design.md` §7 + `agentic/05_roadmap.md` Phase 11). Dual-run for a week, then delete `backend/R/mcp_server.R`.
+- **Superseded / folded into the backend-port programme (root `PLAN.md`, 2026-07).** The Node MCP adapter shipped (PLAN phases 2–3), and phase 5 goes further — retiring the whole Plumber HTTP layer: every classic/econpeople route is ported to the Node/Hono service, the R `eddyspapersbackend` package becomes pipeline-only, and `backend/R/mcp_server.R` is deleted with the rest of the Plumber code (phase-5 M7). See `PLAN.md` for the live plan.
 
 ### v0.4.1 (post-launch)
 **Focus: bibliographic coupling**

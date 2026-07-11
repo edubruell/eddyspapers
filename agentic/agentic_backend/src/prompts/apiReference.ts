@@ -37,6 +37,8 @@ semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journ
 sql_query(sql, params = list())
   Read-only SELECT against these tables: articles, cit_all, cit_internal, handle_stats,
   journals, version_links, bib_coupling. Parser-validated — COPY/ATTACH/DDL/PRAGMA are rejected.
+  CASE CONVENTION: articles.Handle is mixed-case; cit_all/cit_internal/handle_stats/person_works
+  store handles LOWERCASE — always join via LOWER(a.Handle) = other.handle or rows silently vanish.
   version_links has columns (source, target, type) — directed version edges between handles;
   join to articles on target/source for metadata. Prefer the versions() verb below for lookups.
   LIMIT is auto-injected if absent (capped at 5000). Use for keyword chains, SQL aggregations,
@@ -57,7 +59,7 @@ sql_query(sql, params = list())
       "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url,
               hs.total_citations, hs.citation_percentile
        FROM articles a
-       JOIN handle_stats hs ON a.Handle = hs.handle
+       JOIN handle_stats hs ON hs.handle = LOWER(a.Handle)
        WHERE a.category IN ('Top 5 Journals', 'AEJs')
          AND a.year >= 2000
        ORDER BY hs.total_citations DESC LIMIT 30"

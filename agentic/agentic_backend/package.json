@@ -7,10 +7,15 @@
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
+    "mcp-stdio": "tsx --env-file=.env src/mcp-stdio.ts",
+    "start:mcp-stdio": "node dist/mcp-stdio.js",
     "test": "vitest run",
     "eyeball": "tsx --env-file=.env scripts/eyeball.ts",
     "benchmark": "tsx --env-file=.env scripts/benchmark.ts",
-    "qual": "tsx --env-file=.env scripts/qual.ts"
+    "qual": "tsx --env-file=.env scripts/qual.ts",
+    "build:fixture": "tsx scripts/build_fixture.ts",
+    "keys": "tsx scripts/keys.ts",
+    "migrate:appdata": "tsx scripts/migrate_appdata.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "1.5.3-r.1",

@@ -489,7 +489,9 @@ Concrete model picks and the OpenRouter-caching constraints behind them live in 
 
 The concrete repo layout is owned by **`02_implementation_plan.md` §1–§2**. In short: a top-level `agentic/` folder alongside the existing `backend/` and `frontend/`, containing `agentic_backend/` (TypeScript + Hono, also hosts the MCP server), `agentic_frontend/` (Astro + React), and `r/` (the `eddysearch.sandbox` package + `check.R` AST allowlist + `run.R` entrypoint). Infra (systemd unit + sandbox slice + Caddy reverse proxy for `agenticsearch.eduard-bruell.de`) co-locates on the same box as the existing eddyspapers service; the sandbox slice is the only thing that needs careful systemd hardening (see §3.5).
 
-**Operator telemetry.** Two admin routes behind `requireAuth` (same password as the costly POST routes, sent as `x-agentic-key` or `Bearer`) expose run statistics from the persistent `searches` store, mirroring the semantic-search `/stats/searches` contract so the operator's existing R poller works across all three products: `GET /stats/searches?days=N` (total runs, status breakdown, clarifier/refine usage) and `GET /stats/dailylogs?day=YYYY-MM-DD` (one row per run: id, created_at, status, brief, flags, event count). The DB file path is overridable via `AGENTIC_DB_PATH` (tests, deployment). The static `/faq` page (FAQ + imprint + GDPR, including the hallucination disclaimer and the third-party LLM-processing notice) ships with the frontend and stays outside the gate.
+**Operator telemetry.** Two admin routes behind `requireKey('admin')` (Phase 4; the grandfathered shared password carries every scope, so the operator's existing poller keeps working) expose run statistics from the persistent `searches` store, mirroring the semantic-search `/stats/searches` contract. The DB file path is overridable via `AGENTIC_DB_PATH` (tests, deployment). The static `/faq` page (FAQ + imprint + GDPR, including the hallucination disclaimer and the third-party LLM-processing notice) ships with the frontend and stays outside the gate.
+
+> **The one service is now the whole backend (root `PLAN.md` phase 5, 2026-07).** As part of retiring Plumber, this Hono service absorbed every classic/econpeople REST route (`/search`, `/search/save`, `/search/:hash`, `/versions`, `/cites`, `/citedby`, `/citationcounts`, `/handlestats`, `/stats/*`, `/person/*`) alongside the agentic + MCP surfaces. Two knock-on changes to the telemetry above: the **agentic** run stats moved to `GET /stats/agentic/{searches,dailylogs}` so the ported classic Plumber paths `/stats/searches` + top-level `/dailylogs` are free (person telemetry at `/person/stats/searches` + `/person/dailylogs`); and `/stats/last_updated` now reads the corpus `db_metadata` directly instead of proxying the semantic API. **Snapshot reload:** `POST /admin/reload` (`requireKey('admin')`) reopens the read-only corpus pool after a pipeline atomic-swap — the deploy script curls it so diff deploys no longer restart the service (`PLAN.md` §6 decision 4). Nginx (not Caddy) fronts the three subdomains; the cutover only repoints the classic/econpeople `/api/` blocks from Plumber `:8000` to this service `:8001`.
 
 ---
 
@@ -511,7 +513,15 @@ The MCP server is a thin transport adapter in the same Node service, importing `
 
 Transports: **stdio** for local launches (a coding agent spawns the binary) and **streamable HTTP** for the hosted variant at `agenticsearch.eduard-bruell.de/mcp` (one URL, bearer-token auth). The streamable-HTTP path is the right default — same TLS endpoint as the web UI, no per-machine install required.
 
-### 7.2 Tool surface — two doors, not seven
+### 7.2 Tool surface — six tools
+
+> **Superseded (2026-07-10, PLAN.md §5/§C1 is canonical).** The original "two doors"
+> framing below predates the requirement that simple searches also work over MCP
+> without the fat pipeline. The shipped surface is **six tools**: `lit_search` (the
+> full pipeline) plus five cheap tools — `find_papers`, `keyword_search`,
+> `find_people`, `verify_references`, `corpus_context`. The five cheap tools shipped
+> in **Phase 2** (2026-07-10); `lit_search` shipped in **Phase 3** (2026-07-10).
+> Versions/citations/stats remain resources (§7.6), not tools — that decision below still holds.
 
 Reading the current `mcp_server.R`, the surface is per-endpoint (`search_papers`, `get_versions`, …). We collapse that to **two intents**:
 
@@ -551,15 +561,26 @@ Mapping:
 
 | Internal event       | MCP notification                                                |
 |----------------------|-----------------------------------------------------------------|
-| `stage enter/exit`   | `progress` with `progress` 1/5..5/5 and `message`               |
+| `stage enter`        | `progress` with `progress` 1/5..5/5 and `message` (stage exit is not forwarded) |
+| `strategy`           | `progress` with `message: "Strategy: <plan…>"`                  |
 | `progress`           | `progress` with `message` (no numeric advance)                  |
 | `validate ok=false`  | `progress` with `message: "Script rejected — retrying"`         |
+| `revise`             | `progress` with `message: "Refining (<mode>): <reason>"`        |
 | `section`            | `progress` with `message: "Section ready: <title> (N papers)"`  |
 | `synthesis delta`    | not forwarded (would flood); synthesis is delivered whole at the end |
 | `error`              | `CallToolResult { isError: true, content: [...] }`              |
 | `done`               | terminal — return final `CallToolResult`                        |
 
 The caller doesn't need to know our internal event taxonomy — they see prose progress lines that read naturally in a terminal.
+
+> **Phase 3 status (2026-07-10):** `lit_search` is wired (`src/mcp/litSearch.ts`).
+> Progress notifications stream over stdio and any SSE-mode HTTP path; under the hosted
+> streamable-HTTP transport's buffered JSON mode (`enableJsonResponse`) they are collected
+> and returned with the reply rather than delivered live. `skip_clarify` defaults **true**;
+> with `skip_clarify=false` an ambiguous brief returns a non-error `needs_clarification`
+> structured result and stops (no pause/resume over MCP). Identical briefs hit the persisted
+> cache (§7.8). Per-key rate limits and the single-concurrent-`lit_search` cap (§7.9) shipped
+> in Phase 4 (2026-07-10).
 
 ### 7.5 Output shape
 
@@ -579,7 +600,9 @@ The CSV is deliberately *not* the Excel workbook: one flat table is what `awk`, 
     "bibtex":         "string",        // entire .bib, deduped, sorted by year/author
     "papers_csv":     "string",        // see columns below
     "papers":         { /* { [handle]: Paper } — same data as CSV but structured */ },
+    "persons":        { /* { [short_id]: Person } — present only when the run produced person sections (Phase 15); omitted otherwise */ },
     "sections":       [ /* Section[] from §4.4 */ ],
+    "strategy":       "string",        // the plain-language search plan (last strategy event; user-facing, not the R script)
     "search_id":      "string",        // hash-keyed; identical brief returns same id
     "script":         "string",        // the R script that produced this run
     "resource_uri":   "agenticsearch://searches/{search_id}",
@@ -620,14 +643,21 @@ The calling agent's typical use: write `synthesis_md` to `suggested_paths.report
 
 A completed search registers a set of MCP resources the caller can read later (within the session or via the persistent URI):
 
-- `agenticsearch://searches/{id}` — overview (brief + synthesis + sections summary)
-- `agenticsearch://searches/{id}/script` — the R script
-- `agenticsearch://searches/{id}/bibtex` — `.bib` text
-- `agenticsearch://searches/{id}/papers` — full paper records as JSON
-- `agenticsearch://searches/{id}/sections/{section_id}` — one section's full row set
+- `agenticsearch://searches/{id}` — overview (brief + status + synthesis + per-section summary + `n_papers`/`n_persons`) **[Phase 3]**
+- `agenticsearch://searches/{id}/script` — the R script (text/plain) **[Phase 3]**
+- `agenticsearch://searches/{id}/bibtex` — `.bib` text (application/x-bibtex) **[Phase 3]**
+- `agenticsearch://searches/{id}/papers` — full paper records + the flat CSV, as JSON **[Phase 3]**
+- `agenticsearch://searches/{id}/sections/{section_id}` — one section's full row set **[Phase 3]**
 - `agenticsearch://papers/{handle}` — canonical paper record (resolves via existing `/handlestats`, `/versions`, `/citedby`)
-- `agenticsearch://papers/{handle}/citedby?limit=N` — papers citing this one
-- `agenticsearch://papers/{handle}/cites?limit=N` — references of this one
+- `agenticsearch://papers/{handle}/citedby` — papers citing this one
+- `agenticsearch://papers/{handle}/cites` — references of this one
+
+> **Phase 2 note (2026-07-10):** the `?limit=N` originally shown on the two lines
+> above is not wired. The MCP SDK's `ResourceTemplate` matcher rejects any URI
+> carrying a query string the template doesn't declare, and its `{?limit}` form
+> makes the param mandatory (breaking the common no-limit read). The cites/citedby
+> resources return the default cap (50); callers wanting a different N use the search
+> tools. Revisit only if a client needs deeper citation reads over MCP.
 
 Resources are listable so the calling agent can discover what's available without guessing URIs. The paper-level resources subsume the role of the old `get_versions`, `get_citations`, `get_handle_stats` tools without forcing them into the top-level tool list.
 
@@ -645,7 +675,14 @@ These help small calling models stay on-pattern without re-deriving the lit-sear
 
 `search_id` is a stable hash over `{brief, modes, year_range, categories, must_include, db_snapshot_date}`. Identical briefs against the same snapshot return the cached result without re-running R or the synthesiser. This matters because coding agents retry tool calls more than humans do, and because the same brief recurring across sessions (e.g. each time someone reopens a paper) should be free.
 
-Cache TTL: until the next snapshot rotation (nightly). Stored as one row in a `searches` DuckDB table (separate from `articles` snapshot — read-write, but tiny).
+Cache TTL: until the next snapshot rotation (no nightly rotation — the swap happens after each `update_repec.R` run; PLAN.md §11 decision 4). Stored as one row in a `searches` DuckDB table (separate from `articles` snapshot — read-write, but tiny).
+
+> **Phase 3 status (2026-07-10):** the shipped key (`src/agent/cache.ts`, shared with the web
+> `/chat` path) hashes only `{brief, categories, min_year, db_snapshot_date}` — it does **not**
+> yet include `must_include` or `refine`. Two `lit_search` calls that differ only in those
+> collide on `search_id`, and the second is served the first's cached result. Harmless on the
+> web (those weren't first-class inputs there), but Phase 3 exposes both as tool arguments, so
+> widening the hash to match the spec above is queued for **Phase 4** (alongside the key registry).
 
 ### 7.9 Auth and limits
 
@@ -656,6 +693,42 @@ Bearer-token auth (`Authorization: Bearer <key>`) on the streamable-HTTP transpo
 - Single concurrent `lit_search` per key (queue the second).
 
 Stdio transport (local) bypasses auth — the key is "you have shell on this machine."
+
+> **Phase 4 status (2026-07-10) — shipped.** The `api_keys` registry lives in a new
+> Hono-owned read-write `appdata.duckdb` (`src/db/appdata.ts`): `key_hash` (SHA-256 of the
+> `esk_`-prefixed plaintext, never stored raw), `label`, `scopes` (`rest`/`mcp`/`lit_search`/
+> `admin`), `rate_limit_overrides`, `created_at`, `revoked_at`. `requireKey(scope)`
+> (`src/middleware/requireKey.ts`) replaces the shared-password `requireAuth` on every costly
+> route — `rest` on `/chat`, `/papers/*`, `/export/*`; `mcp` on `/mcp`; `admin` on `/stats/*`
+> and `/admin/*`. It is a TTL-cached (30 s) lookup: an unknown/revoked token → 401, a known
+> key missing the scope → 403, and — crucially — an **empty registry with no password → open
+> pass-through** (dev), so the gate only bites once a password or key exists. The legacy
+> `AGENTIC_PASSWORD` is grandfathered as an all-scope `legacy` identity (constant-time
+> compared, never hashed into the registry) so the ZEW preview keeps working.
+>
+> Rate limits are in-process, keyed by key id (`src/auth/rateLimit.ts`): `lit_search`
+> 30/h + 300/day + **1 concurrent** (fixed windows + a concurrency gauge acquired before the
+> pipeline runs and released in a `finally`); `find_papers`/`find_people` 600/h; the SQL-only
+> tools a generous 6000/h abuse backstop. A cache hit consumes **no** quota, but the
+> `lit_search` scope is still checked *before* the cache lookup — a completed run (keyed on
+> brief+snapshot, not on key) is never served to a key that lacks the scope. A registry reload
+> failure is fail-closed (the awaiting request errors rather than opening the gate). The MCP route
+> gates with `mcp` scope, then threads the identity into the per-request server so
+> `lit_search` enforces the finer `lit_search` scope + its own limit at call time; `null`
+> identity (dev / local stdio) skips scope + limiting entirely. Keys are minted/revoked/listed
+> over `/admin/keys` (the `scripts/keys.ts` CLI is a thin HTTP client — only the server process
+> opens the exclusively-locked `appdata.duckdb`); revocation forces a registry refresh, so a
+> revoked key 401s immediately. No per-IP limiting (ZEW NATs through one address). nginx (not
+> Caddy) fronts the public endpoint.
+>
+> **Admin UI (2026-07-11).** The same three `/admin/keys` routes back an operator page in
+> `agentic_frontend` at `/admin` (`components/admin/KeyAdmin.jsx`) — list / mint (free-text
+> label + scope pills, plaintext revealed once) / revoke. No new backend surface. The admin
+> token is stored in `localStorage` under a key separate from the search-app token, so a
+> search-UI user never carries admin rights; on 401/403 the page shows a lock screen. Scope
+> `/admin` to a trusted operator origin at deploy time. Keeping keys an **MCP-only** concern
+> once the web product is password-free (drop `requireKey('rest')` from web routes, keep
+> `mcp`/`admin`) is a Phase-5 rewiring, tracked in FINDINGS.
 
 ### 7.10 Migration from the current R MCP server
 

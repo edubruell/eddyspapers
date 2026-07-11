@@ -68,12 +68,24 @@ describe("computeSearchId", () => {
     expect(id).toMatch(/^[0-9a-f]{16}$/);
   });
 
-  it("does not include mustInclude in the hash (not part of canonical key)", () => {
-    // mustInclude is an AgentInput field but not serialised in the payload
+  it("includes mustInclude in the hash (Phase 4 widened the key)", () => {
+    // Different must-include sets steer the search differently, so they must not
+    // collide onto one cached result (PLAN.md §D1).
     const id1 = computeSearchId({ ...base, mustInclude: ["repec:iza:izadps:dp123"] });
     const id2 = computeSearchId({ ...base });
-    // Both should be equal because mustInclude is not part of the hash
+    expect(id1).not.toBe(id2);
+  });
+
+  it("is order-insensitive for mustInclude", () => {
+    const id1 = computeSearchId({ ...base, mustInclude: ["b", "a"] });
+    const id2 = computeSearchId({ ...base, mustInclude: ["a", "b"] });
     expect(id1).toBe(id2);
+  });
+
+  it("includes refine in the hash", () => {
+    const id1 = computeSearchId({ ...base, refine: true });
+    const id2 = computeSearchId({ ...base, refine: false });
+    expect(id1).not.toBe(id2);
   });
 });
 

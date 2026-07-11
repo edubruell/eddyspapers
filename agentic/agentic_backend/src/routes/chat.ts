@@ -5,7 +5,7 @@ import { computeSearchId } from "../agent/cache.js";
 import { runAgent, type RunOpts } from "../agent/runAgent.js";
 import { bus } from "../stream/bus.js";
 import { getSearchDb } from "../db/singleton.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireKey } from "../middleware/requireKey.js";
 import type { SearchDb } from "../db/searches.js";
 import type { AgentInput, StreamEvent } from "../agent/types.js";
 
@@ -63,10 +63,10 @@ function runPhase(db: SearchDb, id: string, input: AgentInput, dbPath: string, o
     });
 }
 
-// requireAuth is bound to each POST route (not a `/chat/*` wildcard) so it gates only the
-// costly LLM calls. The SSE stream — a separate sub-app mounted on the same /chat prefix —
+// requireKey('rest') is bound to each POST route (not a `/chat/*` wildcard) so it gates only
+// the costly LLM calls. The SSE stream — a separate sub-app mounted on the same /chat prefix —
 // stays open, since EventSource can't carry an Authorization header.
-chatRoute.post("/", requireAuth, async (c) => {
+chatRoute.post("/", requireKey("rest"), async (c) => {
   let body: unknown;
   try {
     body = await c.req.json();
@@ -86,7 +86,7 @@ chatRoute.post("/", requireAuth, async (c) => {
     ? new Date(Date.now() - snapshot.ageMs).toISOString().slice(0, 10)
     : "unknown";
 
-  const id = computeSearchId({ brief, categories, minYear, dbSnapshotDate });
+  const id = computeSearchId({ brief, categories, minYear, mustInclude, refine, dbSnapshotDate });
   const db = await getSearchDb();
 
   const existing = await db.getSearch(id);
@@ -104,7 +104,7 @@ chatRoute.post("/", requireAuth, async (c) => {
 
 // Phase B — the human-in-the-loop reply to a blocking clarifier question. Validates the
 // run is paused, records the answer, and resumes write → … → done on the same bus.
-chatRoute.post("/:id/reply", requireAuth, async (c) => {
+chatRoute.post("/:id/reply", requireKey("rest"), async (c) => {
   const id = c.req.param("id");
 
   let body: unknown;

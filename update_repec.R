@@ -182,14 +182,27 @@ info("\n==== Update Complete ====")
 info("Finished at: ", Sys.time())
 info("Database: ", file.path(config$db_folder, "articles.duckdb"))
 
-info("\n==== Refresh agentic DB copy ====")
+info("\n==== Refresh agentic DB copy (atomic swap) ====")
 tryCatch({
-  src <- file.path(config$db_folder, "articles.duckdb")
-  dst <- file.path(config$db_folder, "articles_agentic.duckdb")
-  file.copy(src, dst, overwrite = TRUE)
-  wal <- paste0(src, ".wal")
-  if (file.exists(wal)) file.copy(wal, paste0(dst, ".wal"), overwrite = TRUE)
-  info("✓ Agentic copy refreshed: ", dst)
+  src     <- file.path(config$db_folder, "articles.duckdb")
+  dst     <- file.path(config$db_folder, "articles_agentic.duckdb")
+  dst_new <- paste0(dst, ".new")
+
+  # Checkpoint the source into a single self-contained file (no outstanding WAL) so the copy
+  # is one file and the swap is a single atomic rename — the Hono service (opened read-only)
+  # always sees either the old or the new snapshot whole, never a torn duckdb/wal pair.
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = src, read_only = FALSE)
+  DBI::dbExecute(con, "CHECKPOINT")
+  DBI::dbDisconnect(con, shutdown = TRUE)
+
+  if (file.exists(dst_new)) file.remove(dst_new)
+  file.copy(src, dst_new)
+  file.rename(dst_new, dst)                 # atomic on the same filesystem
+
+  stale_wal <- paste0(dst, ".wal")          # a stale WAL would shadow the freshly-swapped file
+  if (file.exists(stale_wal)) file.remove(stale_wal)
+
+  info("✓ Agentic copy refreshed (atomic): ", dst)
 }, error = function(e) {
   info("⚠ Agentic DB copy failed (non-fatal): ", e$message)
 })

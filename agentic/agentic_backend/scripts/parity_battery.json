@@ -1,0 +1,227 @@
+{
+  "semantic": [
+    {
+      "id": "sem-01",
+      "query": "Causal effects of minimum wage increases on employment in monopsonistic labour markets. Quasi-experimental evidence from regional variation and border-county designs.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-02",
+      "query": "How the quality of local public administration shapes immigrant outcomes. Effects of processing speed and administrative capacity on migrants' labour market integration in European countries.",
+      "min_year": 2010,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-03",
+      "query": "Monetary policy transmission through bank lending channels. How central bank interest rate decisions affect credit supply to small firms, using bank-level panel data and identification from policy surprises.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-04",
+      "query": "The intergenerational transmission of wealth and educational attainment. Parental resources, inheritance, and children's long-run economic outcomes in administrative register data.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-05",
+      "query": "Effects of carbon pricing and emissions trading schemes on firm competitiveness, industrial production, and carbon leakage in manufacturing.",
+      "min_year": 2015,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-06",
+      "query": "Gender gaps in wages and promotion within firms. The role of child penalties, part-time work, and employer discrimination, with event-study evidence around first childbirth.",
+      "min_year": null,
+      "journal_filter": "Top 5 Journals, Top Field Journals (A), AEJs"
+    },
+    {
+      "id": "sem-07",
+      "query": "Returns to vocational training and active labour market programmes for unemployed workers. Evaluation with matching and instrumental variable designs on administrative data from Germany.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-08",
+      "query": "Trade liberalisation and local labour market adjustment. Import competition from China, manufacturing employment decline, and regional wage effects.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-09",
+      "query": "Housing supply constraints, land-use regulation, and rising rents in large cities. Effects of zoning reform and new construction on housing affordability.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-10",
+      "query": "Health insurance expansions and healthcare utilisation among low-income populations. Effects on emergency department visits, preventive care, and financial hardship.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-11",
+      "query": "The productivity effects of management practices in firms. Field experiments and surveys measuring how structured management improves plant-level output.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-12",
+      "query": "Automation, robots, and the demand for labour. Effects of industrial robot adoption on employment and wages across local labour markets and occupations.",
+      "min_year": 2015,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-13",
+      "query": "Tax evasion and enforcement using third-party reporting. Randomised audit experiments and bunching at kink points to estimate behavioural responses to income taxation.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-14",
+      "query": "Long-run effects of early childhood education programmes on adult earnings, educational attainment, and criminal behaviour, using lottery-based and cohort designs.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-15",
+      "query": "Financial frictions and misallocation of capital across firms in developing countries. How credit constraints reduce aggregate total factor productivity.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-16",
+      "query": "Refugee migration and labour market integration. Employment trajectories of asylum seekers, effects of language training and dispersal policies in Scandinavian and German registers.",
+      "min_year": 2015,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-17",
+      "query": "Climate change damages to agriculture. Effects of extreme heat and drought on crop yields and farmer adaptation, using weather variation in panel data.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-18",
+      "query": "Market power and markups in the macroeconomy. Rising firm concentration, declining labour share, and estimation of markups from production data.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-19",
+      "query": "Behavioural biases in household finance. Inertia in retirement savings, default effects in pension enrolment, and the design of nudges for saving behaviour.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-20",
+      "query": "The effect of school class size and teacher quality on student achievement. Value-added models and quasi-experimental evidence from class size rules.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-21",
+      "query": "Social networks and job search. How referrals and personal connections affect hiring, job match quality, and wages of new hires.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-22",
+      "query": "Difference-in-differences with staggered treatment adoption. Bias of two-way fixed effects estimators under heterogeneous treatment effects and new robust estimators.",
+      "min_year": 2018,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-23",
+      "query": "Innovation, patents, and knowledge spillovers. R&D subsidies, the direction of technical change, and effects of public research funding on private innovation.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-24",
+      "query": "Pension reform and retirement age. Labour supply responses of older workers to increases in statutory retirement ages and early retirement penalties in Europe.",
+      "min_year": null,
+      "journal_filter": null
+    },
+    {
+      "id": "sem-25",
+      "query": "Auction design in electricity and spectrum markets. Bidding behaviour, collusion, and revenue comparisons between auction formats.",
+      "min_year": null,
+      "journal_filter": null
+    }
+  ],
+  "person": [
+    {
+      "id": "per-01",
+      "query": "Minimum wage effects on employment, monopsony power in labour markets, and wage setting by firms.",
+      "scoring_mode": "breadth",
+      "quality_weight": 0
+    },
+    {
+      "id": "per-02",
+      "query": "Minimum wage effects on employment, monopsony power in labour markets, and wage setting by firms.",
+      "scoring_mode": "best_match",
+      "quality_weight": 0
+    },
+    {
+      "id": "per-03",
+      "query": "Climate policy evaluation, carbon pricing, and energy market regulation.",
+      "scoring_mode": "breadth",
+      "quality_weight": 0
+    },
+    {
+      "id": "per-04",
+      "query": "Gender wage gaps, child penalties, and female labour force participation.",
+      "scoring_mode": "breadth",
+      "quality_weight": 0
+    },
+    {
+      "id": "per-05",
+      "query": "Econometric methods for difference-in-differences and event-study designs with staggered adoption.",
+      "scoring_mode": "best_match",
+      "quality_weight": 0
+    },
+    {
+      "id": "per-06",
+      "query": "Refugee and immigrant labour market integration in European welfare states.",
+      "scoring_mode": "breadth",
+      "quality_weight": 0
+    },
+    {
+      "id": "per-07",
+      "query": "Climate policy evaluation, carbon pricing, and energy market regulation.",
+      "scoring_mode": "breadth",
+      "quality_weight": 0,
+      "min_year": 2015
+    },
+    {
+      "id": "per-08",
+      "query": "Gender wage gaps, child penalties, and female labour force participation.",
+      "scoring_mode": "breadth",
+      "quality_weight": 0,
+      "category": "Top 5 Journals, Top Field Journals (A)"
+    },
+    {
+      "id": "per-09",
+      "query": "Minimum wage effects on employment, monopsony power in labour markets, and wage setting by firms.",
+      "scoring_mode": "best_match",
+      "quality_weight": 0,
+      "active_since": 2018,
+      "min_citations": 50
+    }
+  ],
+  "sql": [
+    { "id": "versions_card2012",       "method": "GET", "path": "/versions?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39" },
+    { "id": "citedby_card2012",        "method": "GET", "path": "/citedby?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39&limit=20" },
+    { "id": "cites_card2012",          "method": "GET", "path": "/cites?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39&limit=20" },
+    { "id": "citationcounts_card2012", "method": "GET", "path": "/citationcounts?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39" },
+    { "id": "handlestats_card2012",    "method": "GET", "path": "/handlestats?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39" },
+    { "id": "stats_total",             "method": "GET", "path": "/stats/total" },
+    { "id": "stats_journals",          "method": "GET", "path": "/stats/journals" },
+    { "id": "stats_categories",        "method": "GET", "path": "/stats/categories" },
+    { "id": "person_lookup_card",      "method": "GET", "path": "/person/lookup?name=card&limit=10" },
+    { "id": "person_profile_card",     "method": "GET", "path": "/person/pca271" },
+    { "id": "person_papers_card",      "method": "GET", "path": "/person/pca271/papers?sort_by=citations&limit=10" }
+  ]
+}

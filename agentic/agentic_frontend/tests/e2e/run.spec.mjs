@@ -5,8 +5,10 @@ import { test, expect } from "@playwright/test";
 test("brief → run → strategy, synthesis, and evidence render", async ({ page }) => {
   await page.goto("/");
 
-  // Landing: wordmark + task box.
-  await expect(page.getByText("AGENTIC SEARCH")).toBeVisible();
+  // Landing: wordmark (baked into the logo image) + task box.
+  await expect(
+    page.getByRole("img", { name: /Agentic Search/i }),
+  ).toBeVisible();
   const task = page.getByPlaceholder(/Describe what you're looking for/i);
   await expect(task).toBeVisible();
 

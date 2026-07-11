@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import ExcelJS from "exceljs";
 import { z } from "zod";
-import { requireAuth } from "../middleware/auth.js";
+import { requireKey } from "../middleware/requireKey.js";
 
 // One row per collected source. Mirrors the Paper shape the frontend holds in its store;
 // abstracts can be long, so the column is wrapped rather than truncated.
@@ -21,7 +21,7 @@ const bodySchema = z.object({
 });
 
 export const exportRoute = new Hono();
-exportRoute.use("*", requireAuth);
+exportRoute.use("*", requireKey("rest"));
 
 exportRoute.post("/xlsx", async (c) => {
   let body: unknown;

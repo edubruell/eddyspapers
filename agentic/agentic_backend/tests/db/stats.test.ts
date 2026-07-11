@@ -70,6 +70,14 @@ describe("getStats", () => {
   });
 });
 
+// DuckDB now() stamps created_at in local time, so "today" must be computed in
+// local time as well — new Date().toISOString() is UTC and made this test fail
+// between midnight and 0+offset local (found 2026-07-10).
+const localToday = (): string => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 describe("getDailyLogs", () => {
   it("returns rows for today with event counts and flags", async () => {
     await db.upsertSearch("a", input("logged brief", { refine: true }));
@@ -79,7 +87,7 @@ describe("getDailyLogs", () => {
     ]);
     await db.finalizeSearch("a", "done", "## review");
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     const rows = await db.getDailyLogs(today);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -237,7 +245,7 @@ describe("clarifier lifecycle in stats", () => {
     expect(stats.clarified).toBe(1);
     expect(stats.by_status).toEqual({ done: 1 });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     const rows = await db.getDailyLogs(today);
     expect(rows[0]?.clarified).toBe(true);
   });
@@ -273,15 +281,17 @@ describe("stats routes", () => {
 
   const loadRoute = async (password: string) => {
     vi.resetModules();
+    // requireKey reads the grandfathered password live from process.env (parity with the
+    // appdata path), so stub it there as well as in the env.js mock.
+    vi.stubEnv("AGENTIC_PASSWORD", password);
     vi.doMock("../../src/env.js", () => ({
-      env: {
-        AGENTIC_PASSWORD: password,
-        SEMANTIC_API_BASE: "https://example.test/api",
-        EDDYPAPERS_API_KEY: "",
-      },
+      env: { AGENTIC_PASSWORD: password },
     }));
     vi.doMock("../../src/db/singleton.js", () => ({
       getSearchDb: async () => ({ getStats, getDailyLogs }),
+      // requireKey('admin') resolves keys through the registry → getAppDataDb; no keys
+      // provisioned here, so the grandfathered password is the only admission path.
+      getAppDataDb: async () => ({ activeKeys: async () => [] }),
     }));
     const { statsRoute } = await import("../../src/routes/stats.js");
     return statsRoute;
@@ -290,6 +300,7 @@ describe("stats routes", () => {
   afterEach(() => {
     getStats.mockClear();
     getDailyLogs.mockClear();
+    vi.unstubAllEnvs();
     vi.doUnmock("../../src/env.js");
     vi.doUnmock("../../src/db/singleton.js");
     vi.resetModules();
@@ -297,14 +308,14 @@ describe("stats routes", () => {
 
   it("rejects /searches without a key when the gate is enabled", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/searches");
+    const res = await route.request("/agentic/searches");
     expect(res.status).toBe(401);
     expect(getStats).not.toHaveBeenCalled();
   });
 
   it("rejects /dailylogs with a wrong key when the gate is enabled", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/dailylogs?day=2026-06-11", {
+    const res = await route.request("/agentic/dailylogs?day=2026-06-11", {
       headers: { "x-agentic-key": "nope" },
     });
     expect(res.status).toBe(401);
@@ -313,7 +324,7 @@ describe("stats routes", () => {
 
   it("serves /searches with the x-agentic-key header and defaults days to 30", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/searches", {
+    const res = await route.request("/agentic/searches", {
       headers: { "x-agentic-key": "s3cret" },
     });
     expect(res.status).toBe(200);
@@ -323,7 +334,7 @@ describe("stats routes", () => {
 
   it("serves /searches with a Bearer token and passes days through", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/searches?days=7", {
+    const res = await route.request("/agentic/searches?days=7", {
       headers: { authorization: "Bearer s3cret" },
     });
     expect(res.status).toBe(200);
@@ -332,14 +343,14 @@ describe("stats routes", () => {
 
   it.each(["0", "-3", "2.5", "abc"])("rejects days=%s with 400", async (days) => {
     const route = await loadRoute("");
-    const res = await route.request(`/searches?days=${days}`);
+    const res = await route.request(`/agentic/searches?days=${days}`);
     expect(res.status).toBe(400);
     expect(getStats).not.toHaveBeenCalled();
   });
 
   it("serves /dailylogs for a well-formed day", async () => {
     const route = await loadRoute("s3cret");
-    const res = await route.request("/dailylogs?day=2026-06-11", {
+    const res = await route.request("/agentic/dailylogs?day=2026-06-11", {
       headers: { "x-agentic-key": "s3cret" },
     });
     expect(res.status).toBe(200);
@@ -351,7 +362,7 @@ describe("stats routes", () => {
     "rejects malformed day=%s with 400",
     async (day) => {
       const route = await loadRoute("");
-      const res = await route.request(`/dailylogs?day=${day}`);
+      const res = await route.request(`/agentic/dailylogs?day=${day}`);
       expect(res.status).toBe(400);
       expect(getDailyLogs).not.toHaveBeenCalled();
     },
@@ -359,8 +370,8 @@ describe("stats routes", () => {
 
   it("leaves both routes open when the gate is disabled", async () => {
     const route = await loadRoute("");
-    const statsRes = await route.request("/searches");
-    const logsRes = await route.request("/dailylogs?day=2026-06-11");
+    const statsRes = await route.request("/agentic/searches");
+    const logsRes = await route.request("/agentic/dailylogs?day=2026-06-11");
     expect(statsRes.status).toBe(200);
     expect(logsRes.status).toBe(200);
   });

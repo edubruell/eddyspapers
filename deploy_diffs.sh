@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
 #
-# Upload the newest parquet diffs and have the server ingest them.
+# Upload the newest parquet diffs and have the server ingest them (phase-5 / post-Plumber).
 #
 # Flow:
 #   1. rsync local pqt_diff/ -> server (root)
-#   2. stop the API + fix permissions (root)
-#   3. apply the newest diff into the DuckDB (eddyspapers user, via server_apply_diff.R)
-#   4. start the API again (root)
+#   2. fix permissions (root) — NO service stop: after Plumber's retirement nothing holds
+#      articles.duckdb read-write except this apply step, and the Hono service reads the
+#      separate articles_agentic.duckdb snapshot, so diffs apply live.
+#   3. apply the newest diff into articles.duckdb (eddyspapers user, via server_apply_diff.R,
+#      which disconnects cleanly so the file is checkpointed with no outstanding WAL)
+#   4. refresh the read-only Hono snapshot: cp articles.duckdb -> articles_agentic.duckdb.new,
+#      then atomic mv into place (eddyspapers user)
+#   5. POST /admin/reload so the Hono service reopens the swapped snapshot
 #
-# The API is always brought back up on exit, even if ingestion fails.
+# Emergency escape hatch: set EDDY_STOP_SERVICE=1 to stop the service around the apply (only
+# needed if a future change makes the service hold articles.duckdb again).
 #
 # Overridable via environment variables:
 #   EDDY_HOST, EDDY_ROOT_USER, EDDY_APP_USER,
-#   EDDY_LOCAL_DIFF_DIR, EDDY_REMOTE_DIFF_DIR, EDDY_SERVICE
+#   EDDY_LOCAL_DIFF_DIR, EDDY_REMOTE_DIFF_DIR, EDDY_SERVICE,
+#   EDDY_DB_DIR, EDDY_RELOAD_URL, EDDY_ADMIN_KEY, EDDY_STOP_SERVICE
 #
-# Usage: ./deploy_diffs.sh
+# Usage: EDDY_ADMIN_KEY=esk_… ./deploy_diffs.sh
 
 set -euo pipefail
 
@@ -24,6 +31,13 @@ APP_USER="${EDDY_APP_USER:-eddyspapers}"
 LOCAL_DIFF_DIR="${EDDY_LOCAL_DIFF_DIR:-$HOME/eddyspapers/pqt_diff}"
 REMOTE_DIFF_DIR="${EDDY_REMOTE_DIFF_DIR:-/srv/eddyspapers/data/pqt_diff}"
 SERVICE="${EDDY_SERVICE:-eddyspapers-api}"
+DB_DIR="${EDDY_DB_DIR:-/srv/eddyspapers/data/db}"
+RELOAD_URL="${EDDY_RELOAD_URL:-http://127.0.0.1:8001/admin/reload}"
+# Falls back to the operator key file so cron/update_repec.R runs don't need the env var
+# (minted at the phase-5 cutover; admin scope, only used for POST /admin/reload).
+ADMIN_KEY_FILE="${EDDY_ADMIN_KEY_FILE:-$HOME/.config/eddyspapers/admin_key}"
+ADMIN_KEY="${EDDY_ADMIN_KEY:-$(cat "$ADMIN_KEY_FILE" 2>/dev/null || true)}"
+STOP_SERVICE="${EDDY_STOP_SERVICE:-0}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APPLY_SCRIPT="$SCRIPT_DIR/server_apply_diff.R"
@@ -39,17 +53,16 @@ if [[ ! -d "$LOCAL_DIFF_DIR" ]]; then
   exit 1
 fi
 
-# Show which stamp pair is newest locally, for confirmation.
 newest_local="$(ls -1 "$LOCAL_DIFF_DIR"/articles_diff_*.parquet 2>/dev/null | sort | tail -1 || true)"
 if [[ -n "$newest_local" ]]; then
   say "Newest local diff: $(basename "$newest_local")"
 fi
 
-# Always bring the API back up on exit unless we already started it cleanly.
-api_started=0
+# Emergency: if the service is stopped for the apply, make sure it comes back on exit.
+api_stopped=0
 restart_api() {
-  if [[ "$api_started" -eq 0 ]]; then
-    say "Cleanup: starting ${SERVICE} (it may have been left stopped)"
+  if [[ "$api_stopped" -eq 1 ]]; then
+    say "Cleanup: starting ${SERVICE} (it was stopped for the apply)"
     ssh "${ROOT_USER}@${HOST}" "systemctl start ${SERVICE}" || true
   fi
 }
@@ -60,22 +73,47 @@ rsync -av --no-perms --no-owner --no-group \
   "${LOCAL_DIFF_DIR}/" \
   "${ROOT_USER}@${HOST}:${REMOTE_DIFF_DIR}/"
 
-say "2/5 Stopping ${SERVICE} and fixing permissions (root)"
+say "2/5 Fixing permissions (root)${STOP_SERVICE:+; STOP_SERVICE=${STOP_SERVICE}}"
 ssh "${ROOT_USER}@${HOST}" bash -s <<EOF
 set -euo pipefail
-systemctl stop ${SERVICE}
 chmod 755 ${REMOTE_DIFF_DIR}
 chmod 644 ${REMOTE_DIFF_DIR}/*.parquet
+if [[ "${STOP_SERVICE}" == "1" ]]; then systemctl stop ${SERVICE}; fi
 EOF
+[[ "${STOP_SERVICE}" == "1" ]] && api_stopped=1
 
 say "3/5 Applying newest diff on server (as ${APP_USER})"
 ssh "${APP_USER}@${HOST}" 'Rscript -' < "$APPLY_SCRIPT"
 
-say "4/5 Starting ${SERVICE} (root)"
-ssh "${ROOT_USER}@${HOST}" "systemctl start ${SERVICE}"
-api_started=1
+say "4/5 Refreshing the Hono snapshot (atomic swap, as ${APP_USER})"
+# The mv replaces the inode while the running service still holds the OLD snapshot open
+# read-only; POSIX unlink-on-open keeps that handle valid until step 5's /admin/reload swaps
+# it. A read-only DuckDB open creates no WAL, so the rm -f is a defensive no-op (W3, review).
+ssh "${APP_USER}@${HOST}" bash -s <<EOF
+set -euo pipefail
+cd "${DB_DIR}"
+cp -f articles.duckdb articles_agentic.duckdb.new
+mv -f articles_agentic.duckdb.new articles_agentic.duckdb
+rm -f articles_agentic.duckdb.wal
+EOF
 
-say "5/5 Verifying ${SERVICE} is active"
+if [[ "${STOP_SERVICE}" == "1" ]]; then
+  say "Restarting ${SERVICE} (root)"
+  ssh "${ROOT_USER}@${HOST}" "systemctl start ${SERVICE}"
+  api_stopped=0
+fi
+
+say "5/5 Reloading the corpus snapshot in ${SERVICE}"
+if [[ -z "$ADMIN_KEY" ]]; then
+  echo "WARNING: EDDY_ADMIN_KEY unset — skipping POST ${RELOAD_URL}." >&2
+  echo "         The service will keep serving the OLD snapshot until it restarts or is reloaded." >&2
+else
+  ssh "${ROOT_USER}@${HOST}" \
+    "curl -fsS -X POST -H 'Authorization: Bearer ${ADMIN_KEY}' '${RELOAD_URL}'" \
+    && echo
+fi
+
+say "Verifying ${SERVICE} is active"
 ssh "${ROOT_USER}@${HOST}" "systemctl is-active ${SERVICE}"
 
 say "Deploy complete."

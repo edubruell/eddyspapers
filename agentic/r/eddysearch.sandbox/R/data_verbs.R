@@ -77,10 +77,13 @@ cites <- function(handle, limit = 50) {
   t0 <- Sys.time()
   emit_progress(paste0("cites: ", stringr::str_trunc(handle, 60)))
 
+  # cit_internal stores lowercase handles; articles.Handle is mixed case. Joining
+  # without LOWER() returns zero rows for every call (found 2026-07-10 while
+  # building the Phase 1 test fixture).
   sql <- "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.abstract, a.bib_tex
           FROM cit_internal ci
-          JOIN articles a ON ci.cited = a.Handle
-          WHERE ci.citing = ?
+          JOIN articles a ON ci.cited = LOWER(a.Handle)
+          WHERE ci.citing = LOWER(?)
           LIMIT ?"
 
   result <- DBI::dbGetQuery(.sandbox_state$con, sql, params = list(handle, limit))
@@ -96,8 +99,8 @@ citedby <- function(handle, limit = 50) {
 
   sql <- "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.abstract, a.bib_tex
           FROM cit_internal ci
-          JOIN articles a ON ci.citing = a.Handle
-          WHERE ci.cited = ?
+          JOIN articles a ON ci.citing = LOWER(a.Handle)
+          WHERE ci.cited = LOWER(?)
           LIMIT ?"
 
   result <- DBI::dbGetQuery(.sandbox_state$con, sql, params = list(handle, limit))
@@ -111,10 +114,13 @@ handle_stats <- function(handles) {
   t0 <- Sys.time()
   emit_progress("handle_stats")
 
+  # handle_stats.handle is stored lowercase (like cit_internal) — lowercase the
+  # caller's handles so articles$Handle drops in directly (same bug class as the
+  # cites/citedby LOWER fix, 2026-07-10).
   placeholders <- paste(rep("?", length(handles)), collapse = ", ")
   sql <- paste0("SELECT * FROM handle_stats WHERE handle IN (", placeholders, ")")
 
-  result <- DBI::dbGetQuery(.sandbox_state$con, sql, params = as.list(handles))
+  result <- DBI::dbGetQuery(.sandbox_state$con, sql, params = as.list(tolower(handles)))
   result <- dplyr::as_tibble(result)
 
   emit_progress(paste0("  ↳ ", nrow(result), " results in ", round(as.numeric(Sys.time() - t0, units = "secs"), 1), "s"))

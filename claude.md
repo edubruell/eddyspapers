@@ -273,6 +273,17 @@ The base product is functional end-to-end and was validated against real briefs.
 
 ### What this project does NOT touch
 
-- `backend/` — zero edits planned. `eddyspapersbackend` keeps its current Plumber routes.
-- `frontend/` — zero edits planned. The existing search UI keeps working at its current URL. The only future cross-link is a small "Detective mode →" button + dismissable banner (Phase 12).
-- The existing R MCP server (`backend/R/mcp_server.R`) — left running until the new Node MCP adapter has been dual-run for one week, then deleted (Phase 11).
+> **Superseded by the backend-port programme (root `PLAN.md`, in progress 2026-07).** The
+> "zero edits" rules below held for the agentic build; they no longer hold now that Plumber is
+> being retired. See `PLAN.md` for the live picture: every Plumber route now has a Hono port
+> (phase-5 M1–M4, local + green), and the R `backend/` package becomes pipeline-only.
+
+- `backend/` — ~~zero edits planned~~ **being retired.** `eddyspapersbackend` keeps only its
+  sync/parse/embed/database/persons pipeline code; the Plumber HTTP layer (`inst/plumber/`,
+  the HTTP parts of `R/api.R`/`R/persons.R`, `run_api.R`) is deleted in phase-5 M7, after the
+  two-week prod soak.
+- `frontend/` — still zero *code* edits. The classic + econpeople UIs keep working unchanged;
+  the phase-5 cutover only repoints their nginx `/api/` block from Plumber (`:8000`) to Hono
+  (`:8001`). (The future "Detective mode →" cross-link banner remains out of scope here.)
+- The existing R MCP server (`backend/R/mcp_server.R`) — already retired on prod; deleted with
+  the rest of the Plumber layer in phase-5 M7 (folds in the old Phase-11 task).
