@@ -210,5 +210,18 @@
       "active_since": 2018,
       "min_citations": 50
     }
+  ],
+  "sql": [
+    { "id": "versions_card2012",       "method": "GET", "path": "/versions?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39" },
+    { "id": "citedby_card2012",        "method": "GET", "path": "/citedby?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39&limit=20" },
+    { "id": "cites_card2012",          "method": "GET", "path": "/cites?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39&limit=20" },
+    { "id": "citationcounts_card2012", "method": "GET", "path": "/citationcounts?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39" },
+    { "id": "handlestats_card2012",    "method": "GET", "path": "/handlestats?handle=RePEc:aea:aecrev:v:102:y:2012:i:7:p:3111-39" },
+    { "id": "stats_total",             "method": "GET", "path": "/stats/total" },
+    { "id": "stats_journals",          "method": "GET", "path": "/stats/journals" },
+    { "id": "stats_categories",        "method": "GET", "path": "/stats/categories" },
+    { "id": "person_lookup_card",      "method": "GET", "path": "/person/lookup?name=card&limit=10" },
+    { "id": "person_profile_card",     "method": "GET", "path": "/person/pca271" },
+    { "id": "person_papers_card",      "method": "GET", "path": "/person/pca271/papers?sort_by=citations&limit=10" }
   ]
 }

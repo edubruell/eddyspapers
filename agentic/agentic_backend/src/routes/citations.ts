@@ -15,6 +15,8 @@ import {
 
 export const citationsRoute = new Hono();
 
+// Deliberate divergence from Plumber's uncapped as.integer(limit): clamp to 1000 as a guard
+// (W2, phase-5 review). Parity replays stay well under this, so it doesn't affect the harness.
 const limitOf = (raw: string | undefined): number => {
   const n = Number(raw ?? "50");
   return Number.isInteger(n) && n > 0 ? Math.min(n, 1000) : 50;
@@ -59,7 +61,15 @@ citationsRoute.get("/citationcounts", requireKey("rest"), async (c) => {
 // every value in a one-element array (BigInt → Number so JSON.stringify survives) and leave
 // citations_by_year / citer_category_* as raw strings. Not-found is a 200 body, matching
 // Plumber (the handler never sets a 404 status).
-const jsonScalar = (v: unknown): unknown => (typeof v === "bigint" ? Number(v) : v);
+const jsonScalar = (v: unknown): unknown => {
+  if (typeof v === "bigint") return Number(v);
+  // The JSON-typed columns (citations_by_year, citer_category_*) must reach the frontend as
+  // raw strings — it runs its own JSON.parse. Today @duckdb/node-api returns them as strings;
+  // coerce defensively so a future driver that hands back a parsed object can't silently emit
+  // `[{…}]` and break the stats panel (W1, phase-5 code-quality review).
+  if (v !== null && typeof v === "object") return JSON.stringify(v);
+  return v;
+};
 const boxRow = (row: Record<string, unknown>): Record<string, unknown[]> =>
   Object.fromEntries(Object.entries(row).map(([k, v]) => [k, [jsonScalar(v)]]));
 

@@ -328,6 +328,59 @@ Phase 4 entry.
 
 ---
 
+## Phase 5 — Plumber retirement (M1–M4 built + reviewed 2026-07-11)
+
+Phase-exit reviews (§12.4) ran on the committed M1–M4 diff (fresh-context sub-agents, in parallel).
+
+### Code-quality review — no blockers
+
+Verified the ports are byte-faithful against the Plumber originals: POST `/search` bare array +
+`round5(1-sim)` + desc; `/search/:hash` 200+`{error,status:404}`; `/cites`/`/citedby` LEFT JOIN +
+lowercase `handle` + `is_series` + year-desc; `/handlestats` boxed (frontend `Array.isArray` gate);
+person `/search` reshape (flat `image_url`, 4-field stats, evidence round5, `n_authors` = page size)
+returning scalars; telemetry split with no collision + correct scopes; `classic.ts` `list_value`
+inserts + no un-coerced BigInt; `reloadCorpusDb` open-before-swap + no circular init; the migration's
+ATTACH/cast/sequence-restart/idempotence; the R atomic swap + `deploy_diffs.sh` v2. No `any`/mutation.
+
+Three warnings, all **addressed**:
+- **W1 (fixed)** — `/handlestats` `boxRow` now defensively `JSON.stringify`s any non-string JSON
+  column value, so a future `@duckdb/node-api` that returns a *parsed* `citations_by_year` can't emit
+  `[{…}]` and break the frontend's `JSON.parse` (`src/routes/citations.ts` `jsonScalar`).
+- **W2 (documented)** — `/cites`/`/citedby` `limit` is clamped to 1000 (Plumber was uncapped); noted
+  as a deliberate guard in the route comment; parity replays stay well under it.
+- **W3 (documented)** — `deploy_diffs.sh` step 4 `rm -f …_agentic.duckdb.wal` after the `mv` is a
+  defensive no-op relying on POSIX unlink-on-open (a read-only open makes no WAL); comment added.
+
+### Test extender — +33 tests, no product bugs
+
+Added 4 files (`tests/db/classic.extended.test.ts`, `tests/db/migrate.extended.test.ts`,
+`tests/routes/citations.extended.test.ts`, `tests/routes/person.extended.test.ts`,
+`tests/routes/telemetry.extended.test.ts`) covering hash determinism + per-field discrimination,
+dedup-does-not-overwrite, boxed-handlestats invariants + JSON columns as strings, log VARCHAR[]
+0/3/>3 + day boundaries, exact case-insensitive institution filter, offset-past-end, sort/counts,
+migration missing-table + empty-sequence-restart, and the three-way telemetry shape split (classic
+`filter_usage` vs agentic `by_status` vs person `scoring_modes`+`institution_filters`). Two correct
+behaviours are now pinned: dedup keeps the first results, and the institution filter is exact
+equality (case-variant matches, substring does not).
+
+### Parity harness (M5) — extended, run deferred to the cutover window
+
+`scripts/parity.ts` gains an `sql` battery (citations / stats / person profile-papers-lookup) recorded
+from Plumber and checked by driving the real Hono app via `buildApp().request()`. The comparator is a
+new pure `normalizeForParity` (`scripts/parityNormalize.ts`, unit-tested against real prod wire
+samples): it collapses the two systematic Plumber↔Hono differences — auto_unbox=FALSE **boxing**
+(recursively unwrap one-element arrays on both sides) and jsonlite **digits=4** (round every number to
+4) — and drops volatile keys (timestamps/ids/hashes). Embedding routes stay rank-tolerant.
+**Run status:** the record (needs a local/prod Plumber) + check (needs the local corpus synced to the
+recorded snapshot) is a **deploy-gate step** run in the M6 window (`ops_notes/PHASE5_CUTOVER.md` §0/§5),
+not in CI — exact SQL parity only holds when local corpus == recorded snapshot (citation counts grow
+daily). Prod confirmed the boxing model directly: `/handlestats` + `/person/*` come back fully boxed,
+data.frame routes (`/person/lookup`, `/versions`, `/cites`) come back with scalar cells.
+
+Full suite after M5: **54 files, 619 passed / 4 skipped**; clean `tsc -p tsconfig.build.json`.
+
+---
+
 ## Known pre-existing issues (to deal with later)
 
 - **~113 `tsc --noEmit` errors, all in test files — pre-existing, tracked for a cleanup pass.**

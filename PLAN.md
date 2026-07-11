@@ -442,6 +442,51 @@ recorded: making API keys **MCP-only** once the web goes password-free (drop `re
 from web routes, keep `mcp`/`admin`) is deferred to Phase 5. (Pre-existing `run.spec.mjs` e2e
 failure noted in FINDINGS — predates this change, out of scope.)
 
+**Phase 5 — Plumber retirement — local build (M1–M4) done 2026-07-11; M5/M6 pending.** Split into
+reviewable milestones (M1–M5 local, M6 the prod window, M7 the post-soak R-package strip). All
+Plumber routes now have Hono ports; the local suite is green (583 tests) and the src build is clean.
+
+- **M1 — classic search + user-table appdata + telemetry split** (`5314149`). `appdata.duckdb` gains
+  the four user tables (`saved_searches`, `search_logs`, `person_search_logs`,
+  `saved_person_searches`) + both id sequences + generic `query`/`run` primitives; `results JSON` →
+  `TEXT` (drops the json-extension dep). New `src/db/classic.ts` (saveSearch/getSavedSearch/logSearch/
+  getSearchStats/searchLogsDay), `src/search/hash.ts` (`canonicalHash8` = SHA-256 over canonical JSON —
+  decision 2), `src/util/clientIp.ts`, `src/routes/search.ts` (POST `/search`, `/search/save`, GET
+  `/search/:hash`). Telemetry split: agentic run stats → `/stats/agentic/{searches,dailylogs}`; the
+  classic Plumber paths `/stats/searches` + top-level `/dailylogs` now read appdata `search_logs`;
+  `/stats/{total,journals,categories}` added; `/stats/last_updated` **de-proxied** to read corpus
+  `db_metadata` directly (unauthenticated). `get_stats_from_api.R` agentic pollers repointed.
+- **M2 — citations / versions / handlestats** (`a022fbd`). `src/search/citations.ts` wire variants
+  (`citingPapersOf`/`citedPapersOf` LEFT JOIN + lowercase `handle` key + `is_series` + year-desc;
+  `versionLinksOf`; `citationCountsOf`), MCP fns untouched. `src/routes/citations.ts` at `/`.
+  `/handlestats` is the one **boxed** route (auto_unbox=FALSE parity — the classic frontend gates on
+  `Array.isArray(data.handle)` and JSON.parses the string columns itself). `build_fixture.ts` gains a
+  `cit_all` slice.
+- **M3 — EconPeople `/person/*`** (`c6ae315`). `persons.ts` gains the institution post-filter (exact
+  case-insensitive), `workplace_institution`, and offset pagination; new `src/search/personProfile.ts`
+  (lookup / profile / papers / `handleToIdeasUrl`); `classic.ts` person side; `src/routes/person.ts`
+  (all seven routes, static before `/:short_id`; POST `/search` reshapes to the econpeople wire: flat
+  `image_url`, 4-field stats, evidence round5, `n_authors` = page size). Person routes return **scalar**
+  JSON (verified against prod: Plumber boxes everything, both frontends tolerate scalars via coercion /
+  a `first()` helper; the M5 harness normalises the boxed goldens).
+- **M4 — reload / migration / pipeline** (`3063b88`). `reloadCorpusDb()` (open-new-before-swap,
+  drain-close, guide-cache clear) + `POST /admin/reload`; `scripts/migrate_appdata.ts` (ATTACH
+  READ_ONLY copy, sequences at max+1, idempotence guard, `--import-frontend-key`); `update_repec.R`
+  CHECKPOINT + atomic snapshot rename; `deploy_diffs.sh` v2 (no service stop; cp+mv; curl
+  `/admin/reload`; `EDDY_STOP_SERVICE=1` escape hatch); `env.ts` drops `SEMANTIC_API_BASE` /
+  `EDDYPAPERS_API_KEY`.
+
+Decisions made during the build (refining §6/§11): (1) classic + person telemetry stay **`rest`**-scoped
+(not `admin`) — parity with Plumber's single-key model and works through nginx frontend-key injection;
+no `EDDY_ADMIN_KEY` needed for the poller. (2) The agentic `searches.duckdb` store stays its own file
+(unchanged from decision 3). (3) jsonlite serialises Plumber doubles at `digits=4`, so the M5
+comparator must round doubles to 4 before the exact-SQL diff (e.g. `/handlestats` `citations_per_year`).
+
+Remaining: **M5** — extend `scripts/parity.ts` + battery to every ported route (record vs local
+Plumber → check via `buildApp().request()`), the phase-exit reviews (§12.4), and the doc pass; then
+**M6** the prod cutover window (`ops_notes/PHASE5_CUTOVER.md`, §12.3 runbook) and **M7** the
+post-soak R-package strip.
+
 ## 12. Local testing & deployment
 
 ### 12.1 Local test rig

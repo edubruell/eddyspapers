@@ -83,6 +83,9 @@ say "3/5 Applying newest diff on server (as ${APP_USER})"
 ssh "${APP_USER}@${HOST}" 'Rscript -' < "$APPLY_SCRIPT"
 
 say "4/5 Refreshing the Hono snapshot (atomic swap, as ${APP_USER})"
+# The mv replaces the inode while the running service still holds the OLD snapshot open
+# read-only; POSIX unlink-on-open keeps that handle valid until step 5's /admin/reload swaps
+# it. A read-only DuckDB open creates no WAL, so the rm -f is a defensive no-op (W3, review).
 ssh "${APP_USER}@${HOST}" bash -s <<EOF
 set -euo pipefail
 cd "${DB_DIR}"

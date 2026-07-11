@@ -17,6 +17,7 @@ import { openCorpusDb } from "../src/db/corpus.js";
 import { semanticSearch } from "../src/search/papers.js";
 import { personSearch } from "../src/search/persons.js";
 import type { ScoringMode } from "../src/search/types.js";
+import { normalizeForParity, firstDiff } from "./parityNormalize.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const BATTERY_PATH = join(__dir, "parity_battery.json");
@@ -36,11 +37,23 @@ type PersonCase = {
   active_since?: number;
   min_citations?: number;
 };
-type Battery = { semantic: SemanticCase[]; person: PersonCase[] };
+// Pure-SQL routes (citations / stats / person profile-papers-lookup) compared exactly after
+// normalisation (unwrap Plumber's boxing, round doubles to jsonlite's 4 digits, drop volatile
+// keys). Exactness assumes the local corpus == the recorded snapshot — true at the cutover
+// window (§12.3), less so against a stale local copy, where growing citation counts will diff.
+type SqlCase = { id: string; method: "GET" | "POST"; path: string; body?: unknown };
+type Battery = { semantic: SemanticCase[]; person: PersonCase[]; sql: SqlCase[] };
 
 type SemanticGolden = { id: string; handles: string[]; similarities: number[] };
 type PersonGolden = { id: string; short_ids: string[] };
-type Golden = { base: string; recorded_at: string; semantic: SemanticGolden[]; person: PersonGolden[] };
+type SqlGolden = { id: string; response: unknown };
+type Golden = {
+  base: string;
+  recorded_at: string;
+  semantic: SemanticGolden[];
+  person: PersonGolden[];
+  sql: SqlGolden[];
+};
 
 const SEM_K = 20;
 const PER_K = 10;
@@ -101,8 +114,20 @@ async function record(): Promise<void> {
     console.log(`recorded ${c.id}: ${res.results.length} persons`);
   }
 
+  const sql: SqlGolden[] = [];
+  for (const c of battery.sql) {
+    const res = await fetch(`${base}${c.path}`, {
+      method: c.method,
+      headers,
+      body: c.method === "POST" ? JSON.stringify(c.body ?? {}) : undefined,
+    });
+    if (!res.ok) throw new Error(`${c.path} -> ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    sql.push({ id: c.id, response: await res.json() });
+    console.log(`recorded ${c.id}`);
+  }
+
   await mkdir(dirname(GOLDEN_PATH), { recursive: true });
-  const golden: Golden = { base, recorded_at: new Date().toISOString(), semantic, person };
+  const golden: Golden = { base, recorded_at: new Date().toISOString(), semantic, person, sql };
   await writeFile(GOLDEN_PATH, JSON.stringify(golden, null, 2));
   console.log(`golden written: ${GOLDEN_PATH}`);
 }
@@ -159,6 +184,30 @@ async function check(): Promise<void> {
     const ok = overlap >= PER_MIN_OVERLAP;
     console.log(`${ok ? "PASS" : "FAIL"} ${c.id}  overlap ${overlap}/${PER_K}  top1=${ourIds[0] === g.short_ids[0] ? "same" : "diff"}`);
     if (!ok) failures.push(c.id);
+  }
+
+  // SQL routes: drive the real Hono app (wire-level, so rounding/boxing/field-order are
+  // exercised) and diff exactly-after-normalisation against the Plumber goldens.
+  if (golden.sql?.length) {
+    process.env.DB_SNAPSHOT = db.snapshot.path;
+    process.env.AGENTIC_APPDATA_PATH ??= join(__dir, "../tests/fixtures/parity_appdata.duckdb");
+    delete process.env.AGENTIC_PASSWORD;
+    const { buildApp } = await import("../src/app.js");
+    const app = buildApp();
+    for (const c of battery.sql) {
+      const g = golden.sql.find((x) => x.id === c.id);
+      if (!g) continue;
+      const res = await app.request(c.path, {
+        method: c.method,
+        headers: { "content-type": "application/json" },
+        body: c.method === "POST" ? JSON.stringify(c.body ?? {}) : undefined,
+      });
+      const ours = await res.json();
+      const diff = firstDiff(normalizeForParity(g.response), normalizeForParity(ours));
+      const ok = res.status === 200 && diff === null;
+      console.log(`${ok ? "PASS" : "FAIL"} ${c.id}${diff ? "  " + diff : ""}`);
+      if (!ok) failures.push(c.id);
+    }
   }
 
   db.close();

@@ -1,13 +1,19 @@
 # econpeople — API surface (design draft)
 
 Endpoints for the person finder. **API only** — the future Diogenes frontend is
-the consumer; **no MCP** (decided 2026-06-05). Routes extend the existing
-`eddyspapersbackend` Plumber app (`backend/R/api.R`); they read the person tables
-from `01_data_model.md` and reuse the base `/search` vector path. No new data
-layer.
+the consumer; **no MCP** (decided 2026-06-05). They read the person tables from
+`01_data_model.md` and reuse the base `/search` vector path. No new data layer.
+
+> **Serving layer moved to Hono (root `PLAN.md` phase 5, 2026-07).** These `/person/*`
+> routes were first built in the R/Plumber `eddyspapersbackend` app (`backend/R/persons.R`);
+> they are now ported to the Node/Hono service (`agentic/agentic_backend/src/routes/person.ts`
+> + `src/search/{persons,personProfile}.ts`) with the **same endpoint shapes**. One
+> serialisation nuance the port makes explicit: Plumber's `@serializer json` boxed every scalar
+> in a one-element array — the Hono port returns clean scalars, consumed identically by the
+> frontend (which already read the boxed values via coercion).
 
 Convention follows the existing API (see `CLAUDE.md` "API Endpoints"): JSON in/out,
-same connection pool, same error shape.
+same error shape.
 
 ## 1. `POST /person/search` — topic → authors (the headline)
 
