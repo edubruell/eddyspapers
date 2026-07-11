@@ -81,6 +81,13 @@ await conn.run(
      AND ci.cited IN (SELECT LOWER(Handle) FROM articles)`,
 );
 await conn.run(
+  // cit_all keeps every edge *citing* a fixture paper (citer may be out-of-corpus), so
+  // /citationcounts sees total >= internal — the Phase 5 citation-count route needs it.
+  `CREATE TABLE cit_all AS
+   SELECT ca.* FROM src.cit_all ca
+   WHERE ca.cited IN (SELECT LOWER(Handle) FROM articles)`,
+);
+await conn.run(
   `CREATE TABLE version_links AS
    SELECT vl.* FROM src.version_links vl
    WHERE LOWER(vl.source) IN (SELECT LOWER(Handle) FROM articles)
@@ -131,6 +138,7 @@ const counts = await (await conn.run(`
   SELECT 'articles' AS t, COUNT(*) AS n FROM articles
   UNION ALL SELECT 'handle_stats', COUNT(*) FROM handle_stats
   UNION ALL SELECT 'cit_internal', COUNT(*) FROM cit_internal
+  UNION ALL SELECT 'cit_all', COUNT(*) FROM cit_all
   UNION ALL SELECT 'persons', COUNT(*) FROM persons
   UNION ALL SELECT 'person_works', COUNT(*) FROM person_works
   UNION ALL SELECT 'person_wikidata', COUNT(*) FROM person_wikidata

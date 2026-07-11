@@ -6,6 +6,7 @@ import { searchesRoute } from "./routes/searches.js";
 import { searchRoute } from "./routes/search.js";
 import { statsRoute } from "./routes/stats.js";
 import { dailyLogsRoute } from "./routes/dailylogs.js";
+import { citationsRoute } from "./routes/citations.js";
 import { exportRoute } from "./routes/export.js";
 import { papersRoute } from "./routes/papers.js";
 import { corpusRoute } from "./routes/corpus.js";
@@ -40,6 +41,7 @@ export function buildApp(): Hono {
   app.route("/search", searchRoute);
   app.route("/stats", statsRoute);
   app.route("/dailylogs", dailyLogsRoute);
+  app.route("/", citationsRoute);
   app.route("/export", exportRoute);
   app.route("/papers", papersRoute);
   app.route("/corpus", corpusRoute);
