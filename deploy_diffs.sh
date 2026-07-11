@@ -33,7 +33,10 @@ REMOTE_DIFF_DIR="${EDDY_REMOTE_DIFF_DIR:-/srv/eddyspapers/data/pqt_diff}"
 SERVICE="${EDDY_SERVICE:-eddyspapers-api}"
 DB_DIR="${EDDY_DB_DIR:-/srv/eddyspapers/data/db}"
 RELOAD_URL="${EDDY_RELOAD_URL:-http://127.0.0.1:8001/admin/reload}"
-ADMIN_KEY="${EDDY_ADMIN_KEY:-}"
+# Falls back to the operator key file so cron/update_repec.R runs don't need the env var
+# (minted at the phase-5 cutover; admin scope, only used for POST /admin/reload).
+ADMIN_KEY_FILE="${EDDY_ADMIN_KEY_FILE:-$HOME/.config/eddyspapers/admin_key}"
+ADMIN_KEY="${EDDY_ADMIN_KEY:-$(cat "$ADMIN_KEY_FILE" 2>/dev/null || true)}"
 STOP_SERVICE="${EDDY_STOP_SERVICE:-0}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -54,6 +54,37 @@ describe("normalizeForParity", () => {
     ).toContain("$.journal");
   });
 
+  it("surfaces a value-vs-boxed-null difference (Plumber NA boxed as [null])", () => {
+    expect(
+      firstDiff(normalizeForParity({ url: ["http://x"] }), normalizeForParity({ url: [null] })),
+    ).toContain("$.url");
+  });
+
+  it("keeps nulls inside multi-element arrays so length differences still surface", () => {
+    // The null drop applies to object keys only — dropping array elements would let a
+    // rows-mismatch slip through as an equal-length compare.
+    expect(normalizeForParity([1, null, 2])).toEqual([1, null, 2]);
+    expect(firstDiff(normalizeForParity([1, null, 2]), normalizeForParity([1, 2]))).toContain(
+      "length",
+    );
+  });
+
+  it("drops null keys per-row inside multi-row arrays without changing row count", () => {
+    expect(normalizeForParity([{ a: 1, b: null }, { a: 2, b: "x" }])).toEqual([
+      { a: 1 },
+      { a: 2, b: "x" },
+    ]);
+  });
+
+  it("collapses a one-row result array to a bare object — downstream comparators must handle it", () => {
+    // Hazard pinned on purpose: any comparator that gates on Array.isArray (e.g. parity.ts
+    // diffCitationSet's asRows) sees a 1-row cites/citedby response as [] AFTER normalisation
+    // and must not treat that as an empty (vacuously equal) set.
+    const oneRow = normalizeForParity([{ handle: "repec:x", year: 2020 }]);
+    expect(Array.isArray(oneRow)).toBe(false);
+    expect(oneRow).toEqual({ handle: "repec:x", year: 2020 });
+  });
+
   it("makes a boxed person row equal to the scalar person row Hono returns", () => {
     const plumber = {
       short_id: ["pne16"],

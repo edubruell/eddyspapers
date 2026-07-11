@@ -21,7 +21,9 @@ const poolSize = (): number => Number(process.env.CORPUS_POOL_SIZE ?? 3);
 
 // LIST/ARRAY columns (e.g. person_wikidata's VARCHAR[] fields) come back as
 // DuckDBListValue/DuckDBArrayValue wrappers, which JSON-serialise as objects —
-// the wire (and jsonlite parity) needs plain arrays.
+// the wire (and jsonlite parity) needs plain arrays. Other wrapper types
+// (DuckDBStructValue, DuckDBMapValue, decimal/timestamp values) are NOT unwrapped;
+// no current corpus column produces them — adding one needs a case here.
 const plainValue = (v: unknown): unknown =>
   v instanceof DuckDBListValue || v instanceof DuckDBArrayValue ? v.items.map(plainValue) : v;
 

@@ -73,20 +73,42 @@ const SIM_TOLERANCE = 1e-4;
 //  - person profile/papers: sort tie groups canonically on both sides, then compare exact.
 type Row = Record<string, unknown>;
 const CITATION_SET = /^(cites_|citedby_)/;
-const asRows = (v: unknown): Row[] => (Array.isArray(v) ? (v as Row[]) : []);
+// normalizeForParity collapses a 1-row array to a bare object — re-wrap it, or a 1-row
+// citation case compares vacuously (review finding, 2026-07-11).
+const asRows = (v: unknown): Row[] =>
+  Array.isArray(v) ? (v as Row[]) : v && typeof v === "object" ? [v as Row] : [];
 
 function diffCitationSet(golden: unknown, ours: unknown): string | null {
   const g = asRows(golden);
   const o = asRows(ours);
   if (g.length !== o.length) return `$: length ${g.length} vs ${o.length}`;
+  for (const [side, rows] of [["golden", g], ["ours", o]] as const) {
+    if (new Set(rows.map((r) => String(r.handle))).size !== rows.length) {
+      return `$: duplicate handles on ${side} side`;
+    }
+  }
   const years = (rows: Row[]): string => rows.map((r) => String(r.year ?? "null")).sort().join(",");
   if (years(g) !== years(o)) return `$: year multiset [${years(g)}] vs [${years(o)}]`;
+  // Membership may only differ inside the LIMIT-boundary year (the minimum year present);
+  // rows on both sides must match exactly.
+  const boundaryYear = Math.min(...[...g, ...o].map((r) => Number(r.year ?? Infinity)));
   const byHandle = new Map(o.map((r) => [String(r.handle), r]));
   for (const row of g) {
     const other = byHandle.get(String(row.handle));
-    if (!other) continue; // boundary-year membership difference — allowed
+    if (!other) {
+      if (Number(row.year ?? Infinity) !== boundaryYear) {
+        return `$[${String(row.handle)}]: missing from ours outside the boundary year`;
+      }
+      continue;
+    }
     const d = firstDiff(row, other, `$[${String(row.handle)}]`);
     if (d) return d;
+  }
+  const gHandles = new Set(g.map((r) => String(r.handle)));
+  for (const row of o) {
+    if (!gHandles.has(String(row.handle)) && Number(row.year ?? Infinity) !== boundaryYear) {
+      return `$[${String(row.handle)}]: extra in ours outside the boundary year`;
+    }
   }
   return null;
 }

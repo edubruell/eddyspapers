@@ -18,6 +18,7 @@ vi.mock("../../src/search/embed.js", async (importActual) => {
 let app: Hono;
 let tmp = "";
 let profileId = ""; // has a wikidata row
+let listRichId = ""; // has a NON-EMPTY citizenships list — exercises element unwrapping
 let worksId = ""; // most in-corpus works
 let nameNeedle = ""; // a substring guaranteed to match a person
 
@@ -28,6 +29,8 @@ beforeAll(async () => {
 
   const fx = await openFixture();
   profileId = String((await fx.query("SELECT p.short_id FROM persons p JOIN person_wikidata w ON w.short_id = p.short_id LIMIT 1"))[0].short_id);
+  const lr = await fx.query("SELECT short_id FROM person_wikidata WHERE len(citizenships) > 0 LIMIT 1");
+  listRichId = lr.length > 0 ? String(lr[0].short_id) : "";
   worksId = String((await fx.query("SELECT short_id, COUNT(*) n FROM person_works GROUP BY short_id ORDER BY n DESC LIMIT 1"))[0].short_id);
   const nm = String((await fx.query("SELECT name_last FROM persons WHERE name_last IS NOT NULL AND LENGTH(name_last) > 3 LIMIT 1"))[0].name_last);
   nameNeedle = nm.slice(0, 4);
@@ -184,6 +187,19 @@ describe("GET /person/:short_id", () => {
       expect(v === null || v === undefined || Array.isArray(v), `${f} must be null or a plain array`).toBe(true);
       if (Array.isArray(v)) v.forEach((s) => expect(typeof s).toBe("string"));
     }
+  });
+
+  it("round-trips a NON-EMPTY VARCHAR[] as string elements (empty lists can't catch a broken map)", async () => {
+    // profileId's lists are all empty in the fixture, so the previous test never exercises
+    // element unwrapping — a plainValue that returned e.g. [{}] per element would slip through.
+    expect(listRichId, "fixture must contain a person with non-empty citizenships").not.toBe("");
+    const p = (await (await app.request(`/person/${listRichId}`)).json()) as {
+      wikidata: { citizenships: unknown };
+    };
+    const c = p.wikidata.citizenships;
+    expect(Array.isArray(c)).toBe(true);
+    expect((c as unknown[]).length).toBeGreaterThan(0);
+    (c as unknown[]).forEach((s) => expect(typeof s).toBe("string"));
   });
 
   it("mirrors an unknown short_id as {error:'Person not found'}", async () => {
