@@ -30,7 +30,7 @@ All three are served by **one Node/Hono service** at `:8001` (`agentic/agentic_b
 │   │   ├── tests/
 │   │   └── scripts/        ← parity harness, key CLI, migration tools
 │   ├── agentic_frontend/   ← Astro+React UI for agenticsearch
-│   └── r/                  ← eddysearch.sandbox R package + subprocess runner
+│   └── r/                  ← eddysearch.sandbox R package + subprocess runner (→ sandbox/ post-M7)
 │
 ├── frontend/               ← Astro+React UI for classic search (econpapers)
 ├── econpeople_frontend/    ← Astro+React UI for EconPeople
