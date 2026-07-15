@@ -311,7 +311,7 @@ create_indices <- function(con) {
   DBI::dbExecute(con, "LOAD vss;")
   DBI::dbExecute(con, "SET hnsw_enable_experimental_persistence=true;")
   DBI::dbExecute(con, "DROP INDEX IF EXISTS idx_hnsw;")
-  DBI::dbExecute(con, "CREATE INDEX idx_hnsw ON articles USING HNSW (embeddings);")
+  DBI::dbExecute(con, "CREATE INDEX idx_hnsw ON articles USING HNSW (embeddings) WITH (metric = 'cosine');")
   
   indices <- DBI::dbGetQuery(con, "
     SELECT *

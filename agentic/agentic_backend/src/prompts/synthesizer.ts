@@ -83,6 +83,11 @@ If no url is available: \`repec:iza:izadps:dp12345\` — the frontend will ancho
 Use handle backticks (\`repec:...\`) when pointing at "the section above" rather than an external
 page, or when there is no URL.
 
+A handle is NEVER a URL. Never place a \`repec:...\` handle inside link parentheses —
+write \`[Heidhues et al. 2024](\`repec:ces:ceswps:_11332\`)\` is WRONG and renders as a dead
+link. A handle citation is the bare backtick form only: **[Heidhues et al. 2024]** followed by
+\`repec:ces:ceswps:_11332\`, with no \`[](...)\` wrapper around the handle.
+
 Never invent URLs. Never substitute a generic IDEAS URL for a paper that has a real publisher URL.
 
 ## Voice
