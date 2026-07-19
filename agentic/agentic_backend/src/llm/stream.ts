@@ -33,6 +33,7 @@ const DEFAULT_STREAM_TIMEOUT_MS = 300_000;
 
 export interface StreamResult {
   finishReason: string;
+  usage: { promptTokens: number; completionTokens: number; cachedTokens: number };
 }
 
 export async function streamStructured(opts: {
@@ -81,13 +82,12 @@ export async function streamStructured(opts: {
     promptTokensDetails?: { cachedTokens?: number };
   };
 
-  await logUsage(
-    opts.stage,
-    opts.modelId,
-    raw.promptTokens,
-    raw.completionTokens,
-    raw.promptTokensDetails?.cachedTokens ?? 0
-  );
+  const cachedTokens = raw.promptTokensDetails?.cachedTokens ?? 0;
 
-  return { finishReason };
+  await logUsage(opts.stage, opts.modelId, raw.promptTokens, raw.completionTokens, cachedTokens);
+
+  return {
+    finishReason,
+    usage: { promptTokens: raw.promptTokens, completionTokens: raw.completionTokens, cachedTokens },
+  };
 }

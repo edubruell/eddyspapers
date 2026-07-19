@@ -68,7 +68,10 @@ describe("streamStructured", () => {
     });
 
     expect(seen).toEqual(["a", "b", "c"]);
-    expect(out).toEqual({ finishReason: "length" });
+    expect(out).toEqual({
+      finishReason: "length",
+      usage: { promptTokens: 10, completionTokens: 5, cachedTokens: 0 },
+    });
   });
 
   it("throws when the stream reports an error via onError (textStream does not throw)", async () => {

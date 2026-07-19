@@ -13,6 +13,7 @@
     "eyeball": "tsx --env-file=.env scripts/eyeball.ts",
     "benchmark": "tsx --env-file=.env scripts/benchmark.ts",
     "qual": "tsx --env-file=.env scripts/qual.ts",
+    "synth:ab": "tsx --env-file=.env scripts/synth_ab.ts",
     "build:fixture": "tsx scripts/build_fixture.ts",
     "keys": "tsx scripts/keys.ts",
     "migrate:appdata": "tsx scripts/migrate_appdata.ts"
