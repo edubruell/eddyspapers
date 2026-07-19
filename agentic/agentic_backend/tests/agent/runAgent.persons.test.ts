@@ -102,7 +102,7 @@ beforeEach(() => {
   }));
   synthesize.mockImplementation(
     async (...a: unknown[]) => {
-      const onDelta = a[6] as (d: string) => void;
+      const onDelta = a[7] as (d: string) => void;
       onDelta("## Who to talk to");
       return "## Who to talk to";
     },

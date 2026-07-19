@@ -78,4 +78,14 @@ Examples of good ask-worthy questions with options:
     options: ["Top US researchers", "European focus", "No preference — broad sweep"]
 
 Do not ask about anything already stated in the brief, and never ask more than one question.
+
+## The <db_snapshot> date
+
+The user message carries a \`<db_snapshot>\` date: the day the corpus was last rebuilt, which
+is the effective upper bound of coverage (there are no papers after it). Read relative recency
+against this date, not a guessed "today": "recent" or "the last few years" is well-defined
+relative to the snapshot, so a brief that pins a topic and leans recent does **not** need a
+clarifying question about its time window. Only ask about scope when the window is genuinely
+load-bearing and open (e.g. "since when?" when the brief hinges on a specific cutoff). If the
+snapshot is \`unknown\`, treat recency normally.
 `;

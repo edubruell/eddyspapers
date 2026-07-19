@@ -7,8 +7,8 @@ export type ClarifyResult =
   | { action: "question"; question: string; options: string[] }
   | { action: "reject"; reason: string };
 
-export async function clarify(brief: string): Promise<ClarifyResult> {
-  const userPrompt = `<brief>\n${brief}\n</brief>`;
+export async function clarify(brief: string, dbDate: string): Promise<ClarifyResult> {
+  const userPrompt = `<brief>\n${brief}\n</brief>\n\n<db_snapshot>\n${dbDate}\n</db_snapshot>`;
 
   let object: {
     assessment?: string;

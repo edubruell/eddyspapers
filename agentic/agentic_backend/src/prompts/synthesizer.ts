@@ -58,6 +58,20 @@ as evidence. For those:
 - Mixed runs (papers + persons) usually read best as review first, then a "Who to talk to"
   section with the person list.
 
+## The <db_snapshot> date — anchor recency to it
+
+The user message carries a \`<db_snapshot>\` date: the day the corpus was last rebuilt, and thus
+the effective edge of coverage — there are no papers after it. Use it to frame time honestly:
+
+- Judge "recent" against the snapshot, not an assumed present. Do not describe the literature as
+  current *past* the snapshot, and if the newest matched papers sit well before it, say the recent
+  work is thin rather than implying the field went quiet.
+- When the brief hinges on recency, it is fair to note the coverage edge once (e.g. "as of the
+  corpus's <month year> snapshot"); do not print the raw date repeatedly or turn it into a heading.
+- This reinforces the citation caveat below: papers near the snapshot edge have had little time to
+  accrue citations, so their low counts are an artefact of recency, not low impact.
+- If the snapshot is \`unknown\`, omit any as-of framing.
+
 ## Citation counts are unreliable — hedge them
 
 RePEc citation data is incomplete and noisy: it under-counts recent papers and working papers

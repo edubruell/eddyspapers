@@ -30,7 +30,7 @@ describe("clarify action mapping", () => {
       usage: { promptTokens: 1, completionTokens: 1, cachedTokens: 0 },
     });
     const clarify = await importClarify();
-    const result = await clarify("a well-formed economics brief about minimum wages");
+    const result = await clarify("a well-formed economics brief about minimum wages", "2026-07-11");
     expect(result).toEqual({ action: "proceed" });
   });
 
@@ -40,7 +40,7 @@ describe("clarify action mapping", () => {
       usage: { promptTokens: 1, completionTokens: 1, cachedTokens: 0 },
     });
     const clarify = await importClarify();
-    const result = await clarify("how do I bake bread");
+    const result = await clarify("how do I bake bread", "2026-07-11");
     expect(result).toEqual({ action: "reject", reason: "Not economics." });
   });
 
@@ -50,7 +50,7 @@ describe("clarify action mapping", () => {
       usage: { promptTokens: 1, completionTokens: 1, cachedTokens: 0 },
     });
     const clarify = await importClarify();
-    const result = await clarify("how do I bake bread");
+    const result = await clarify("how do I bake bread", "2026-07-11");
     expect(result.action).toBe("reject");
     if (result.action === "reject") expect(result.reason.length).toBeGreaterThan(0);
   });
@@ -66,7 +66,7 @@ describe("clarify action mapping", () => {
       usage: { promptTokens: 1, completionTokens: 1, cachedTokens: 0 },
     });
     const clarify = await importClarify();
-    const result = await clarify("recent top-5 labour papers and their USP");
+    const result = await clarify("recent top-5 labour papers and their USP", "2026-07-11");
     expect(result).toEqual({
       action: "question",
       question: "USP relative to what?",
@@ -80,7 +80,7 @@ describe("clarify action mapping", () => {
       usage: { promptTokens: 1, completionTokens: 1, cachedTokens: 0 },
     });
     const clarify = await importClarify();
-    const result = await clarify("labour market frictions");
+    const result = await clarify("labour market frictions", "2026-07-11");
     expect(result.action).toBe("question");
     if (result.action === "question") {
       expect(result.options).toEqual([]);
@@ -94,14 +94,14 @@ describe("clarify action mapping", () => {
       usage: { promptTokens: 1, completionTokens: 1, cachedTokens: 0 },
     });
     const clarify = await importClarify();
-    const result = await clarify("labour market frictions");
+    const result = await clarify("labour market frictions", "2026-07-11");
     expect(result).toEqual({ action: "proceed" });
   });
 
   it("falls through to proceed when the LLM call throws (never strand on infra hiccup)", async () => {
     generateStructured.mockRejectedValue(new Error("openrouter 503"));
     const clarify = await importClarify();
-    const result = await clarify("employment effects of minimum wages in Germany");
+    const result = await clarify("employment effects of minimum wages in Germany", "2026-07-11");
     expect(result).toEqual({ action: "proceed" });
   });
 });

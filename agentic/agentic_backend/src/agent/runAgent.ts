@@ -147,10 +147,16 @@ export async function runAgent(
   };
 
   try {
+    const snapshot = await resolveSnapshot(dbPath);
+    const dbDate =
+      snapshot.exists && snapshot.ageMs != null
+        ? new Date(Date.now() - snapshot.ageMs).toISOString().slice(0, 10)
+        : "unknown";
+
     // ── Clarify ──────────────────────────────────────────────────────────────
     if (runClarify) {
       const tStage = stageEnter("clarify");
-      const clarifyResult = await clarify(input.brief);
+      const clarifyResult = await clarify(input.brief, dbDate);
       if (clarifyResult.action === "reject") {
         stageExit("clarify", tStage);
         fail(clarifyResult.reason);
@@ -174,12 +180,6 @@ export async function runAgent(
       currentStage = "clarify";
       emit({ type: "stage", stage: "clarify", state: "exit" });
     }
-
-    const snapshot = await resolveSnapshot(dbPath);
-    const dbDate =
-      snapshot.exists && snapshot.ageMs != null
-        ? new Date(Date.now() - snapshot.ageMs).toISOString().slice(0, 10)
-        : "unknown";
 
     // ── Round 1 ────────────────────────────────────────────────────────────────
     const round1 = await runRound(dbDate, undefined, 0);
@@ -258,6 +258,7 @@ export async function runAgent(
         papers,
         persons,
         bibtex,
+        dbDate,
         (delta) => emit({ type: "synthesis", delta }),
       );
     }

@@ -15,6 +15,7 @@ export async function synthesize(
   papers: Record<string, Paper>,
   persons: Record<string, Person>,
   bibtex: string,
+  dbDate: string,
   onDelta: (delta: string) => void,
 ): Promise<string> {
   const personsBlock = Object.keys(persons ?? {}).length
@@ -23,6 +24,7 @@ export async function synthesize(
 
   const userMessage =
     `<brief>\n${brief}\n</brief>\n\n` +
+    `<db_snapshot>\n${dbDate}\n</db_snapshot>\n\n` +
     `<script>\n${script}\n</script>\n\n` +
     `<sections>\n${JSON.stringify(sections, null, 2)}\n</sections>\n\n` +
     `<papers>\n${JSON.stringify(papers, null, 2)}\n</papers>\n\n` +
