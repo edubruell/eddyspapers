@@ -3,9 +3,9 @@ Type: Package
 Title: Semantic Economics Paper Search Engine Backend
 Version: 0.4.1
 Authors@R: person("Eduard", "Brüll", email = "eduard.bruell@zew.de", role = c("aut", "cre"))
-Description: Backend utilities for a semantic economics paper search engine. 
-    Handles syncing RePEc archives, parsing RDF files, generating embeddings, 
-    and managing the DuckDB database. Includes a Plumber API for search queries.
+Description: Data pipeline for a semantic economics paper search engine.
+    Handles syncing RePEc archives, parsing RDF files, generating embeddings,
+    and managing the DuckDB database. Serving is handled by the Node/Hono API.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
@@ -21,20 +21,15 @@ Imports:
     stringr,
     glue,
     jsonlite,
-    arrow,
     duckdb,
+    processx,
     tidyllm,
     withr,
-    plumber,
     DBI,
-    pool,
     rprojroot,
     tibble,
     lubridate,
-    digest,
     R.utils,
-    mcptools,
-    ellmer,
     httr2
 Suggests:
     testthat (>= 3.0.0)
