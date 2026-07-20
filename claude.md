@@ -10,7 +10,7 @@ Three related products sharing one DuckDB corpus (~479k economics papers from Re
 | EconPeople person finder | `econpeople.eduard-bruell.de` | Live |
 | Agentic literature review | `agenticsearch.eduard-bruell.de` | Live (ZEW preview) |
 
-All three are served by **one Node/Hono service** at `:8001` (`agentic/agentic_backend/`). R/Plumber is retired on prod (stopped 2026-07-11); dead code stripped in M7 (~2026-07-25). See `localwip/notes/PLAN.md` for the full architecture record.
+All three are served by **one Node/Hono service** at `:8001` (`api/`). R/Plumber is retired on prod (stopped 2026-07-11); dead code stripped and the tree restructured in M7 (2026-07-20). See `localwip/notes/PLAN.md` for the full architecture record.
 
 ## Folder map
 
@@ -19,33 +19,37 @@ All three are served by **one Node/Hono service** at `:8001` (`agentic/agentic_b
 ├── update_repec.R          ← cron entry point: sync → parse → embed → diff → deploy
 ├── deploy_diffs.sh         ← manual diff upload + /admin/reload
 ├── server_apply_diff.R     ← runs on server inside deploy_diffs.sh
+├── diff_upload.R           ← rsync upload helper
 │
-├── backend/                ← R package `eddyspapersbackend` (pipeline-only after M7)
-│   └── R/                  ← config, folders, sync, parse, database, handle_stats,
-│                              persons, persons_wikidata, update_logs
+├── pipeline/               ← R package `eddyspapersbackend` (pipeline only — no serving)
+│   ├── R/                  ← config, folders, sync, parse, database, handle_stats,
+│   │                          persons, persons_wikidata, update_logs
+│   └── inst/scripts/       ← Perl ReDIF parsers
 │
-├── agentic/
-│   ├── agentic_backend/    ← Node/Hono API service (serves ALL three products)
-│   │   ├── src/            ← routes, search, auth, db, mcp, sandbox
-│   │   ├── tests/
-│   │   └── scripts/        ← parity harness, key CLI, migration tools
-│   ├── agentic_frontend/   ← Astro+React UI for agenticsearch
-│   └── r/                  ← eddysearch.sandbox R package + subprocess runner (→ sandbox/ post-M7)
+├── api/                    ← Node/Hono API service (serves ALL three products)
+│   ├── src/                ← routes, search, auth, db, mcp, sandbox
+│   ├── tests/
+│   └── scripts/            ← parity harness, key CLI, migration tools
 │
-├── frontend/               ← Astro+React UI for classic search (econpapers)
-├── econpeople_frontend/    ← Astro+React UI for EconPeople
-├── econpeople/             ← assets only (logo); design docs in localwip/notes/econpeople/ (→ assets/ post-M7)
+├── sandbox/                ← eddysearch.sandbox R package + subprocess runner (run.R, check.R)
 │
+├── frontends/              ← all three Astro+React UIs (shared palette)
+│   ├── classic/            ← econpapers
+│   ├── econpeople/         ← econpeople
+│   └── agentic/            ← agenticsearch
+│
+├── assets/                 ← shared source assets (logo, screenshot)
 ├── stats/                  ← analysis scripts and cached data
 ├── maintenance/            ← static maintenance page
 ├── ops_notes/              ← gitignored server-ops notes
 └── localwip/               ← gitignored scratch
     ├── notes/              ← PLAN.md, FINDINGS.md, roadmap.md, M7_restructure.md
+    ├── adhoc/              ← retired one-off scripts
     ├── lit-search/         ← skill WIP
     └── lit-check/
 ```
 
-**Post-M7 restructure planned** (~2026-07-25): rename `backend/` → `pipeline/`, `agentic/agentic_backend/` → `api/`, `agentic/r/` → `sandbox/`, `econpeople/` → `assets/`; group UIs under `frontends/`. See `localwip/notes/M7_restructure.md`.
+The pnpm workspace root is the repo root and covers `api` and `frontends/agentic`; `frontends/classic` and `frontends/econpeople` are standalone npm projects.
 
 ## Service architecture
 
@@ -130,8 +134,6 @@ All design docs are in `localwip/notes/` (gitignored):
 
 ## Pending work (next up)
 
-- **M7 strip** (~2026-07-25): delete dead Plumber code from `backend/`; see `localwip/notes/M7_restructure.md` for the full strip + restructure plan.
-- **HNSW cosine index**: rebuild `WITH (metric='cosine')` in `create_indices()` — current index uses l2sq.
 - **Phase 6**: rewrite `lit-search` + `lit-check` skills against the MCP server (currently in `localwip/`).
 - **Quality-weight parity cases**: re-add to parity battery after confirming blended mode matches (vectorised-ifelse bug was fixed locally; not yet golden-recorded).
 
@@ -158,9 +160,9 @@ All design docs are in `localwip/notes/` (gitignored):
 
 After every implementation step:
 1. Spawn a fresh sub-agent (`Agent` with `subagent_type: general-purpose`) to review code quality and extend tests.
-2. Update `agentic/05_roadmap.md` (or relevant phase checklist).
+2. Update `localwip/notes/agentic/05_roadmap.md` (or relevant phase checklist).
 3. If implementation diverges from a design doc, update the doc — code and docs must stay in sync.
 
-**Frontend dev:** `cd frontend && npm install && npm run dev`  
-**API dev:** `cd agentic/agentic_backend && pnpm install && pnpm dev`  
+**Frontend dev:** `cd frontends/classic && npm install && npm run dev` (or `frontends/econpeople`)  
+**API dev:** `pnpm install` at the repo root, then `cd api && pnpm dev`  
 **API endpoint (local):** `http://127.0.0.1:8001`

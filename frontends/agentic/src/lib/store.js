@@ -1,0 +1,144 @@
+// Reducer over the StreamEvent taxonomy (api/src/agent/types.ts).
+// The `script` event is intentionally ignored — the user is shown the plain-language
+// `strategy` instead of the R script (decided 2026-06-05, 03_interface.md §3.2).
+
+export const STAGES = ["clarify", "write", "validate", "execute", "synthesize"];
+
+export function initialState() {
+  return {
+    started: false,
+    stages: Object.fromEntries(STAGES.map((s) => [s, "pending"])),
+    stageMs: {},
+    progress: null,
+    strategy: null,
+    strategyPending: false,
+    clarifierQuestion: null,
+    clarifierOptions: [],
+    awaitingReply: false,
+    refining: false,
+    reviseReason: null,
+    papers: {},
+    persons: {},
+    sections: [],
+    synthesis: "",
+    bibtex: null,
+    error: null,
+    done: false,
+    msTotal: null,
+  };
+}
+
+export function reduceEvent(state, e) {
+  switch (e.type) {
+    case "stage": {
+      const stages = { ...state.stages };
+      const stageMs = { ...state.stageMs };
+      if (e.state === "enter") {
+        stages[e.stage] = "active";
+        const patch = { ...state, started: true, stages };
+        if (e.stage === "write") patch.strategyPending = true;
+        return patch;
+      }
+      // exit — a clarify exit resolves the paused "waiting" state once the user replied
+      if (stages[e.stage] !== "failed") stages[e.stage] = "done";
+      if (typeof e.ms === "number") stageMs[e.stage] = e.ms;
+      const patch = { ...state, stages, stageMs };
+      if (e.stage === "clarify") patch.awaitingReply = false;
+      return patch;
+    }
+
+    case "clarify":
+      // Blocking clarifier turn — the run is paused on us (06_clarifier.md §7.2).
+      return {
+        ...state,
+        clarifierQuestion: e.question,
+        clarifierOptions: e.options ?? [],
+        awaitingReply: e.required === true,
+        stages: { ...state.stages, clarify: "waiting" },
+      };
+
+    case "assistant":
+      // legacy single-token clarifier note (no longer produced by the clarify stage)
+      return {
+        ...state,
+        clarifierQuestion: (state.clarifierQuestion ?? "") + e.delta,
+      };
+
+    case "revise":
+      // Multistage refine pass (07_multistage.md §7). On `replace` the prior approach was
+      // wrong — clear round-1 results so only the corrected pass shows; on `augment` keep them.
+      return {
+        ...state,
+        refining: true,
+        reviseReason: e.reason,
+        strategy: null,
+        strategyPending: true,
+        ...(e.mode === "replace" ? { sections: [], papers: {}, persons: {}, bibtex: null } : {}),
+      };
+
+    case "strategy":
+      return { ...state, strategy: e.strategy, strategyPending: false };
+
+    case "script":
+      return state; // never surfaced
+
+    case "validate":
+      if (!e.ok) {
+        const stages = { ...state.stages, validate: "failed" };
+        return { ...state, stages };
+      }
+      return state;
+
+    case "progress":
+      return {
+        ...state,
+        progress: { label: e.label, current: e.current, total: e.total },
+      };
+
+    case "section": {
+      const sections = state.sections.filter((s) => s.id !== e.section.id);
+      sections.push(e.section);
+      return { ...state, sections };
+    }
+
+    case "paper":
+      return {
+        ...state,
+        papers: { ...state.papers, [e.paper.handle]: e.paper },
+      };
+
+    case "person":
+      return {
+        ...state,
+        persons: { ...state.persons, [e.person.short_id]: e.person },
+      };
+
+    case "bibtex":
+      return { ...state, bibtex: { entries: e.entries, bibtex: e.bibtex } };
+
+    case "synthesis":
+      return { ...state, synthesis: state.synthesis + e.delta };
+
+    case "error": {
+      const stages = { ...state.stages };
+      if (e.where && stages[e.where] !== undefined) stages[e.where] = "failed";
+      return {
+        ...state,
+        stages,
+        error: { where: e.where, message: e.message, recoverable: e.recoverable },
+      };
+    }
+
+    case "done": {
+      // The run is finished — any stage still showing active/pending (e.g. a
+      // stage-exit event that didn't arrive) is resolved to done. Failed stays.
+      const stages = Object.fromEntries(
+        Object.entries(state.stages).map(([k, v]) => [k, v === "failed" ? v : "done"]),
+      );
+      return { ...state, stages, awaitingReply: false, refining: false, done: true, msTotal: e.ms_total };
+    }
+
+    default:
+      return state;
+  }
+}

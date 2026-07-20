@@ -1,6 +1,6 @@
 # Eddy's Papers 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Screenshot of Eddy's Papers semantic search interface](screenshot.webp)
+![Screenshot of Eddy's Papers semantic search interface](assets/screenshot.webp)
 A **Semantic Paper Search Engine** for economics papers from the [RePEc](https://repec.org) archives. Uses vector embeddings of Abstracts to enable natural language queries over academic publications.
 
 ## Overview
@@ -10,7 +10,7 @@ This project provides:
 - RDF/ReDIF metadata parsing using Perl backend
 - Semantic embeddings generation with Ollama (mxbai-embed-large model)
 - Vector similarity search using DuckDB with VSS extension
-- REST API built with R Plumber
+- REST API built with Node/Hono (TypeScript)
 - Modern web interface built with Astro and React
 
 It also ships a second, agentic product — **Agentic Search** (a.k.a. "Detective mode") — a
@@ -25,41 +25,35 @@ find economists by topic, joined from the RePEc Author Service archive onto the 
 ## Project Structure
 
 ```text
-eddyspaperui/
-├── backend/                 # R package for data pipeline and API
+eddyspapers/
+├── pipeline/                # R package `eddyspapersbackend` — the data pipeline
 │   ├── R/                   # Package source code
 │   │   ├── config.R         # Configuration utilities
 │   │   ├── folders.R        # Folder reference factory
 │   │   ├── sync.R           # RePEc rsync synchronization
 │   │   ├── parse.R          # RDF parsing with Perl
-│   │   ├── embed.R          # Embedding generation
-│   │   ├── database.R       # DuckDB operations
-│   │   └── api.R            # API endpoint functions
-│   ├── inst/plumber/        # Plumber API definition
-│   │   └── api.R
+│   │   ├── database.R       # DuckDB operations + embedding generation
+│   │   ├── handle_stats.R   # Citation and impact metrics
+│   │   └── persons.R        # Person parsing and rollups
+│   ├── inst/scripts/        # Perl ReDIF parsers
 │   ├── DESCRIPTION          # Package metadata
 │   └── NAMESPACE            # Exported functions
-├── frontend/                # Astro + React web interface
-│   ├── src/
-│   │   ├── components/      # React UI components
-│   │   ├── layouts/         # Astro layouts
-│   │   ├── lib/             # API client
-│   │   └── pages/           # Astro pages
-│   └── package.json
-├── agentic/                 # Agentic Search ("Detective mode") — second product
-│   ├── agentic_backend/     # Hono + TypeScript service (SSE pipeline, R sandbox, DuckDB cache)
-│   ├── agentic_frontend/    # Astro + React chat-style UI
-│   ├── r/                   # eddysearch.sandbox R package (the verbs the agent calls)
-│   └── 00–07_*.md           # Canonical design docs (architecture, prompts, roadmap, features)
-├── econpeople/              # EconPeople (person finder): design docs + assets
-│   └── 00–03_*.md           # Vision, data model, API surface, profile tiers
-├── econpeople_frontend/     # EconPeople Astro + React web interface
+├── api/                     # Hono + TypeScript service — serves all three products
+│   ├── src/                 # Routes, search, auth, db, MCP, sandbox bridge
+│   └── tests/
+├── sandbox/                 # eddysearch.sandbox R package (the verbs the agent calls)
+│   ├── run.R                # Sandbox subprocess entry point
+│   └── check.R              # Static AST checks on generated scripts
+├── frontends/               # Astro + React web interfaces (shared palette)
+│   ├── classic/             # Classic semantic search
+│   ├── econpeople/          # EconPeople person finder
+│   └── agentic/             # Agentic literature review (chat-style UI)
+├── assets/                  # Shared source assets (logo, screenshot)
 ├── data/                    # Data storage (not in repo)
 │   ├── RePEc/               # Downloaded archives
 │   ├── rds_archivep/        # Parsed RDF data
 │   ├── db/                  # DuckDB database
 │   └── journals.csv         # Journal metadata
-├── run_api.R                # Start production API server
 └── update_repec.R           # Update pipeline for cron jobs
 ```
 
@@ -97,8 +91,7 @@ literature review — streaming each step to the browser as it happens.
 
 It is modelled on a literature-search workflow but productised to run server-side with no
 filesystem assumptions. The backend is **Hono + TypeScript** (not R); the frontend is **Astro +
-React**. The existing R Plumber API and search UI are untouched and keep running at their current
-URLs.
+React**.
 
 ### Pipeline
 
@@ -141,26 +134,26 @@ clarify → write → validate → execute → synthesize
   `journals`, `version_links`, and `bib_coupling` tables — no new tables required.
 - Reuses existing REST endpoints (`/search`, `/handlestats`, `/versions`, `/cites`, `/citedby`) as
   fallbacks; the sandbox reads the DB directly for the hot path.
-- A small DuckDB file under `agentic/agentic_backend/data/agentic/` is a disposable cache of search
+- A small DuckDB file under `api/data/agentic/` is a disposable cache of search
   runs — safe to delete.
 
 ### Run the agentic services
 
 ```bash
 # Backend (Hono + TS) — listens on http://127.0.0.1:8001
-cd agentic/agentic_backend
-npm install
+cd api
+pnpm install
 # Create a .env with at least:
 #   OPENROUTER_API_KEY=...        # LLM access via OpenRouter
 #   MODEL_WRITER=... MODEL_CLARIFIER=... MODEL_ASSESSOR=... MODEL_SYNTH=...
-#   SEMANTIC_API_BASE=...         # the R Plumber API base (fallback lookups)
+#   SEMANTIC_API_BASE=...         # the API base for fallback lookups
 #   EDDYPAPERS_API_KEY=...        # key for that API (never reaches the browser)
 #   AGENTIC_PASSWORD=...          # optional: shared password gating the costly LLM
 #                                 #   routes (leave unset to disable the gate in dev)
 npm run dev
 
 # Frontend (Astro + React)
-cd agentic/agentic_frontend
+cd frontends/agentic
 npm install
 npm run dev
 ```
@@ -194,9 +187,8 @@ why each author ranked.
 ### Architecture & endpoints
 
 Per design decision **D-3**, EconPeople ships **API-first**: the person endpoints **extend the
-existing R/Plumber `eddyspapersbackend`** (shared DuckDB, maximum infra reuse) rather than a new
-service. It adds the person tables `persons`, `person_works`, `person_stats`, `person_wikidata`
-alongside the existing ones. A separate Astro + React frontend lives in `econpeople_frontend/`.
+existing shared service** (same DuckDB, maximum infra reuse) rather than standing up a new one. It adds the person tables `persons`, `person_works`, `person_stats`, `person_wikidata`
+alongside the existing ones. A separate Astro + React frontend lives in `frontends/econpeople/`.
 
 - `POST /person/search`: topic to ranked authors with matched-paper evidence (the headline).
 - `GET /person/{short_id}`: author profile.
@@ -233,7 +225,7 @@ Design decisions are canonical in the numbered docs under `econpeople/` (`00_ove
 
 ```r
 # Install backend package
-devtools::install("backend/")
+devtools::install("pipeline/")
 ```
 
 ### 2. Configure Folders
@@ -267,41 +259,36 @@ This will:
 
 ### 5. Start API Server
 
-```r
-# Start Plumber API on port 8000
-source("run_api.R")
+```bash
+# Hono service on port 8001 — serves all three products
+pnpm install          # at the repo root (workspace)
+cd api && pnpm dev
 ```
 
 ### 6. Start Frontend
 
 ```bash
-cd frontend
+cd frontends/classic
 npm install
 npm run dev
 ```
 
 ## Usage
 
-### Production API
-```r
-source("run_api.R")
-```
-
-
 ### Development
 ```bash
-# Terminal 1: Start API
-Rscript run_api.R
+# Terminal 1: Start the API
+cd api && pnpm dev
 
 # Terminal 2: Start frontend dev server
-cd frontend && npm run dev
+cd frontends/classic && npm run dev
 ```
 
 ## API Examples
 
 ### Search Papers
 ```bash
-curl -X POST http://localhost:8000/search \
+curl -X POST http://localhost:8001/search \
   -H "Content-Type: application/json" \
 
   -d '{
@@ -318,7 +305,7 @@ curl -X POST http://localhost:8000/search \
 2. **Parse**: Perl processes RDF files → R data frames → RDS files
 3. **Embed**: tidyllm generates embeddings via Ollama
 4. **Store**: DuckDB stores papers + embeddings with VSS extension
-5. **Search**: Plumber API provides vector similarity search
+5. **Search**: the Hono API provides vector similarity search
 6. **Display**: Astro/React frontend queries API and renders results
 
 

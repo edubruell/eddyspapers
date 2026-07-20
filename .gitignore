@@ -1,7 +1,15 @@
 .DS_Store
 **/.DS_Store
 *.Rproj
-agentic/node_modules/
+
+# Build output and dependencies (never commit)
+node_modules/
+**/node_modules/
+frontends/*/dist/
+frontends/*/.astro/
+api/dist/
+frontend_dist/
+
 .Rproj.user
 .Rhistory
 .RData
