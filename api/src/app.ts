@@ -32,7 +32,7 @@ export function buildApp(): Hono {
     cors({ origin: corsOrigins, allowHeaders: ["Content-Type", "Authorization", "X-API-Key", "Last-Event-ID"] }),
   );
 
-  app.get("/healthz", (c) => c.json({ status: "ok", service: "agentic_backend" }));
+  app.get("/healthz", (c) => c.json({ status: "ok", service: "api" }));
   // Login probe: 200 when the presented password is valid (or the gate is disabled),
   // 401 otherwise. The frontend gate uses this to decide whether to show the lock screen.
   app.get("/auth/check", requireAuth, (c) => c.json({ ok: true }));
