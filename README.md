@@ -34,14 +34,17 @@ eddyspapers/
 │   │   ├── parse.R          # RDF parsing with Perl
 │   │   ├── database.R       # DuckDB operations + embedding generation
 │   │   ├── handle_stats.R   # Citation and impact metrics
-│   │   └── persons.R        # Person parsing and rollups
+│   │   ├── persons.R        # Person parsing and rollups
+│   │   ├── persons_wikidata.R # Wikidata enrichment for registered authors
+│   │   └── update_logs.R    # Pipeline run logging
 │   ├── inst/scripts/        # Perl ReDIF parsers
 │   ├── DESCRIPTION          # Package metadata
 │   └── NAMESPACE            # Exported functions
 ├── api/                     # Hono + TypeScript service — serves all three products
 │   ├── src/                 # Routes, search, auth, db, MCP, sandbox bridge
 │   └── tests/
-├── sandbox/                 # eddysearch.sandbox R package (the verbs the agent calls)
+├── sandbox/                 # R sandbox for the agentic pipeline
+│   ├── eddysearch.sandbox/  # R package with the verbs the agent calls
 │   ├── run.R                # Sandbox subprocess entry point
 │   └── check.R              # Static AST checks on generated scripts
 ├── frontends/               # Astro + React web interfaces (shared palette)
@@ -49,12 +52,17 @@ eddyspapers/
 │   ├── econpeople/          # EconPeople person finder
 │   └── agentic/             # Agentic literature review (chat-style UI)
 ├── assets/                  # Shared source assets (logo, screenshot)
+├── stats/                   # Analysis scripts for usage stats
+├── maintenance/             # Static maintenance page
 ├── data/                    # Data storage (not in repo)
 │   ├── RePEc/               # Downloaded archives
 │   ├── rds_archivep/        # Parsed RDF data
 │   ├── db/                  # DuckDB database
 │   └── journals.csv         # Journal metadata
-└── update_repec.R           # Update pipeline for cron jobs
+├── update_repec.R           # Update pipeline for cron jobs
+├── deploy_diffs.sh          # Manual diff upload + snapshot reload on the server
+├── server_apply_diff.R      # Runs on the server inside deploy_diffs.sh
+└── diff_upload.R            # rsync upload helper
 ```
 
 ## Features
