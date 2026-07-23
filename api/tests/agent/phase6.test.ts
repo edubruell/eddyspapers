@@ -495,6 +495,39 @@ describe("executeScript result assembly", () => {
     vi.restoreAllMocks();
   });
 
+  it("salvages partial papers/sections when the sandbox times out after streaming some", async () => {
+    const { executeScript } = await import("../../src/agent/stages/execute.js");
+    const { runSandbox } = await import("../../src/sandbox/runSandbox.js");
+
+    vi.mock("../../src/sandbox/runSandbox.js");
+    vi.mocked(runSandbox).mockImplementationOnce(async (_p, _d, cb) => {
+      cb({
+        type: "paper",
+        handle: "repec:a:1",
+        title: "Salvaged Paper",
+        year: 2024,
+        authors: "A. Author",
+        journal: "Some Journal",
+        category: "Working Paper Series",
+        url: "https://example.com/1",
+        similarity: 0.1,
+        abstract: null,
+      });
+      cb({ type: "section", title: "Partial results", handles: ["repec:a:1"], note: null });
+      return { exitCode: -1, timedOut: true, stdout: "", stderr: "", events: [] };
+    });
+
+    const result = await executeScript("dummy", "/fake/db.duckdb", () => {});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.partial).toBe(true);
+      expect(Object.keys(result.papers)).toEqual(["repec:a:1"]);
+      expect(result.sections).toHaveLength(1);
+    }
+
+    vi.restoreAllMocks();
+  });
+
   it("returns ok:false with stderr excerpt when exit code is non-zero", async () => {
     const { executeScript } = await import("../../src/agent/stages/execute.js");
     const { runSandbox } = await import("../../src/sandbox/runSandbox.js");

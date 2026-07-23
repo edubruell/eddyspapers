@@ -33,14 +33,27 @@ person_search <- function(query, max_k = 25, k_papers = 600,
     ""
   }
 
+  # Same HNSW-vs-filter issue as semantic_search() (data_verbs.R): a WHERE clause
+  # combined with `ORDER BY <distance> LIMIT k` in the same subquery defeats the
+  # index and forces a full scan of ~479k embedding rows. `candidates` runs the
+  # index-accelerated unfiltered top-k scan; `hits` (a separate CTE, walled off by
+  # `candidates`'s own ORDER BY/LIMIT so the filter can't be pushed back through
+  # it) applies min_year/journal_filter to that small pool and re-limits.
+  candidate_pool <- max(as.integer(k_papers) * 3L, 1500L)
+
   # Same two-stage rollup as the EconPeople backend (the retired Plumber persons.R), but as one
   # CTE chain — the sandbox connection is read-only, so no temp tables.
   sql <- sprintf("
-    WITH hits AS (
+    WITH candidates AS (
       SELECT LOWER(a.Handle) AS work_handle,
-             a.title, a.journal, a.year,
+             a.title, a.journal, a.year, a.category,
              1 - array_cosine_distance(a.embeddings, ?::FLOAT[1024]) AS hit_score
       FROM articles a
+      ORDER BY hit_score DESC
+      LIMIT ?
+    ),
+    hits AS (
+      SELECT * FROM candidates a
       %s
       ORDER BY hit_score DESC
       LIMIT ?
@@ -85,7 +98,7 @@ person_search <- function(query, max_k = 25, k_papers = 600,
   ", where_clause)
 
   rs <- DBI::dbSendQuery(con, sql)
-  DBI::dbBind(rs, list(list(vec), as.integer(k_papers)))
+  DBI::dbBind(rs, list(list(vec), candidate_pool, as.integer(k_papers)))
   result <- DBI::dbFetch(rs)
   DBI::dbClearResult(rs)
   result <- dplyr::as_tibble(result)

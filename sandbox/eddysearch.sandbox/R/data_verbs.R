@@ -16,44 +16,41 @@ semantic_search <- function(query, max_k = 30, min_year = NULL, journal_filter =
   emb_result <- tidyllm::ollama_embedding(query, .model = "mxbai-embed-large")
   vec <- unlist(emb_result$embeddings)
 
-  filters <- character(0)
+  # The HNSW index only accelerates a plain `ORDER BY <distance> LIMIT k` scan with
+  # no WHERE clause — adding one (year/category/journal filters) makes DuckDB's
+  # planner fall back to a full sequential scan of ~479k embedding rows, which is
+  # what was blowing the agentic sandbox's timeout on filtered calls (seconds vs.
+  # 50s+ per call; see api/scripts/spike_vss.ts). So we always run the
+  # index-accelerated unfiltered top-k scan over a generous candidate pool, then
+  # apply the filters in R — same result semantics, at the cost of not seeing a
+  # filter-matching paper ranked below the candidate pool.
+  candidate_k <- max(as.integer(max_k) * 15L, 300L)
 
-  if (!is.null(min_year)) {
-    filters <- c(filters, sprintf("a.year >= %d", as.integer(min_year)))
-  }
-
-  if (!is.null(journal_filter) && length(journal_filter) > 0) {
-    cats_sql <- paste(shQuote(journal_filter), collapse = ", ")
-    filters <- c(filters, sprintf("a.category IN (%s)", cats_sql))
-  }
-
-  if (!is.null(journal_name)) {
-    filters <- c(filters, sprintf("LOWER(a.journal) LIKE LOWER('%%%s%%')", journal_name))
-  }
-
-  where_clause <- if (length(filters) > 0) {
-    paste("WHERE", paste(filters, collapse = " AND "))
-  } else {
-    ""
-  }
-
-  sql <- sprintf(
-    "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url,
-            a.bib_tex, a.abstract,
-            array_cosine_distance(a.embeddings, ?::FLOAT[1024]) AS similarity
-     FROM articles a
-     %s
-     ORDER BY similarity ASC
-     LIMIT ?",
-    where_clause
-  )
+  sql <- "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url,
+                 a.bib_tex, a.abstract,
+                 array_cosine_distance(a.embeddings, ?::FLOAT[1024]) AS similarity
+          FROM articles a
+          ORDER BY similarity ASC
+          LIMIT ?"
 
   rs <- DBI::dbSendQuery(con, sql)
-  DBI::dbBind(rs, list(list(vec), max_k))
-  result <- DBI::dbFetch(rs)
+  DBI::dbBind(rs, list(list(vec), candidate_k))
+  candidates <- DBI::dbFetch(rs)
   DBI::dbClearResult(rs)
 
-  result <- dplyr::as_tibble(result)
+  candidates <- dplyr::as_tibble(candidates)
+
+  if (!is.null(min_year)) {
+    candidates <- dplyr::filter(candidates, year >= as.integer(min_year))
+  }
+  if (!is.null(journal_filter) && length(journal_filter) > 0) {
+    candidates <- dplyr::filter(candidates, category %in% journal_filter)
+  }
+  if (!is.null(journal_name)) {
+    candidates <- dplyr::filter(candidates, grepl(journal_name, journal, ignore.case = TRUE, fixed = TRUE))
+  }
+
+  result <- dplyr::slice_head(candidates, n = max_k)
 
   emit_progress(paste0("  ↳ ", nrow(result), " results in ", round(as.numeric(Sys.time() - t0, units = "secs"), 1), "s"))
   result

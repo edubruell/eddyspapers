@@ -81,6 +81,7 @@ export async function runAgent(
         persons: Record<string, Person>;
         sections: Section[];
         bibtex: string;
+        partial?: boolean;
       }
     | { ok: false; message: string; recoverable: boolean };
 
@@ -134,6 +135,12 @@ export async function runAgent(
       stageExit("execute", tStage);
       return { ok: false, recoverable: false, message: `Execution failed: ${executeResult.message}` };
     }
+    if (executeResult.partial) {
+      emit({
+        type: "progress",
+        label: "The search timed out before finishing — continuing with the results found so far.",
+      });
+    }
     stageExit("execute", tStage);
 
     return {
@@ -143,6 +150,7 @@ export async function runAgent(
       persons: executeResult.persons ?? {},
       sections: executeResult.sections,
       bibtex: executeResult.bibtex,
+      partial: executeResult.partial,
     };
   };
 
@@ -193,6 +201,7 @@ export async function runAgent(
     let sections = round1.sections;
     let bibtex = round1.bibtex;
     let script = round1.script;
+    let partial = round1.partial ?? false;
 
     // ── Refine pass (07_multistage.md) — opt-in but MANDATORY when enabled ──────
     // The advisor always proposes one more pass; only an advisor failure (null) skips it.
@@ -231,6 +240,7 @@ export async function runAgent(
           sections = round2.sections;
           bibtex = round2.bibtex;
           script = round2.script;
+          partial = round2.partial ?? false;
         } else {
           // augment: union by handle; append new sections; dedup the merged BibTeX by cite-key.
           papers = { ...papers, ...round2.papers };
@@ -238,6 +248,7 @@ export async function runAgent(
           sections = [...sections, ...round2.sections];
           bibtex = mergeBibtex(bibtex, round2.bibtex);
           script = round2.script;
+          partial = partial || (round2.partial ?? false);
           // Re-emit the consolidated bundle so the artifact reflects the accumulated set.
           emit({ type: "bibtex", entries: Object.keys(papers).length, bibtex });
         }
@@ -261,6 +272,13 @@ export async function runAgent(
         dbDate,
         (delta) => emit({ type: "synthesis", delta }),
       );
+      if (partial) {
+        const caveat =
+          "\n\n---\n*This search was cut short by a timeout before every planned query finished — " +
+          "the review above is based on a partial result set and coverage may be incomplete.*";
+        emit({ type: "synthesis", delta: caveat });
+        synthesis += caveat;
+      }
     }
     stageExit("synthesize", tStage);
 

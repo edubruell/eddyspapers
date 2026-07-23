@@ -9,7 +9,7 @@ const __dir = dirname(fileURLToPath(import.meta.url));
 const RUN_R = resolve(__dir, "../../../sandbox/run.R");
 const SANDBOX_SH = resolve(__dir, "../../bin/run-sandbox.sh");
 
-const DEFAULT_TIMEOUT_MS = 90_000;
+const DEFAULT_TIMEOUT_MS = 150_000;
 const DEFAULT_MAX_EVENT_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_STDIO_BYTES = 256 * 1024;
 const FD3_POLL_MS = 120;

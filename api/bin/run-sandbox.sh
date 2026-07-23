@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT="$1"
 DB="$2"
 RUN_R="$3"
-TIMEOUT_SECS="${4:-90}"
+TIMEOUT_SECS="${4:-150}"
 
 # Run the (AST-allowlisted) R script with a hard wall-clock cap.
 #

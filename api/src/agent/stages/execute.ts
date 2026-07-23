@@ -12,6 +12,10 @@ export type ExecuteResult =
       persons: Record<string, Person>;
       sections: Section[];
       bibtex: string;
+      // True when the sandbox timed out before finishing, but had already
+      // streamed at least one paper/person/section — the caller salvages
+      // and synthesizes from what was collected instead of failing outright.
+      partial?: boolean;
     }
   | { ok: false; message: string; timedOut: boolean };
 
@@ -167,6 +171,11 @@ export async function executeScript(
     const result = await runSandbox(tmp, dbPath, (raw) => translateEvent(raw));
 
     if (result.timedOut) {
+      const hasPartialResults =
+        Object.keys(papers).length > 0 || Object.keys(persons).length > 0 || sections.length > 0;
+      if (hasPartialResults) {
+        return { ok: true, papers, persons, sections, bibtex, partial: true };
+      }
       return { ok: false, message: "Sandbox timed out", timedOut: true };
     }
 
