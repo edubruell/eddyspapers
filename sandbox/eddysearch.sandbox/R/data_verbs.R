@@ -47,7 +47,7 @@ semantic_search <- function(query, max_k = 30, min_year = NULL, journal_filter =
     candidates <- dplyr::filter(candidates, category %in% journal_filter)
   }
   if (!is.null(journal_name)) {
-    candidates <- dplyr::filter(candidates, grepl(journal_name, journal, ignore.case = TRUE, fixed = TRUE))
+    candidates <- dplyr::filter(candidates, grepl(tolower(journal_name), tolower(journal), fixed = TRUE))
   }
 
   result <- dplyr::slice_head(candidates, n = max_k)
