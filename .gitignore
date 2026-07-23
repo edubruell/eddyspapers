@@ -21,6 +21,9 @@ localwip/
 # Per-machine Claude Code settings
 .claude/settings.local.json
 
+# Generated rsync inventory of the RePEc tree — regenerated per run
+repec_rsync_tree.txt
+
 # Local scratch / WIP scripts
 local_hacks.R
 local_test.R
@@ -34,3 +37,6 @@ ops_notes/
 
 # Local outreach drafts (never publish)
 local_mail/
+
+# Cached analysis data — IP enrichment cache and search-log pulls (contain raw IPs)
+stats/*.rds

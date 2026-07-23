@@ -66,8 +66,8 @@ eddyspapers/
 - **Search**: Vector similarity search with filters (year, journal, category)
 - **API Endpoints**:
   - `/search`: Semantic search with multiple filters
-  - `/save`: Save search queries and results
-  - `/saved/:hash`: Retrieve saved searches
+  - `/search/save`: Save search queries and results
+  - `/search/:hash`: Retrieve saved searches
   - `/stats/journals`: Journal statistics
   - `/stats/categories`: Category distribution
   - `/stats/total`: Total article count
@@ -76,11 +76,11 @@ eddyspapers/
 ### Frontend
 - **Two-phase UI**: Landing view transitions to sidebar layout on search
 - **Semantic search**: Natural language paper queries
-- **Category filtering**: Journal and Series Categories (Top 5, General Intereset, Top Field, Second in Field, Other, Working Paper Series)
+- **Category filtering**: Journal and Series Categories (Top 5, General Interest, Top Field, Second in Field, Other, Working Paper Series)
 - **Year filtering**: Filter by minimum publication year
 - **BibTeX export**: One-click citation copying
 - **Expandable abstracts**: Toggle paper abstract visibility
-- **Extended Infromation on Citations/References:** Additional information in results cards
+- **Extended information on citations/references:** Additional information in results cards
 
 ## Agentic Search
 
@@ -158,9 +158,6 @@ npm install
 npm run dev
 ```
 
-Design decisions are canonical in the numbered docs under `agentic/` (`00_overview.md` →
-`07_multistage.md`).
-
 ## EconPeople
 
 **EconPeople** (branding: the "Diogenes meerkat") is a third product whose unit of search is the
@@ -200,9 +197,6 @@ alongside the existing ones. A separate Astro + React frontend lives in `fronten
 The person verbs are also exposed inside **Agentic Search** (`person_search`, `person_lookup`,
 `person_profile`, `person_papers`), so a brief can target people as well as papers.
 
-Design decisions are canonical in the numbered docs under `econpeople/` (`00_overview.md` →
-`03_profile_tiers.md`).
-
 ## Requirements
 
 ### System Dependencies
@@ -213,11 +207,10 @@ Design decisions are canonical in the numbered docs under `econpeople/` (`00_ove
 - **Node.js** (≥18) for frontend development
 
 ### R Package Dependencies
-- tidyverse, here, fs
-- DuckDB, pool, DBI
-- tidyllm (Ollama integration)
-- plumber (REST API)
-- rprojroot, withr, arrow, jsonlite
+- dplyr, tidyr, purrr, readr, stringr, glue, tibble, lubridate
+- here, fs, rprojroot, withr, R.utils
+- duckdb, DBI
+- tidyllm (Ollama integration), httr2, processx, jsonlite
 
 ## Setup
 
@@ -290,9 +283,8 @@ cd frontends/classic && npm run dev
 ```bash
 curl -X POST http://localhost:8001/search \
   -H "Content-Type: application/json" \
-
   -d '{
-    "query": "Reductions in Gouvernment Expenditures and Political Polarization",
+    "query": "Reductions in Government Expenditures and Political Polarization",
     "min_year": 2020,
     "limit": 10
   }'
