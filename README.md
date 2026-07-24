@@ -39,9 +39,14 @@ eddyspapers/
 │   ├── rds_archivep/         # parsed RDF data
 │   ├── db/                   # DuckDB database
 │   └── journals.csv          # journal metadata
-├── update_repec.R           # update pipeline for cron jobs
+├── backfills/               # one-off, run-once enrichment scripts (see backfills/README.md)
+│   ├── backfill_wave1.R      # M8 Wave 1: JEL, EDIRC, journal_quality, DOI-from-redif/url
+│   └── backfill_doi_tiered.R # host-tiered DOI backfill (Nature transform + container)
+├── update_repec.R           # recurring update pipeline for cron jobs
 ├── deploy_diffs.sh          # manual diff upload + snapshot reload on the server
+├── deploy_patches.sh        # manual parquet-patch upload + reload (enrichment/backfills)
 ├── server_apply_diff.R      # runs on the server inside deploy_diffs.sh
+├── server_apply_patch.R     # runs on the server inside deploy_patches.sh
 └── diff_upload.R            # rsync upload helper
 ```
 

@@ -133,7 +133,8 @@ crossref_score_threshold <- function() {
 }
 
 first_author_token <- function(authors) {
-  first <- stringr::str_split(authors %||% "", ";")[[1]][1]
+  if (length(authors) == 0 || is.na(authors)) authors <- ""
+  first <- stringr::str_split(authors, ";")[[1]][1]
   parts <- stringr::str_split(stringr::str_trim(first), "\\s+")[[1]]
   tolower(parts[length(parts)])
 }

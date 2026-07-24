@@ -16,10 +16,16 @@ All three are served by **one Node/Hono service** at `:8001` (`api/`). R/Plumber
 
 ```
 /
-├── update_repec.R          ← cron entry point: sync → parse → embed → diff → deploy
+├── update_repec.R          ← RECURRING cron entry point: sync → parse → embed → diff → deploy
 ├── deploy_diffs.sh         ← manual diff upload + /admin/reload
+├── deploy_patches.sh       ← manual parquet-patch upload + /admin/reload (enrichment/backfills)
 ├── server_apply_diff.R     ← runs on server inside deploy_diffs.sh
+├── server_apply_patch.R    ← runs on server inside deploy_patches.sh
 ├── diff_upload.R           ← rsync upload helper
+│
+├── backfills/              ← RUN-ONCE enrichment runners (NOT the cron; see backfills/README.md)
+│   ├── backfill_wave1.R        M8 Wave 1 (JEL, EDIRC, journal_quality, DOI-from-redif/url)
+│   └── backfill_doi_tiered.R   host-tiered DOI backfill (reusable fns live in pipeline/R/)
 │
 ├── pipeline/               ← R package `eddyspapersbackend` (pipeline only — no serving)
 │   ├── R/                  ← config, folders, sync, parse, database, handle_stats,

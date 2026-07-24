@@ -4,14 +4,13 @@
 # server needs, applies the articles.doi patch locally, and resets the diff
 # baseline. Run AFTER installing the updated eddyspapersbackend package.
 #
-#   Rscript backfill_wave1.R
+#   Rscript backfills/backfill_wave1.R
 #
 # Then ship to prod with:  ./deploy_patches.sh
 #
-# The Crossref DOI backfill is separate and deliberate (build + calibrate
-# first): see crossref_backfill() — sample run:
-#   Rscript -e 'library(eddyspapersbackend); Sys.setenv(PAPER_SEARCH_DATA_ROOT="/Users/ebr/eddyspapers");
-#               crossref_backfill(mailto = "eduard.bruell@zew.de", limit = 500)'
+# The DOI backfill is separate and runs on its own: see
+# backfills/backfill_doi_tiered.R (Nature transform + container routes ->
+# finalize_doi_patch). The blind Crossref route it replaced is retired.
 
 library(eddyspapersbackend)
 
