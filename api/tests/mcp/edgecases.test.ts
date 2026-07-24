@@ -42,12 +42,13 @@ describe("tool inputSchema round-trips", () => {
       Object.keys(tools.find((t) => t.name === name)?.inputSchema?.properties ?? {}).sort();
 
     expect(props("find_papers")).toEqual(
-      ["author_keyword", "categories", "journal_name", "max_k", "min_year", "query", "title_keyword"].sort(),
+      ["author_keyword", "categories", "jel", "journal_name", "max_k", "min_year", "query", "title_keyword"].sort(),
     );
     expect(props("keyword_search")).toEqual(
       [
         "categories",
         "fields",
+        "jel",
         "journal_name",
         "keywords",
         "limit",
@@ -146,6 +147,37 @@ describe("malformed tool input → isError", () => {
     expect(res.isError).toBe(true);
   });
 
+  it("find_papers with a 3-digit jel code is a validation error", async () => {
+    const res = await call("find_papers", {
+      query: "prose query about minimum wage employment effects",
+      jel: ["J310"],
+    });
+    expect(res.isError).toBe(true);
+  });
+
+  it("find_papers with jel as a bare string (not array) is a validation error", async () => {
+    const res = await call("find_papers", {
+      query: "prose query about minimum wage employment effects",
+      jel: "J31",
+    });
+    expect(res.isError).toBe(true);
+  });
+
+  it("keyword_search with a LIKE-wildcard jel entry is a validation error", async () => {
+    const res = await call("keyword_search", { keywords: ["wage"], jel: ["J3%"] });
+    expect(res.isError).toBe(true);
+  });
+
+  it("keyword_search with an empty-string jel entry is a validation error", async () => {
+    const res = await call("keyword_search", { keywords: ["wage"], jel: [""] });
+    expect(res.isError).toBe(true);
+  });
+
+  it("keyword_search with a two-letter jel entry is a validation error", async () => {
+    const res = await call("keyword_search", { keywords: ["wage"], jel: ["JJ3"] });
+    expect(res.isError).toBe(true);
+  });
+
   it("calling an unregistered tool is reported as an isError result", async () => {
     // In SDK 1.29.0 an unknown tool name resolves to a CallToolResult with
     // isError:true (-32602 not found), not a rejected promise.
@@ -173,6 +205,15 @@ describe("keyword_search behaviour over MCP", () => {
       const anyHandles = new Set(anyRes.results.map((r) => r.Handle));
       for (const r of allRes.results) expect(anyHandles.has(r.Handle)).toBe(true);
     }
+  });
+
+  it("a valid jel filter narrows results and accepts lowercase codes", async () => {
+    const base = rows(await call("keyword_search", { keywords: ["minimum wage"], limit: 500 }));
+    const withJel = rows(
+      await call("keyword_search", { keywords: ["minimum wage"], jel: ["j3"], limit: 500 }),
+    );
+    expect(withJel.total).toBeGreaterThan(0);
+    expect(withJel.total).toBeLessThan(base.total);
   });
 
   it("order_by='citations' returns without error and joins handle_stats", async () => {

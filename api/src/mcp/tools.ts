@@ -67,6 +67,14 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
         journal_name: z.string().optional().describe("Journal-name substring(s), comma-separable"),
         title_keyword: z.string().optional(),
         author_keyword: z.string().optional(),
+        jel: z
+          .array(z.string().regex(/^[A-Za-z]\d{0,2}$/))
+          .optional()
+          .describe(
+            "JEL codes or prefixes to require (e.g. ['J31'] or ['J3','C21']). " +
+              "Coverage caveat: only ~55% of papers carry JEL codes (43% of journal articles), " +
+              "so this filter also drops papers whose codes are simply unknown.",
+          ),
       },
     },
     async (a) =>
@@ -81,6 +89,7 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
           journalName: splitJournalName(a.journal_name),
           titleKeyword: a.title_keyword,
           authorKeyword: a.author_keyword,
+          jel: a.jel,
         });
         return ok({ count: papers.length, papers });
       })()),
@@ -104,6 +113,10 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
         max_year: z.number().int().optional(),
         categories: z.array(z.string()).optional(),
         journal_name: z.string().optional().describe("Journal-name substring(s), comma-separable"),
+        jel: z
+          .array(z.string().regex(/^[A-Za-z]\d{0,2}$/))
+          .optional()
+          .describe("JEL codes or prefixes to require; ~55% coverage, absence means unknown"),
         order_by: z.enum(["year", "citations"]).optional(),
         limit: z.number().int().min(1).max(500).optional(),
         offset: z.number().int().min(0).optional(),
@@ -121,6 +134,7 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
           maxYear: a.max_year,
           categories: a.categories,
           journalName: splitJournalName(a.journal_name),
+          jel: a.jel,
           orderBy: a.order_by,
           limit: a.limit,
           offset: a.offset,

@@ -119,6 +119,19 @@ await conn.run(
 await conn.run("CREATE TABLE journals AS SELECT * FROM src.journals");
 await conn.run("CREATE TABLE db_metadata AS SELECT * FROM src.db_metadata");
 
+// M8 enrichment tables. article_jel/person_workplaces restrict to the slice;
+// the reference tables stay whole (small). Requires a migrated + backfilled
+// source DB — failing loudly here beats a fixture that silently lacks them.
+await conn.run(
+  "CREATE TABLE article_jel AS SELECT j.* FROM src.article_jel j WHERE j.handle IN (SELECT LOWER(Handle) FROM articles)",
+);
+await conn.run("CREATE TABLE jel_codes AS SELECT * FROM src.jel_codes");
+await conn.run(
+  "CREATE TABLE person_workplaces AS SELECT pwp.* FROM src.person_workplaces pwp JOIN picked_persons pp ON pp.short_id = pwp.short_id",
+);
+await conn.run("CREATE TABLE institutions AS SELECT * FROM src.institutions");
+await conn.run("CREATE TABLE journal_quality AS SELECT * FROM src.journal_quality");
+
 // A real query vector for Ollama-free tests: the embedding of a canonical
 // minimum-wage paper. Searching with a paper's own vector must rank it first —
 // the cheapest possible correctness assertion for the vector path.

@@ -27,10 +27,12 @@ init_articles_table <- function(con) {
       url VARCHAR,
       authors VARCHAR,
       bib_tex VARCHAR,
-      embeddings FLOAT[1024]
+      embeddings FLOAT[1024],
+      doi VARCHAR,
+      doi_source VARCHAR
     )
   ")
-  
+
   invisible(TRUE)
 }
 
@@ -125,7 +127,12 @@ load_cleaned_collection <- function(rds_folder = NULL,
   
   full_article_data <- list.files(rds_folder, full.names = TRUE) |>
     purrr::map_dfr(readRDS)
-  
+
+  # Pre-M8 RDS caches may predate the doi field entirely.
+  if (!"doi" %in% colnames(full_article_data)) {
+    full_article_data$doi <- NA_character_
+  }
+
   no_dup <- full_article_data |>
     dplyr::group_by(Handle) |>
     dplyr::slice(1) |>
@@ -146,7 +153,12 @@ load_cleaned_collection <- function(rds_folder = NULL,
       is_series,
       authors = authors_string,
       bib_tex = bib_tex,
+      doi,
       file
+    ) |>
+    dplyr::mutate(
+      doi = normalize_doi(doi),
+      doi_source = dplyr::if_else(is.na(doi), NA_character_, "redif")
     ) |>
     dplyr::mutate(year = parse_year_int(year)) |>
     dplyr::filter((year >= 1995 & !is_series) | (year >= 2010 & is_series)) |>
@@ -287,11 +299,14 @@ process_embedding_batch <- function(batch, con, num_batches,
     )
   
   DBI::dbExecute(con, "
-    INSERT INTO articles 
-    SELECT 
-      Handle, title, abstract, pages, vol, issue, number, 
-      archive, journal_code, year, is_series, journal, 
-      category, url, authors, bib_tex, embeddings
+    INSERT INTO articles
+      (Handle, title, abstract, pages, vol, issue, number,
+       archive, journal_code, year, is_series, journal,
+       category, url, authors, bib_tex, embeddings, doi, doi_source)
+    SELECT
+      Handle, title, abstract, pages, vol, issue, number,
+      archive, journal_code, year, is_series, journal,
+      category, url, authors, bib_tex, embeddings, doi, doi_source
     FROM temp_batch
   ")
   
@@ -351,8 +366,9 @@ embed_and_populate_db <- function(db_path = NULL,
   DBI::dbExecute(con, "LOAD vss;")
   
   init_articles_table(con)
+  migrate_schema(con)
   processed_handles <- get_processed_handles(con)
-  
+
   cleaned_collection <- load_cleaned_collection(rds_folder, journals_csv)
   
   to_embed <- cleaned_collection |>
@@ -618,7 +634,9 @@ dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
     purrr::keep(~.x %in% c("articles", "saved_searches", "search_logs", "version_links",
                             "cit_all", "cit_internal", "handle_stats",
                             "persons", "person_works", "person_stats",
-                            "person_wikidata", "journals")) |>
+                            "person_wikidata", "person_workplaces", "journals",
+                            "article_jel", "jel_codes", "institutions",
+                            "journal_quality")) |>
     purrr::map(export_tbl)
   
   
@@ -676,7 +694,9 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   tables <- c(
     "articles", "saved_searches", "search_logs", "version_links",
     "cit_all", "cit_internal", "handle_stats",
-    "persons", "person_works", "person_stats", "person_wikidata", "journals"
+    "persons", "person_works", "person_stats", "person_wikidata",
+    "person_workplaces", "journals",
+    "article_jel", "jel_codes", "institutions", "journal_quality"
   )
   
   pqt_paths <- file.path(pqt_folder, paste0(tables, "_", date_stamp, ".parquet"))
@@ -759,6 +779,14 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   load_tbl("person_works")
   load_tbl("person_stats")
   load_tbl("person_wikidata")
+  load_tbl("person_workplaces")
+  load_tbl("article_jel")
+  load_tbl("jel_codes")
+  load_tbl("institutions")
+  load_tbl("journal_quality")
+
+  # Restored DBs lose schema_meta; converge schema + recreate side-table indices.
+  migrate_schema(con)
 
   invisible(db_path)
 }
@@ -887,7 +915,9 @@ compute_parquet_diffs <- function(base_stamp,
                                   tables = c("articles", "handle_stats", "cit_all",
                                             "cit_internal", "version_links",
                                             "persons", "person_works", "person_stats",
-                                            "person_wikidata")) {
+                                            "person_wikidata", "person_workplaces",
+                                            "article_jel", "jel_codes",
+                                            "institutions", "journal_quality")) {
 
   if (is.null(pqt_folder)) {
     config <- get_folder_config()
@@ -907,16 +937,21 @@ compute_parquet_diffs <- function(base_stamp,
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   table_keys <- list(
-    articles        = "Handle",
-    handle_stats    = "handle",
-    cit_all         = c("citing", "cited"),
-    cit_internal    = c("citing", "cited"),
-    version_links   = c("source", "target", "type"),
-    persons         = "short_id",
-    person_works    = c("short_id", "work_handle"),
-    person_stats    = "short_id",
-    person_wikidata = "short_id",
-    journals        = "series_handle"
+    articles          = "Handle",
+    handle_stats      = "handle",
+    cit_all           = c("citing", "cited"),
+    cit_internal      = c("citing", "cited"),
+    version_links     = c("source", "target", "type"),
+    persons           = "short_id",
+    person_works      = c("short_id", "work_handle"),
+    person_stats      = "short_id",
+    person_wikidata   = "short_id",
+    person_workplaces = c("short_id", "rank"),
+    article_jel       = c("handle", "jel_code"),
+    jel_codes         = "code",
+    institutions      = "edi_handle",
+    journal_quality   = "series_handle",
+    journals          = "series_handle"
   )
 
   diff_files <- list()
@@ -955,53 +990,66 @@ compute_parquet_diffs <- function(base_stamp,
     
     keys <- table_keys[[tbl]]
     key_clause <- paste(keys, collapse = ", ")
-    
-    if (tbl == "articles") {
-      
+
+    # The diff SQL below is positional (UNION ALL) — a base dump from before a
+    # schema migration would silently misalign or binder-error mid-cron. Fail
+    # with instructions instead: the fix is always a fresh post-migration dump.
+    base_cols   <- DBI::dbGetQuery(con, sprintf("DESCRIBE base_%s", tbl))$column_name
+    update_cols <- DBI::dbGetQuery(con, sprintf("DESCRIBE update_%s", tbl))$column_name
+    if (!identical(base_cols, update_cols)) {
+      stop("Schema mismatch for ", tbl, " between dumps ", base_stamp, " and ",
+           update_stamp, " (base: ", paste(base_cols, collapse = ","),
+           " vs update: ", paste(update_cols, collapse = ","),
+           ") — re-dump a post-migration baseline before diffing")
+    }
+
+    # Columns whose changes should NOT ship a row: embeddings are immutable
+    # per handle and huge; fetched_at changes every download without meaning.
+    compare_exclusions <- list(
+      articles        = "embeddings",
+      journal_quality = "fetched_at"
+    )
+
+    compare_cols <- setdiff(base_cols, c(keys, compare_exclusions[[tbl]]))
+
+    key_diff_sql <- sprintf("
+      SELECT *, 'NEW' as operation FROM update_%s
+      WHERE (%s) NOT IN (SELECT %s FROM base_%s)
+
+      UNION ALL
+
+      SELECT *, 'DELETE' as operation FROM base_%s
+      WHERE (%s) NOT IN (SELECT %s FROM update_%s)
+    ", tbl, key_clause, key_clause, tbl,
+       tbl, key_clause, key_clause, tbl)
+
+    # Value changes on surviving keys ship as UPDATE rows. Historically this
+    # ran for articles only, so recomputed handle_stats / edited persons rows
+    # silently never reached the server (M8 finding) — now every table with
+    # non-key payload columns gets the three-way diff. Pure edge tables
+    # (cit_all, cit_internal, version_links) have no payload and keep the
+    # NEW/DELETE-only shape.
+    diff_sql <- if (length(compare_cols) > 0) {
       join_conditions <- paste(
         sprintf("b.%s = u.%s", keys, keys),
         collapse = " AND "
       )
-      
-      compare_cols <- DBI::dbGetQuery(con, sprintf("DESCRIBE base_%s", tbl))$column_name
-      compare_cols <- setdiff(compare_cols, c(keys, "embeddings"))
-      
       compare_conditions <- paste(
         sprintf("(b.%s IS DISTINCT FROM u.%s)", compare_cols, compare_cols),
         collapse = " OR "
       )
-      
-      diff_sql <- sprintf("
-        SELECT *, 'NEW' as operation FROM update_%s
-        WHERE %s NOT IN (SELECT %s FROM base_%s)
-        
+      sprintf("
+        %s
+
         UNION ALL
-        
-        SELECT *, 'DELETE' as operation FROM base_%s
-        WHERE %s NOT IN (SELECT %s FROM update_%s)
-        
-        UNION ALL
-        
+
         SELECT u.*, 'UPDATE' as operation
         FROM base_%s b
         JOIN update_%s u ON %s
         WHERE %s
-      ", tbl, key_clause, key_clause, tbl,
-         tbl, key_clause, key_clause, tbl,
-         tbl, tbl, join_conditions, compare_conditions)
-      
+      ", key_diff_sql, tbl, tbl, join_conditions, compare_conditions)
     } else {
-      
-      diff_sql <- sprintf("
-        SELECT *, 'NEW' as operation FROM update_%s
-        WHERE (%s) NOT IN (SELECT %s FROM base_%s)
-        
-        UNION ALL
-        
-        SELECT *, 'DELETE' as operation FROM base_%s
-        WHERE (%s) NOT IN (SELECT %s FROM update_%s)
-      ", tbl, key_clause, key_clause, tbl,
-         tbl, key_clause, key_clause, tbl)
+      key_diff_sql
     }
     
     diff_file <- file.path(
@@ -1057,7 +1105,9 @@ apply_parquet_diffs <- function(base_stamp,
                                 tables = c("articles", "handle_stats", "cit_all",
                                           "cit_internal", "version_links",
                                           "persons", "person_works", "person_stats",
-                                          "person_wikidata"),
+                                          "person_wikidata", "person_workplaces",
+                                          "article_jel", "jel_codes",
+                                          "institutions", "journal_quality"),
                                 rebuild_indices = TRUE) {
 
   if (is.null(db_path)) {
@@ -1075,17 +1125,27 @@ apply_parquet_diffs <- function(base_stamp,
 
   DBI::dbExecute(con, "LOAD vss;")
 
+  # Schema first: a diff computed against a post-migration dump carries the
+  # new columns, and inserting them into a pre-migration table silently drops
+  # them (insert_cols comes from DESCRIBE of the target).
+  migrate_schema(con)
+
   table_keys <- list(
-    articles        = "Handle",
-    handle_stats    = "handle",
-    cit_all         = c("citing", "cited"),
-    cit_internal    = c("citing", "cited"),
-    version_links   = c("source", "target", "type"),
-    persons         = "short_id",
-    person_works    = c("short_id", "work_handle"),
-    person_stats    = "short_id",
-    person_wikidata = "short_id",
-    journals        = "series_handle"
+    articles          = "Handle",
+    handle_stats      = "handle",
+    cit_all           = c("citing", "cited"),
+    cit_internal      = c("citing", "cited"),
+    version_links     = c("source", "target", "type"),
+    persons           = "short_id",
+    person_works      = c("short_id", "work_handle"),
+    person_stats      = "short_id",
+    person_wikidata   = "short_id",
+    person_workplaces = c("short_id", "rank"),
+    article_jel       = c("handle", "jel_code"),
+    jel_codes         = "code",
+    institutions      = "edi_handle",
+    journal_quality   = "series_handle",
+    journals          = "series_handle"
   )
 
 
@@ -1165,47 +1225,31 @@ apply_parquet_diffs <- function(base_stamp,
     }
     
     if ("UPDATE" %in% op_counts$operation) {
-      if (tbl %in% c("articles", "handle_stats")) {
-        
-        key_col <- keys[1]
-        update_cols <- setdiff(insert_cols, c(key_col))
-        
-        set_clause <- paste(
-          sprintf("%s = excluded.%s", update_cols, update_cols),
-          collapse = ", "
-        )
-        
-        upsert_sql <- sprintf("
-          INSERT INTO %s (%s)
-          SELECT %s FROM temp_diff WHERE operation = 'UPDATE'
-          ON CONFLICT (%s) DO UPDATE SET %s
-        ", tbl, insert_cols_str, insert_cols_str, key_col, set_clause)
-        
-        updated <- DBI::dbExecute(con, upsert_sql)
-        info("  Updated ", updated, " rows")
-        
+      # Uniform delete+insert for every table. The old ON CONFLICT upsert
+      # (articles/handle_stats only) required a UNIQUE/PK constraint that
+      # articles never had and that restore_db_from_parquet strips from every
+      # table (CREATE TABLE AS loses constraints) — it binder-errored the
+      # moment an UPDATE row actually arrived on such a DB. Delete+insert is
+      # semantically identical here and needs no constraints.
+      key_where <- if (length(keys) == 1) {
+        sprintf("%s IN (SELECT %s FROM temp_diff WHERE operation = 'UPDATE')",
+                keys, keys)
       } else {
-        
-        key_where <- if (length(keys) == 1) {
-          sprintf("%s IN (SELECT %s FROM temp_diff WHERE operation = 'UPDATE')", 
-                  keys, keys)
-        } else {
-          sprintf("(%s) IN (SELECT %s FROM temp_diff WHERE operation = 'UPDATE')",
-                  paste(keys, collapse = ", "),
-                  paste(keys, collapse = ", "))
-        }
-        
-        deleted_for_update <- DBI::dbExecute(con, sprintf(
-          "DELETE FROM %s WHERE %s", tbl, key_where
-        ))
-        
-        inserted_for_update <- DBI::dbExecute(con, sprintf("
-          INSERT INTO %s (%s)
-          SELECT %s FROM temp_diff WHERE operation = 'UPDATE'
-        ", tbl, insert_cols_str, insert_cols_str))
-        
-        info("  Updated ", inserted_for_update, " rows (delete+insert)")
+        sprintf("(%s) IN (SELECT %s FROM temp_diff WHERE operation = 'UPDATE')",
+                paste(keys, collapse = ", "),
+                paste(keys, collapse = ", "))
       }
+
+      DBI::dbExecute(con, sprintf(
+        "DELETE FROM %s WHERE %s", tbl, key_where
+      ))
+
+      inserted_for_update <- DBI::dbExecute(con, sprintf("
+        INSERT INTO %s (%s)
+        SELECT %s FROM temp_diff WHERE operation = 'UPDATE'
+      ", tbl, insert_cols_str, insert_cols_str))
+
+      info("  Updated ", inserted_for_update, " rows (delete+insert)")
     }
     
     DBI::dbExecute(con, "DROP TABLE temp_diff")

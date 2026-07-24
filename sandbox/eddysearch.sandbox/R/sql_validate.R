@@ -22,7 +22,9 @@ validate_sql <- function(sql, con) {
   allowed_tables <- c(
     "articles", "cit_all", "cit_internal", "handle_stats",
     "journals", "version_links", "bib_coupling",
-    "persons", "person_works", "person_stats", "person_wikidata"
+    "persons", "person_works", "person_stats", "person_wikidata",
+    "article_jel", "jel_codes", "institutions", "person_workplaces",
+    "journal_quality"
   )
 
   walk_node <- function(node) {

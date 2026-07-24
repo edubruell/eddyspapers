@@ -56,7 +56,7 @@ function armPipeline(gateSynth: boolean): void {
   });
   synthesize.mockImplementation(async (..._a: unknown[]) => {
     if (gateSynth) await new Promise<void>((r) => (releaseSynth = r));
-    const onDelta = _a[6] as (d: string) => void;
+    const onDelta = _a.filter((x) => typeof x === "function").at(-1) as (d: string) => void;
     onDelta("## Review\nDone.");
     return "## Review\nDone.";
   });

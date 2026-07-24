@@ -69,7 +69,7 @@ function setHappyPath(): void {
     return { ok: true, papers: { [paper.handle]: paper }, persons: {}, sections: [section], bibtex: "@article{smith2020,}" };
   });
   synthesize.mockImplementation(async (..._a: unknown[]) => {
-    const onDelta = _a[6] as (d: string) => void;
+    const onDelta = _a.filter((x) => typeof x === "function").at(-1) as (d: string) => void;
     onDelta("## Review\n");
     onDelta("Minimum wages have small disemployment effects.");
     return "## Review\nMinimum wages have small disemployment effects.";

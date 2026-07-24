@@ -10,6 +10,7 @@ export type PaperResult = {
   journal: string | null;
   category: string | null;
   url: string | null;
+  doi: string | null;
   bib_tex: string | null;
   abstract: string | null;
 };
@@ -27,6 +28,7 @@ export type SemanticParams = {
   journalName?: string[] | null;
   titleKeyword?: string | null;
   authorKeyword?: string | null;
+  jel?: string[] | null;
 };
 
 export type KeywordField = "title" | "abstract" | "authors";
@@ -39,6 +41,7 @@ export type KeywordParams = {
   maxYear?: number | null;
   categories?: string[] | null;
   journalName?: string[] | null;
+  jel?: string[] | null;
   orderBy?: "year" | "citations";
   limit?: number;
   offset?: number;

@@ -7,7 +7,7 @@ paper_url <- function(handle, url = NULL) {
   paste0("https://ideas.repec.org/", path)
 }
 
-semantic_search <- function(query, max_k = 30, min_year = NULL, journal_filter = NULL, journal_name = NULL) {
+semantic_search <- function(query, max_k = 30, min_year = NULL, journal_filter = NULL, journal_name = NULL, jel = NULL) {
   t0 <- Sys.time()
   emit_progress(paste0("semantic_search: ", stringr::str_trunc(query, 60)))
 
@@ -27,7 +27,7 @@ semantic_search <- function(query, max_k = 30, min_year = NULL, journal_filter =
   candidate_k <- max(as.integer(max_k) * 15L, 300L)
 
   sql <- "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url,
-                 a.bib_tex, a.abstract,
+                 a.doi, a.bib_tex, a.abstract,
                  array_cosine_distance(a.embeddings, ?::FLOAT[1024]) AS similarity
           FROM articles a
           ORDER BY similarity ASC
@@ -49,11 +49,44 @@ semantic_search <- function(query, max_k = 30, min_year = NULL, journal_filter =
   if (!is.null(journal_name)) {
     candidates <- dplyr::filter(candidates, grepl(tolower(journal_name), tolower(journal), fixed = TRUE))
   }
+  if (!is.null(jel) && length(jel) > 0) {
+    candidates <- filter_by_jel(con, candidates, jel)
+  }
 
   result <- dplyr::slice_head(candidates, n = max_k)
 
   emit_progress(paste0("  ↳ ", nrow(result), " results in ", round(as.numeric(Sys.time() - t0, units = "secs"), 1), "s"))
   result
+}
+
+# JEL post-filter for the candidate-pool pattern: one lookup against article_jel
+# for the candidate handles, then keep rows matching any code/prefix. Runs after
+# the index-accelerated scan so the HNSW fast path is preserved. article_jel
+# stores handles lowercase. Coverage is ~55% of the corpus — papers without any
+# JEL rows are dropped by this filter even though their codes are merely unknown.
+filter_by_jel <- function(con, candidates, jel) {
+  codes <- toupper(trimws(jel))
+  codes <- codes[grepl("^[A-Z][0-9]{0,2}$", codes)]
+  # All-invalid input errors instead of silently returning zero rows — a script
+  # would read "0 results" as "no papers in this area", which is the one wrong
+  # conclusion an invalid filter must never produce.
+  if (length(codes) == 0) {
+    stop("jel filter contains no valid JEL codes (expected e.g. 'J31' or 'J3'): ",
+         paste(jel, collapse = ", "))
+  }
+  if (nrow(candidates) == 0) return(candidates)
+
+  placeholders <- paste(rep("?", nrow(candidates)), collapse = ", ")
+  sql <- paste0(
+    "SELECT DISTINCT handle FROM article_jel WHERE handle IN (", placeholders, ") AND (",
+    paste(rep("jel_code LIKE ?", length(codes)), collapse = " OR "), ")"
+  )
+  matched <- DBI::dbGetQuery(
+    con, sql,
+    params = c(as.list(tolower(candidates$Handle)), as.list(paste0(codes, "%")))
+  )$handle
+
+  dplyr::filter(candidates, tolower(Handle) %in% matched)
 }
 
 sql_query <- function(sql, params = list()) {

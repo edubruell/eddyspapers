@@ -18,15 +18,27 @@ post_process_person_entry <- function(entry) {
   short_id <- get_field_safe(entry, "short-id", "")
   if (nchar(short_id) == 0) return(NULL)
 
-  workplace_name        <- ""
-  workplace_institution <- ""
-  if (!is.null(entry$workplace) && length(entry$workplace) > 0) {
-    wp <- entry$workplace[[1]]
-    if (!is.null(wp$name) && length(wp$name) > 0)
-      workplace_name <- wp$name[[1]]
-    if (!is.null(wp$institution) && length(wp$institution) > 0)
-      workplace_institution <- wp$institution[[1]]
-  }
+  # All workplaces with their Workplace-Share weights (13% of persons are
+  # multi-affiliated). The persons table keeps the first workplace as before;
+  # the full set feeds person_workplaces for EDIRC joins. The typed prototype
+  # keeps zero-workplace persons from producing a column-less tibble.
+  workplace_proto <- tibble::tibble(
+    edi_handle = character(), name = character(),
+    share = numeric(), rank = integer()
+  )
+  workplaces <- purrr::imap(entry$workplace %||% list(), function(wp, i) {
+    tibble::tibble(
+      edi_handle = get_field_safe(wp, "institution"),
+      name       = get_field_safe(wp, "name"),
+      share      = suppressWarnings(as.numeric(get_field_safe(wp, "share", NA_character_))),
+      rank       = as.integer(i)
+    )
+  }) |>
+    purrr::list_rbind(ptype = workplace_proto) |>
+    dplyr::filter(nchar(edi_handle) > 0 | nchar(name) > 0)
+
+  workplace_name        <- if (nrow(workplaces) > 0) workplaces$name[1] else ""
+  workplace_institution <- if (nrow(workplaces) > 0) workplaces$edi_handle[1] else ""
 
   work_field_map <- c(
     "author-paper"    = "paper",
@@ -60,7 +72,8 @@ post_process_person_entry <- function(entry) {
     homepage              = get_field_safe(entry, "homepage"),
     registered_date       = get_field_safe(entry, "registered-date", NA_character_),
     last_login_date       = get_field_safe(entry, "last-login-date", NA_character_),
-    works                 = list(works)
+    works                 = list(works),
+    workplaces            = list(workplaces)
   )
 }
 
@@ -224,6 +237,7 @@ populate_persons <- function(db_path = NULL, rds_persons_folder = NULL) {
   DBI::dbExecute(con, "DROP TABLE IF EXISTS persons")
   DBI::dbExecute(con, "DROP TABLE IF EXISTS person_stats")
   init_persons_tables(con)
+  migrate_schema(con)
 
   persons_df <- persons_raw |>
     purrr::map_dfr(~tibble::tibble(
@@ -252,6 +266,25 @@ populate_persons <- function(db_path = NULL, rds_persons_folder = NULL) {
 
   DBI::dbAppendTable(con, "person_works", works_df)
   info("Inserted ", nrow(works_df), " rows into person_works")
+
+  # Older persons_raw.rds files (pre-M8) lack the workplaces element; the
+  # table then stays empty until the next parse_all_persons run.
+  workplaces_df <- persons_raw |>
+    purrr::map_dfr(~{
+      wp <- .x$workplaces
+      if (is.null(wp) || nrow(wp[[1]]) == 0) return(tibble::tibble())
+      dplyr::mutate(wp[[1]], short_id = .x$short_id)
+    })
+
+  DBI::dbExecute(con, "DELETE FROM person_workplaces")
+  if (nrow(workplaces_df) > 0) {
+    # edi_handle lowercased at load so it joins institutions.edi_handle directly
+    # (persons.workplace_institution keeps the registered original case).
+    workplaces_df <- workplaces_df |>
+      dplyr::transmute(short_id, edi_handle = tolower(edi_handle), name, share, rank)
+    DBI::dbAppendTable(con, "person_workplaces", workplaces_df)
+  }
+  info("Inserted ", nrow(workplaces_df), " rows into person_workplaces")
 
   invisible(nrow(persons_df))
 }

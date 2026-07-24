@@ -101,6 +101,54 @@ describe("POST /search", () => {
   });
 });
 
+describe("POST /search jel filter", () => {
+  it("accepts a jel CSV (with spaces) and applies the filter", async () => {
+    // Fixture precondition: the seed paper has no article_jel rows, so a jel
+    // filter must drop it from its own-vector search.
+    const { openFixture } = await import("../search/helpers.js");
+    const db = await openFixture();
+    const seedJel = await db.query(
+      "SELECT COUNT(*) AS n FROM article_jel WHERE handle = LOWER(?)",
+      [queryHandle],
+    );
+    const [seedRow] = await db.query("SELECT doi FROM articles WHERE Handle = ?", [queryHandle]);
+    db.close();
+    expect(Number(seedJel[0].n)).toBe(0); // else the fixture slice changed — pick a new anchor
+
+    const unfiltered = await post("/search", { query: "x", max_k: 10 });
+    const rows = (await unfiltered.json()) as (Row & { doi: string | null })[];
+    expect(rows[0].Handle).toBe(queryHandle);
+    // doi rides along on the classic wire format now.
+    expect(rows[0].doi).toBe(seedRow.doi);
+
+    const res = await post("/search", { query: "x", max_k: 10, jel: "J3, C21" });
+    expect(res.status).toBe(200);
+    const filtered = (await res.json()) as Row[];
+    expect(filtered.length).toBeGreaterThan(0);
+    filtered.forEach((r) => expect(r.Handle).not.toBe(queryHandle));
+  });
+
+  it.each(["J381", "J3;C1", "DROP TABLE", "J3,", "J3,,C1", "%"])(
+    "rejects malformed jel %j with 400",
+    async (jel) => {
+      const res = await post("/search", { query: "x", max_k: 5, jel });
+      expect(res.status).toBe(400);
+    },
+  );
+
+  it("POST /search/save with jel returns the specific 400", async () => {
+    const res = await post("/search/save", { query: "x", max_k: 5, jel: "J31" });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/jel filter is not yet supported for saved searches/);
+  });
+
+  it("POST /search/save without jel is unaffected", async () => {
+    const res = await post("/search/save", { query: "no jel here", max_k: 3 });
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("POST /search/save + GET /search/:hash", () => {
   it("saves, returns {hash, results}, and reloads the same search", async () => {
     const save = await post("/search/save", { query: "save me", max_k: 6 });

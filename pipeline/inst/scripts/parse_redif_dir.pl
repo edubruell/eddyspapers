@@ -17,7 +17,8 @@ use ReDIF::Parser qw(
 
 use JSON;
 
-my $dir = shift @ARGV or die "Usage: $0 directory\n";
+my $dir = shift @ARGV or die "Usage: $0 directory [template-type]\n";
+my $want_type = shift @ARGV || 'ReDIF-Person 1.0';
 
 redif_open_dir_recursive($dir);
 
@@ -26,7 +27,7 @@ print "[\n";
 my $count = 0;
 
 while (my $template = redif_get_next_template_good_or_bad()) {
-    next unless defined $template->{TYPE} && $template->{TYPE} eq 'ReDIF-Person 1.0';
+    next unless defined $template->{TYPE} && $template->{TYPE} eq $want_type;
     print ",\n" if $count++;
     print $json->encode($template);
 }

@@ -22,7 +22,7 @@ info("Data root: ", config$data_root)
 iscited_file <- get_folder_refs(config)$repec("cit","conf","iscited.txt") 
 
 
-info("\n[1/11] Syncing RePEc archives...")
+info("\n[1/14] Syncing RePEc archives...")
 tryCatch({
   sync_journals_from_csv(
     journals_csv = config$journals_csv,
@@ -36,12 +36,15 @@ tryCatch({
   
   iscited_file <- sync_repec_iscited(dest_root = config$repec_folder)
   info("✓ iscited.txt Sync completed successfully")
+
+  sync_repec_edirc(dest_root = config$repec_folder)
+  info("✓ EDIRC institution Sync completed successfully")
 }, error = function(e) {
   info("✗ Sync failed: ", e$message)
   stop(e)
 })
 
-info("\n[2/11] Parsing ReDIF files...")
+info("\n[2/14] Parsing ReDIF files...")
 tryCatch({
   parse_all_journals(
     repec_folder = config$repec_folder,
@@ -54,7 +57,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[3/11] Generating embeddings and updating database...")
+info("\n[3/14] Generating embeddings and updating database...")
 tryCatch({
   embed_and_populate_db(
     db_path = file.path(config$db_folder, "articles.duckdb"),
@@ -72,7 +75,19 @@ tryCatch({
   stop(e)
 })
 
-info("\n[4/11] Creating Related Works Table in Database...")
+info("\n[4/14] Populating JEL tables...")
+tryCatch({
+  con_jel <- get_db_con(file.path(config$db_folder, "articles.duckdb"))
+  build_article_jel(con_jel, rds_folder = config$rds_folder)
+  populate_jel_codes(con_jel)
+  info("✓ JEL tables populated successfully")
+}, error = function(e) {
+  info("⚠ JEL population failed (non-fatal): ", e$message)
+}, finally = {
+  if (exists("con_jel")) try(DBI::dbDisconnect(con_jel, shutdown = TRUE), silent = TRUE)
+})
+
+info("\n[5/14] Creating Related Works Table in Database...")
 tryCatch({
   write_version_links_to_db(
         db_path = file.path(config$db_folder, "articles.duckdb"),
@@ -84,7 +99,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[5/11] Processing citation data...")
+info("\n[6/14] Processing citation data...")
 tryCatch({
   info("  Populating citation tables...")
   cit_result <- populate_citations(
@@ -101,7 +116,7 @@ tryCatch({
 })
 
 
-info("\n[6/11] Computing handle statistics...")
+info("\n[7/14] Computing handle statistics...")
 tryCatch({
   con <- DBI::dbConnect(
     duckdb::duckdb(),
@@ -119,7 +134,7 @@ tryCatch({
   stop(e)
 })
 
-info("\n[7/11] Syncing pers author archive...")
+info("\n[8/14] Syncing pers author archive...")
 tryCatch({
   sync_repec_pers(dest_root = config$repec_folder)
   info("✓ Pers sync completed successfully")
@@ -127,7 +142,7 @@ tryCatch({
   info("⚠ Pers sync failed (non-fatal): ", e$message)
 })
 
-info("\n[8/11] Parsing person RDF files...")
+info("\n[9/14] Parsing person RDF files...")
 tryCatch({
   parse_all_persons(
     repec_folder       = config$repec_folder,
@@ -138,7 +153,7 @@ tryCatch({
   info("⚠ Person parsing failed (non-fatal): ", e$message)
 })
 
-info("\n[9/11] Populating person tables and computing stats...")
+info("\n[10/14] Populating person tables and computing stats...")
 tryCatch({
   populate_persons(
     db_path            = file.path(config$db_folder, "articles.duckdb"),
@@ -152,7 +167,20 @@ tryCatch({
   info("⚠ Person table population failed (non-fatal): ", e$message)
 })
 
-info("\n[10/11] Syncing Wikidata enrichment for persons...")
+info("\n[11/14] Populating EDIRC institutions...")
+tryCatch({
+  institutions <- parse_all_institutions(repec_folder = config$repec_folder)
+  con_edi <- get_db_con(file.path(config$db_folder, "articles.duckdb"))
+  migrate_schema(con_edi)
+  populate_institutions(con_edi, institutions)
+  info("✓ institutions table populated successfully")
+}, error = function(e) {
+  info("⚠ EDIRC population failed (non-fatal): ", e$message)
+}, finally = {
+  if (exists("con_edi")) try(DBI::dbDisconnect(con_edi, shutdown = TRUE), silent = TRUE)
+})
+
+info("\n[12/14] Syncing Wikidata enrichment for persons...")
 tryCatch({
   wikidata_count <- sync_wikidata_persons(
     db_path = file.path(config$db_folder, "articles.duckdb")
@@ -162,7 +190,19 @@ tryCatch({
   info("⚠ Wikidata sync failed (non-fatal): ", e$message)
 })
 
-info("\n[11/11] Creating backup...")
+info("\n[13/14] Refreshing journal quality factors...")
+tryCatch({
+  con_jq <- get_db_con(file.path(config$db_folder, "articles.duckdb"))
+  migrate_schema(con_jq)
+  populate_journal_quality(con_jq)
+  info("✓ journal_quality refreshed successfully")
+}, error = function(e) {
+  info("⚠ journal_quality refresh failed (non-fatal): ", e$message)
+}, finally = {
+  if (exists("con_jq")) try(DBI::dbDisconnect(con_jq, shutdown = TRUE), silent = TRUE)
+})
+
+info("\n[14/14] Creating backup...")
 tryCatch({
   pqt_file <- dump_db_to_parquet(
     db_path = file.path(config$db_folder, "articles.duckdb"),

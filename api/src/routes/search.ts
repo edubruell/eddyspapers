@@ -40,6 +40,11 @@ const searchBodySchema = z.object({
   journal_name: z.string().nullish(),
   title_keyword: z.string().nullish(),
   author_keyword: z.string().nullish(),
+  // JEL codes or prefixes, comma-separable ("J31" or "J3,C21").
+  jel: z
+    .string()
+    .regex(/^\s*[A-Za-z]\d{0,2}(\s*,\s*[A-Za-z]\d{0,2})*\s*$/, "jel must be comma-separated JEL codes")
+    .nullish(),
 });
 
 type SearchBody = z.infer<typeof searchBodySchema>;
@@ -70,6 +75,7 @@ const semanticParamsOf = (b: SearchBody): SemanticParams => ({
   journalName: csv(b.journal_name),
   titleKeyword: b.title_keyword ?? null,
   authorKeyword: b.author_keyword ?? null,
+  jel: csv(b.jel),
 });
 
 const flagsOf = (b: SearchBody) => ({
@@ -126,6 +132,12 @@ searchRoute.post("/save", requireKey("rest"), async (c) => {
   if (body === null) return c.json({ error: "Invalid JSON body" }, 400);
   const parsed = searchBodySchema.safeParse(body);
   if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
+  // Saved searches hash the seven classic params; silently dropping a jel
+  // filter on reload would misrepresent the saved result set, so reject until
+  // the hash/appdata schema learns the field.
+  if (parsed.data.jel) {
+    return c.json({ error: "jel filter is not yet supported for saved searches" }, 400);
+  }
 
   const db = await getCorpusDb();
   const results = finalize(await semanticSearch(db, semanticParamsOf(parsed.data)));

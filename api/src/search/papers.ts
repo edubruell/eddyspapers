@@ -17,7 +17,7 @@ import type {
 // Exported so citations.ts (paper-level MCP resources + Phase 5 citation route
 // ports) selects and maps the same article columns without redefining them.
 export const PAPER_COLS =
-  "a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.bib_tex, a.abstract";
+  "a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.doi, a.bib_tex, a.abstract";
 
 // Filter fragments carry their bind values with them so WHERE assembly stays a
 // pure fold and user input never lands in the SQL string (the Plumber version
@@ -58,8 +58,25 @@ export const rowToPaper = (r: Record<string, unknown>): PaperResult => ({
   journal: (r.journal as string | null) ?? null,
   category: (r.category as string | null) ?? null,
   url: (r.url as string | null) ?? null,
+  doi: (r.doi as string | null) ?? null,
   bib_tex: (r.bib_tex as string | null) ?? null,
   abstract: (r.abstract as string | null) ?? null,
+});
+
+// JEL inputs are codes or prefixes ("J31", "J3"); prefix LIKE covers both since
+// codes cap at letter+2 digits. Uppercase + shape-check here so raw callers
+// can't smuggle LIKE wildcards; invalid entries are dropped (an invalid code
+// can never match anyway — absence of JEL rows means unknown, not excluded).
+const jelCodes = (jel: string[] | null | undefined): string[] =>
+  (jel ?? [])
+    .map((c) => c.trim().toUpperCase())
+    .filter((c) => /^[A-Z]\d{0,2}$/.test(c));
+
+const jelFragment = (codes: string[]): Fragment => ({
+  sql: `EXISTS (SELECT 1 FROM article_jel j
+        WHERE j.handle = LOWER(a.Handle)
+          AND (${codes.map(() => "j.jel_code LIKE ?").join(" OR ")}))`,
+  params: codes.map((c) => `${c}%`),
 });
 
 // Shared by semantic + person search: the row filters Plumber's /search supports.
@@ -69,6 +86,7 @@ export const paperFilters = (p: {
   journalName?: string[] | null;
   titleKeyword?: string | null;
   authorKeyword?: string | null;
+  jel?: string[] | null;
 }): Fragment[] =>
   pipe(
     [
@@ -81,6 +99,7 @@ export const paperFilters = (p: {
         : null,
       p.titleKeyword ? frag(`LOWER(a.title) LIKE ? ${LIKE_ESC}`, likeParam(p.titleKeyword)) : null,
       p.authorKeyword ? frag(`LOWER(a.authors) LIKE ? ${LIKE_ESC}`, likeParam(p.authorKeyword)) : null,
+      jelCodes(p.jel).length ? jelFragment(jelCodes(p.jel)) : null,
     ],
     A.filter((f): f is Fragment => f !== null),
   );
@@ -143,7 +162,7 @@ export async function keywordSearch(db: CorpusDb, p: KeywordParams): Promise<Key
 
   const where = whereClause([
     keywordBlock,
-    ...paperFilters({ minYear: p.minYear, journalFilter: p.categories, journalName: p.journalName }),
+    ...paperFilters({ minYear: p.minYear, journalFilter: p.categories, journalName: p.journalName, jel: p.jel }),
     ...(p.maxYear != null ? [frag("a.year <= ?", p.maxYear)] : []),
   ]);
 

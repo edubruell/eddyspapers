@@ -176,9 +176,13 @@ post_process_entry <- function(entry) {
   if (!is.null(entry$month)) {
     month <- entry$month[[1]]
   }
+  # Older archives use the legacy X-DOI tag instead of DOI; reading only
+  # entry$doi silently drops those (M8 verification finding).
   doi <- ""
   if (!is.null(entry$doi)) {
     doi <- entry$doi[[1]]
+  } else if (!is.null(entry$`x-doi`)) {
+    doi <- entry$`x-doi`[[1]]
   }
   number <- ""
   if (!is.null(entry$number)) {

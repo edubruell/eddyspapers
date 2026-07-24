@@ -8,7 +8,7 @@ package not listed here. Every call to a data verb emits a progress event automa
 
 ### Data verbs
 
-semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journal_name = NULL)
+semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journal_name = NULL, jel = NULL)
   Vector similarity search over the articles database. Returns a tibble.
   - query: a mock abstract — 2–4 sentences written as if they were the abstract of an ideal
     result paper. NOT a question, NOT keywords. See "Semantic query writing guide".
@@ -16,7 +16,11 @@ semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journ
   - min_year: integer filter, e.g. 2015L
   - journal_filter: character vector of category names, e.g. c("Top 5 Journals", "AEJs", "Top Field Journals (A)")
   - journal_name: substring match on journal name, e.g. "Journal of Labor Economics"
-  Returns columns: Handle, title, year, authors, journal, category, url, bib_tex, abstract, similarity
+  - jel: character vector of JEL codes or prefixes, e.g. c("J31") or c("J3", "C21"). CAUTION:
+    only ~55% of papers carry JEL codes (43% of journal articles, 0% of arXiv), so this filter
+    also drops papers whose codes are simply unknown — use it for precision passes, never as
+    the only sweep for a topic.
+  Returns columns: Handle, title, year, authors, journal, category, url, doi, bib_tex, abstract, similarity
   Lower similarity = closer match (cosine distance).
 
   Examples:
@@ -36,7 +40,21 @@ semantic_search(query, max_k = 30, min_year = NULL, journal_filter = NULL, journ
 
 sql_query(sql, params = list())
   Read-only SELECT against these tables: articles, cit_all, cit_internal, handle_stats,
-  journals, version_links, bib_coupling. Parser-validated — COPY/ATTACH/DDL/PRAGMA are rejected.
+  journals, version_links, bib_coupling, article_jel, jel_codes, institutions,
+  person_workplaces, journal_quality. Parser-validated — COPY/ATTACH/DDL/PRAGMA are rejected.
+  Enrichment tables (M8) — ALL their join keys are stored LOWERCASE:
+  - article_jel(handle, jel_code) — JEL codes; ~55% coverage, absence = unknown.
+    Join via article_jel.handle = LOWER(articles.Handle).
+  - jel_codes(code, label, level, parent) — official JEL labels/hierarchy.
+  - institutions(edi_handle, primary/secondary/tertiary_name, display_name, country, url) —
+    EDIRC registry. person_workplaces.edi_handle joins directly;
+    persons.workplace_institution needs LOWER() (it keeps the registered case).
+  - person_workplaces(short_id, edi_handle, name, share, rank) — ALL affiliations per person
+    with RePEc share weights (persons.workplace_* keeps only the first).
+  - journal_quality(series_handle, simple_if, recursive_if, h_index, ... , *_10y) — RePEc
+    series impact factors incl. WP series; experimental data, use as one signal among several,
+    never a sole ranking key. series_handle format 'repec:{archive}:{journal_code}' joins
+    journals.series_handle directly.
   CASE CONVENTION: articles.Handle is mixed-case; cit_all/cit_internal/handle_stats/person_works
   store handles LOWERCASE — always join via LOWER(a.Handle) = other.handle or rows silently vanish.
   version_links has columns (source, target, type) — directed version edges between handles;

@@ -98,23 +98,28 @@ owned by the Hono service — never touched by the pipeline.
 ## Pipeline (update_repec.R)
 
 ```
-1. Sync journals (rsync)
+1. Sync journals + EDIRC + iscited (rsync)
 2. Parse RDF files
-3. Embed & populate articles table
-4. Write version links
-5. Sync iscited.txt
-6. Parse & populate cit_all
-7. Build cit_internal
-8. Compute handle_stats
-9. Refresh persons + Wikidata
+3. Embed & populate articles table (incl. doi from ReDIF)
+4. Populate JEL tables (article_jel from RDS cache, jel_codes from AEA XML)
+5. Write version links
+6. Parse & populate cit_all, build cit_internal
+7. Compute handle_stats
+8. Refresh persons (+ person_workplaces), EDIRC institutions, Wikidata
+9. Refresh journal_quality (RePEc seriesfactors)
 10. Dump to parquet (full + diff)
 11. Deploy diff → server (deploy_diffs.sh) if EDDY_DEPLOY=1
 ```
 
+Backfills/enrichment updates travel as **parquet patches** (not diffs): `write_patch()` /
+`apply_patch()` in the pipeline package, shipped with `deploy_patches.sh` →
+`server_apply_patch.R`. Schema changes live in `migrate_schema()` (pipeline/R/migrate.R).
+Design: `localwip/notes/data_enrichment/01_backfill_mechanism.md`.
+
 ## DuckDB tables
 
 **Corpus (articles_agentic.duckdb — read-only for Hono):**
-- `articles` — papers with embeddings (HNSW index)
+- `articles` — papers with embeddings (HNSW index) + `doi`/`doi_source` (M8)
 - `cit_all` — full citation graph (~36M edges)
 - `cit_internal` — both-ends-in-corpus subgraph
 - `handle_stats` — precomputed citation + impact metrics
@@ -122,6 +127,9 @@ owned by the Hono service — never touched by the pipeline.
 - `journals` — journal metadata
 - `bib_coupling` — precomputed bibliographic coupling
 - `persons`, `person_works`, `person_stats`, `person_wikidata` — EconPeople tables
+- `article_jel` (handle lowercase; ~55% coverage, NULL = unknown), `jel_codes` — JEL (M8)
+- `institutions` (EDIRC), `person_workplaces` (all affiliations + shares) — M8
+- `journal_quality` — RePEc series impact factors (experimental; one signal among several) — M8
 
 **Appdata (appdata.duckdb — Hono read-write):**
 - `saved_searches`, `search_logs`, `person_search_logs`, `api_keys`
