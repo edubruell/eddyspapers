@@ -1,7 +1,7 @@
 Package: eddyspapersbackend
 Type: Package
 Title: Semantic Economics Paper Search Engine Backend
-Version: 0.6.0
+Version: 0.7.0
 Authors@R: person("Eduard", "Brüll", email = "eduard.bruell@zew.de", role = c("aut", "cre"))
 Description: Data pipeline for a semantic economics paper search engine.
     Handles syncing RePEc archives, parsing RDF files, generating embeddings,

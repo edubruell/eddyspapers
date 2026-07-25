@@ -56,6 +56,33 @@ schema_migrations <- function() {
          h_index_10y             INTEGER,
          fetched_at              TIMESTAMP
        )"
+    ),
+    m8_wave2 = c(
+      "CREATE TABLE IF NOT EXISTS article_openalex (
+         handle                 VARCHAR PRIMARY KEY,
+         openalex_id            VARCHAR,
+         doi                    VARCHAR,
+         oa_cited_by_count      INTEGER,
+         fwci                   DOUBLE,
+         pctl_value             DOUBLE,
+         is_top1                BOOLEAN,
+         is_top10               BOOLEAN,
+         is_retracted           BOOLEAN,
+         is_oa                  BOOLEAN,
+         oa_status              VARCHAR,
+         oa_url                 VARCHAR,
+         primary_topic          VARCHAR,
+         primary_field          VARCHAR,
+         counts_by_year         VARCHAR,
+         funders                VARCHAR,
+         venue                  VARCHAR,
+         issn_l                 VARCHAR,
+         referenced_works_count INTEGER,
+         oa_year                INTEGER,
+         updated_date           DATE
+       )",
+      "CREATE INDEX IF NOT EXISTS idx_article_openalex_handle ON article_openalex(handle)",
+      "CREATE INDEX IF NOT EXISTS idx_article_openalex_doi    ON article_openalex(doi)"
     )
   )
 }

@@ -636,7 +636,7 @@ dump_db_to_parquet <- function(db_path = NULL, pqt_folder = NULL) {
                             "persons", "person_works", "person_stats",
                             "person_wikidata", "person_workplaces", "journals",
                             "article_jel", "jel_codes", "institutions",
-                            "journal_quality")) |>
+                            "journal_quality", "article_openalex")) |>
     purrr::map(export_tbl)
   
   
@@ -696,7 +696,8 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
     "cit_all", "cit_internal", "handle_stats",
     "persons", "person_works", "person_stats", "person_wikidata",
     "person_workplaces", "journals",
-    "article_jel", "jel_codes", "institutions", "journal_quality"
+    "article_jel", "jel_codes", "institutions", "journal_quality",
+    "article_openalex"
   )
   
   pqt_paths <- file.path(pqt_folder, paste0(tables, "_", date_stamp, ".parquet"))
@@ -784,6 +785,7 @@ restore_db_from_parquet <- function(pqt_folder = NULL,
   load_tbl("jel_codes")
   load_tbl("institutions")
   load_tbl("journal_quality")
+  load_tbl("article_openalex")
 
   # Restored DBs lose schema_meta; converge schema + recreate side-table indices.
   migrate_schema(con)
