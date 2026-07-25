@@ -11,7 +11,12 @@
 #      which disconnects cleanly so the file is checkpointed with no outstanding WAL)
 #   4. refresh the read-only Hono snapshot: cp articles.duckdb -> articles_agentic.duckdb.new,
 #      then atomic mv into place (eddyspapers user)
-#   5. POST /admin/reload so the Hono service reopens the swapped snapshot
+#   5. restart the Hono service so it reopens the swapped snapshot as a single instance
+#
+# Why restart, not POST /admin/reload: the corpus DB + HNSW index is ~13G resident and the
+# box has 23G RAM with no swap. A hot reload transiently holds two instances (~26G) which
+# evicts the DB from page cache and wedges every corpus query. A restart guarantees one
+# instance. Trade-off: a few seconds of downtime + a cold index warm-up on the first search.
 #
 # Emergency escape hatch: set EDDY_STOP_SERVICE=1 to stop the service around the apply (only
 # needed if a future change makes the service hold articles.duckdb again).
@@ -19,9 +24,9 @@
 # Overridable via environment variables:
 #   EDDY_HOST, EDDY_ROOT_USER, EDDY_APP_USER,
 #   EDDY_LOCAL_DIFF_DIR, EDDY_REMOTE_DIFF_DIR, EDDY_SERVICE,
-#   EDDY_DB_DIR, EDDY_RELOAD_URL, EDDY_ADMIN_KEY, EDDY_STOP_SERVICE
+#   EDDY_DB_DIR, EDDY_STOP_SERVICE
 #
-# Usage: EDDY_ADMIN_KEY=esk_… ./deploy_diffs.sh
+# Usage: ./deploy_diffs.sh
 
 set -euo pipefail
 
@@ -32,11 +37,6 @@ LOCAL_DIFF_DIR="${EDDY_LOCAL_DIFF_DIR:-$HOME/eddyspapers/pqt_diff}"
 REMOTE_DIFF_DIR="${EDDY_REMOTE_DIFF_DIR:-/srv/eddyspapers/data/pqt_diff}"
 SERVICE="${EDDY_SERVICE:-eddyspapers-api}"
 DB_DIR="${EDDY_DB_DIR:-/srv/eddyspapers/data/db}"
-RELOAD_URL="${EDDY_RELOAD_URL:-http://127.0.0.1:8001/admin/reload}"
-# Falls back to the operator key file so cron/update_repec.R runs don't need the env var
-# (minted at the phase-5 cutover; admin scope, only used for POST /admin/reload).
-ADMIN_KEY_FILE="${EDDY_ADMIN_KEY_FILE:-$HOME/.config/eddyspapers/admin_key}"
-ADMIN_KEY="${EDDY_ADMIN_KEY:-$(cat "$ADMIN_KEY_FILE" 2>/dev/null || true)}"
 STOP_SERVICE="${EDDY_STOP_SERVICE:-0}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -97,21 +97,9 @@ mv -f articles_agentic.duckdb.new articles_agentic.duckdb
 rm -f articles_agentic.duckdb.wal
 EOF
 
-if [[ "${STOP_SERVICE}" == "1" ]]; then
-  say "Restarting ${SERVICE} (root)"
-  ssh "${ROOT_USER}@${HOST}" "systemctl start ${SERVICE}"
-  api_stopped=0
-fi
-
-say "5/5 Reloading the corpus snapshot in ${SERVICE}"
-if [[ -z "$ADMIN_KEY" ]]; then
-  echo "WARNING: EDDY_ADMIN_KEY unset — skipping POST ${RELOAD_URL}." >&2
-  echo "         The service will keep serving the OLD snapshot until it restarts or is reloaded." >&2
-else
-  ssh "${ROOT_USER}@${HOST}" \
-    "curl -fsS -X POST -H 'Authorization: Bearer ${ADMIN_KEY}' '${RELOAD_URL}'" \
-    && echo
-fi
+say "5/5 Restarting ${SERVICE} to load the swapped snapshot (root)"
+ssh "${ROOT_USER}@${HOST}" "systemctl restart ${SERVICE}"
+api_stopped=0
 
 say "Verifying ${SERVICE} is active"
 ssh "${ROOT_USER}@${HOST}" "systemctl is-active ${SERVICE}"

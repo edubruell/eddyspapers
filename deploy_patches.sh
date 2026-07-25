@@ -9,14 +9,18 @@
 #   3. apply pending patches into articles.duckdb (eddyspapers user, via
 #      server_apply_patch.R; already-applied patch_ids are skipped via patch_meta)
 #   4. refresh the read-only Hono snapshot (atomic swap, eddyspapers user)
-#   5. POST /admin/reload
+#   5. restart the Hono service so it reopens the swapped snapshot as a single instance
+#
+# Why restart, not POST /admin/reload: the corpus DB + HNSW index is ~13G resident and the
+# box has 23G RAM with no swap. A hot reload transiently holds two instances (~26G) which
+# evicts the DB from page cache and wedges every corpus query. A restart guarantees one
+# instance. Trade-off: a few seconds of downtime + a cold index warm-up on the first search.
 #
 # Overridable via environment variables:
 #   EDDY_HOST, EDDY_ROOT_USER, EDDY_APP_USER,
-#   EDDY_LOCAL_PATCH_DIR, EDDY_REMOTE_PATCH_DIR, EDDY_SERVICE,
-#   EDDY_DB_DIR, EDDY_RELOAD_URL, EDDY_ADMIN_KEY
+#   EDDY_LOCAL_PATCH_DIR, EDDY_REMOTE_PATCH_DIR, EDDY_SERVICE, EDDY_DB_DIR
 #
-# Usage: EDDY_ADMIN_KEY=esk_… ./deploy_patches.sh
+# Usage: ./deploy_patches.sh
 
 set -euo pipefail
 
@@ -27,9 +31,6 @@ LOCAL_PATCH_DIR="${EDDY_LOCAL_PATCH_DIR:-$HOME/eddyspapers/pqt_patch}"
 REMOTE_PATCH_DIR="${EDDY_REMOTE_PATCH_DIR:-/srv/eddyspapers/data/pqt_patch}"
 SERVICE="${EDDY_SERVICE:-eddyspapers-api}"
 DB_DIR="${EDDY_DB_DIR:-/srv/eddyspapers/data/db}"
-RELOAD_URL="${EDDY_RELOAD_URL:-http://127.0.0.1:8001/admin/reload}"
-ADMIN_KEY_FILE="${EDDY_ADMIN_KEY_FILE:-$HOME/.config/eddyspapers/admin_key}"
-ADMIN_KEY="${EDDY_ADMIN_KEY:-$(cat "$ADMIN_KEY_FILE" 2>/dev/null || true)}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APPLY_SCRIPT="$SCRIPT_DIR/server_apply_patch.R"
@@ -74,15 +75,8 @@ mv -f articles_agentic.duckdb.new articles_agentic.duckdb
 rm -f articles_agentic.duckdb.wal
 EOF
 
-say "5/5 Reloading the corpus snapshot in ${SERVICE}"
-if [[ -z "$ADMIN_KEY" ]]; then
-  echo "WARNING: EDDY_ADMIN_KEY unset — skipping POST ${RELOAD_URL}." >&2
-  echo "         The service will keep serving the OLD snapshot until it restarts or is reloaded." >&2
-else
-  ssh "${ROOT_USER}@${HOST}" \
-    "curl -fsS -X POST -H 'Authorization: Bearer ${ADMIN_KEY}' '${RELOAD_URL}'" \
-    && echo
-fi
+say "5/5 Restarting ${SERVICE} to load the swapped snapshot (root)"
+ssh "${ROOT_USER}@${HOST}" "systemctl restart ${SERVICE}"
 
 say "Verifying ${SERVICE} is active"
 ssh "${ROOT_USER}@${HOST}" "systemctl is-active ${SERVICE}"

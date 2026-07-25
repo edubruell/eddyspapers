@@ -67,6 +67,13 @@ export async function openCorpusDb(pathOverride?: string): Promise<CorpusDb> {
   return {
     snapshot,
     query: (sql, params) => rowsToObjects(nextConn(), sql, params),
-    close: () => conns.forEach((c) => c.disconnectSync()),
+    // Close the instance, not just the connections — the underlying DuckDB database
+    // (file mapping + the ~13G HNSW index) is freed only by closeSync(). Disconnecting
+    // the pool alone leaks the whole instance, so each /admin/reload would pile up
+    // another resident copy until the box OOMs.
+    close: () => {
+      conns.forEach((c) => c.disconnectSync());
+      instance.closeSync();
+    },
   };
 }
