@@ -14,8 +14,10 @@ export const canonicalHash8 = (fields: Array<[string, unknown]>): string => {
   return createHash("sha256").update(canonical).digest("hex").slice(0, 8);
 };
 
-// The classic /search hash covers all seven request params (mirrors generate_search_hash
-// in the retired Plumber api.R). Raw comma-strings are hashed as received, not the split arrays.
+// The classic /search hash covers the original seven request params (mirrors
+// generate_search_hash in the retired Plumber api.R). Raw comma-strings are hashed as
+// received, not the split arrays. `jel` is appended only when set, so a search without a
+// JEL filter hashes identically to before — every pre-JEL sharelink stays resolvable.
 export const searchHashInput = (p: {
   query: string;
   maxK: number;
@@ -24,6 +26,7 @@ export const searchHashInput = (p: {
   journalName: string | null;
   titleKeyword: string | null;
   authorKeyword: string | null;
+  jel?: string | null;
 }): Array<[string, unknown]> => [
   ["query", p.query],
   ["max_k", p.maxK],
@@ -32,6 +35,7 @@ export const searchHashInput = (p: {
   ["journal_name", p.journalName],
   ["title_keyword", p.titleKeyword],
   ["author_keyword", p.authorKeyword],
+  ...(p.jel != null ? [["jel", p.jel] as [string, unknown]] : []),
 ];
 
 // The person save hash covers only {query, scoring_mode, quality_weight} — NOT the filters

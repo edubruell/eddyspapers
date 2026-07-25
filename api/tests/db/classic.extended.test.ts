@@ -21,6 +21,7 @@ import {
   type PersonSearchLogInput,
 } from "../../src/db/classic.js";
 import type { SemanticResult } from "../../src/search/types.js";
+import { canonicalHash8, searchHashInput } from "../../src/search/hash.js";
 
 // Phase-5 GAP coverage for src/db/classic.ts — extends tests/db/classic.test.ts. Focuses on
 // hash determinism/per-field discrimination, canonical null handling, the dedup-does-not-
@@ -51,6 +52,7 @@ const params: SavedSearchParams = {
   journalName: null,
   titleKeyword: null,
   authorKeyword: null,
+  jel: null,
 };
 
 const paper = (h: string, sim: number): SemanticResult => ({
@@ -61,6 +63,7 @@ const paper = (h: string, sim: number): SemanticResult => ({
   journal: "j",
   category: "c",
   url: null,
+  doi: null,
   bib_tex: null,
   abstract: null,
   similarity: sim,
@@ -99,6 +102,66 @@ describe("searchHash determinism and per-field discrimination", () => {
 
   it("null and 0 for a numeric field are distinct", () => {
     expect(searchHash({ ...params, minYear: null })).not.toBe(searchHash({ ...params, minYear: 0 }));
+  });
+});
+
+describe("jel is backward-compatible with pre-JEL sharelinks", () => {
+  // GOLDEN: the exact 8-char hash the pre-JEL code produced for `params` (seven fields,
+  // no jel term at all). Computed independently as SHA-256 over the canonical JSON array
+  // ["monopsony and minimum wage",100,2010,"Top 5 Journals",null,null,null] → first 8 hex.
+  // If the conditional jel-append ever changes the array length/JSON for a jel-less search,
+  // this value moves and every existing shared search link breaks. It must never change.
+  const GOLDEN_PRE_JEL = "017674e6";
+
+  it("a jel-less search hashes to the exact pre-JEL golden value", () => {
+    expect(searchHash(params)).toBe(GOLDEN_PRE_JEL);
+  });
+
+  it("an absent jel term and an explicit jel: null hash identically (7-element array)", () => {
+    // searchHashInput omits the jel pair entirely when jel is null/absent — so the two
+    // input arrays are byte-identical, not merely equal-hashing.
+    const absent = searchHashInput({
+      query: params.query,
+      maxK: params.maxK,
+      minYear: params.minYear,
+      journalFilter: params.journalFilter,
+      journalName: params.journalName,
+      titleKeyword: params.titleKeyword,
+      authorKeyword: params.authorKeyword,
+    });
+    const explicitNull = searchHashInput({
+      query: params.query,
+      maxK: params.maxK,
+      minYear: params.minYear,
+      journalFilter: params.journalFilter,
+      journalName: params.journalName,
+      titleKeyword: params.titleKeyword,
+      authorKeyword: params.authorKeyword,
+      jel: null,
+    });
+    expect(absent).toHaveLength(7);
+    expect(explicitNull).toHaveLength(7);
+    expect(absent).toEqual(explicitNull);
+    expect(canonicalHash8(absent)).toBe(GOLDEN_PRE_JEL);
+    expect(canonicalHash8(explicitNull)).toBe(GOLDEN_PRE_JEL);
+  });
+
+  it("setting a jel filter changes the hash (8-element array) and appends the jel term last", () => {
+    const withJel = searchHashInput({
+      query: params.query,
+      maxK: params.maxK,
+      minYear: params.minYear,
+      journalFilter: params.journalFilter,
+      journalName: params.journalName,
+      titleKeyword: params.titleKeyword,
+      authorKeyword: params.authorKeyword,
+      jel: "J31",
+    });
+    expect(withJel).toHaveLength(8);
+    expect(withJel[7]).toEqual(["jel", "J31"]);
+    expect(searchHash({ ...params, jel: "J31" })).not.toBe(GOLDEN_PRE_JEL);
+    // Distinct jel values give distinct hashes; both differ from the jel-less baseline.
+    expect(searchHash({ ...params, jel: "J31" })).not.toBe(searchHash({ ...params, jel: "C21" }));
   });
 });
 

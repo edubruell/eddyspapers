@@ -30,6 +30,7 @@ export default function SearchApp() {
     const [journalName, setJournalName] = useState("");
     const [titleKeyword, setTitleKeyword] = useState("");
     const [authorKeyword, setAuthorKeyword] = useState("");
+    const [jel, setJel] = useState("");
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
@@ -60,6 +61,7 @@ export default function SearchApp() {
                 const restoredJournalName  = first(saved.journal_name) ?? "";
                 const restoredTitleKeyword = first(saved.title_keyword) ?? "";
                 const restoredAuthorKeyword= first(saved.author_keyword) ?? "";
+                const restoredJel          = first(saved.jel) ?? "";
                 const jfRaw                = first(saved.journal_filter) ?? null;
 
                 // normalise minYear ("NA" -> empty)
@@ -73,6 +75,7 @@ export default function SearchApp() {
                 setJournalName(restoredJournalName);
                 setTitleKeyword(restoredTitleKeyword);
                 setAuthorKeyword(restoredAuthorKeyword);
+                setJel(restoredJel);
 
                 if (jfRaw) {
                     const activeLabels = jfRaw.split(",").map(s => s.trim());
@@ -142,6 +145,7 @@ export default function SearchApp() {
                 journalName: journalName || null,
                 titleKeyword: titleKeyword || null,
                 authorKeyword: authorKeyword || null,
+                jel: jel || null,
                 maxK: maxK
             });
 
@@ -169,7 +173,8 @@ export default function SearchApp() {
                 .join(","),
             journal_name: journalName || null,
             title_keyword: titleKeyword || null,
-            author_keyword: authorKeyword || null
+            author_keyword: authorKeyword || null,
+            jel: jel || null
         };
 
         try {
@@ -185,31 +190,11 @@ export default function SearchApp() {
 
     return (
         <>
-        <div className="mb-3 px-4 text-center">
-            <a
-                href="https://econpeople.eduard-bruell.de"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="
-                    inline-block max-w-full rounded-lg border border-green-300 bg-green-100/80
-                    px-4 py-2 text-xs leading-5 text-green-900
-                    hover:bg-green-100 hover:border-green-400 transition-colors
-                "
-            >
-                <span className="mr-1.5 inline-block align-middle rounded-full bg-green-600 text-white text-[10px] leading-none font-bold px-2 py-1 tracking-wide">
-                    NEW
-                </span>
-                <span className="align-middle">
-                    Check out the new semantic economist search on{" "}
-                    <span className="font-semibold underline whitespace-nowrap">econpeople.eduard&#8209;bruell.de</span>
-                </span>
-            </a>
-        </div>
         <div
             className={
                 hasSearched
                     ? "flex flex-col md:flex-row h-full gap-3"
-                    : "flex justify-center pt-6 px-4"
+                    : "flex justify-center pt-1 px-4"
             }
         >
             {/* LEFT COLUMN */}
@@ -249,6 +234,8 @@ export default function SearchApp() {
                         setTitleKeyword={setTitleKeyword}
                         authorKeyword={authorKeyword}
                         setAuthorKeyword={setAuthorKeyword}
+                        jel={jel}
+                        setJel={setJel}
                         categories={CATEGORY_DEFS}
                         selectedCats={selectedCats}
                         onToggleCategory={toggleCategory}

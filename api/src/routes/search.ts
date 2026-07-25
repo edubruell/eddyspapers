@@ -65,6 +65,7 @@ const savedParamsOf = (b: SearchBody): SavedSearchParams => ({
   journalName: b.journal_name ?? null,
   titleKeyword: b.title_keyword ?? null,
   authorKeyword: b.author_keyword ?? null,
+  jel: b.jel ?? null,
 });
 
 const semanticParamsOf = (b: SearchBody): SemanticParams => ({
@@ -132,12 +133,6 @@ searchRoute.post("/save", requireKey("rest"), async (c) => {
   if (body === null) return c.json({ error: "Invalid JSON body" }, 400);
   const parsed = searchBodySchema.safeParse(body);
   if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
-  // Saved searches hash the seven classic params; silently dropping a jel
-  // filter on reload would misrepresent the saved result set, so reject until
-  // the hash/appdata schema learns the field.
-  if (parsed.data.jel) {
-    return c.json({ error: "jel filter is not yet supported for saved searches" }, 400);
-  }
 
   const db = await getCorpusDb();
   const results = finalize(await semanticSearch(db, semanticParamsOf(parsed.data)));
@@ -166,6 +161,7 @@ searchRoute.get("/:hash", requireKey("rest"), async (c) => {
     journal_name: saved.journalName,
     title_keyword: saved.titleKeyword,
     author_keyword: saved.authorKeyword,
+    jel: saved.jel,
     created_at: saved.createdAt,
     results: finalize(saved.results),
   });

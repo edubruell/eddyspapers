@@ -65,6 +65,16 @@ export default function ResultCard({ paper }) {
                         {paper.journal}{" "}
                         {paper.year ? `(${paper.year})` : null}
                     </p>
+                    {paper.doi && (
+                        <a
+                            href={`https://doi.org/${paper.doi}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-sky-700 hover:underline break-all"
+                        >
+                            doi.org/{paper.doi}
+                        </a>
+                    )}
                 </div>
 
                 <div className="text-right text-[11px] text-stone-500 whitespace-nowrap">

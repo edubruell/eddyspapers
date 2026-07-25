@@ -42,6 +42,7 @@ const params: SavedSearchParams = {
   journalName: null,
   titleKeyword: null,
   authorKeyword: null,
+  jel: null,
 };
 
 const paper = (h: string, sim: number): SemanticResult => ({
@@ -52,6 +53,7 @@ const paper = (h: string, sim: number): SemanticResult => ({
   journal: "j",
   category: "c",
   url: null,
+  doi: null,
   bib_tex: null,
   abstract: null,
   similarity: sim,

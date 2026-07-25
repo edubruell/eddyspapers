@@ -27,6 +27,7 @@ export async function searchPapers({
                                        journalName,
                                        titleKeyword,
                                        authorKeyword,
+                                       jel,
                                        maxK = 100
                                    }) {
     const payload = {
@@ -38,7 +39,8 @@ export async function searchPapers({
             : null,
         journal_name: journalName || null,
         title_keyword: titleKeyword || null,
-        author_keyword: authorKeyword || null
+        author_keyword: authorKeyword || null,
+        jel: jel || null
     };
 
     const res = await fetch(`${API_BASE}/search`, {
@@ -176,6 +178,17 @@ export async function getHandleStats(handle) {
     }
 
     return stats;
+}
+
+let _jelCache = null;
+export async function getJelCodes() {
+    if (_jelCache) return _jelCache;
+    const res = await fetch(`${API_BASE}/stats/jel`, {
+        headers: apiHeaders(false)
+    });
+    await check(res);
+    _jelCache = await res.json();
+    return _jelCache;
 }
 
 export async function getJournalStats() {

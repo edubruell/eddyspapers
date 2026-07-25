@@ -20,8 +20,11 @@ const SEQUENCES: Record<string, string> = {
 
 // results JSON (src) -> TEXT (appdata): an explicit CAST keeps the copy type-clean.
 const COPY_SQL: Record<string, string> = {
+  // Explicit column list: the target gained a `jel` column (M8 surfacing) that the old
+  // corpus-embedded source lacks, so a positional SELECT * would mis-align. Migrated rows
+  // keep jel NULL.
   saved_searches:
-    "INSERT INTO saved_searches SELECT hash, query, max_k, min_year, journal_filter, journal_name, title_keyword, author_keyword, CAST(results AS VARCHAR), created_at FROM src.saved_searches",
+    "INSERT INTO saved_searches (hash, query, max_k, min_year, journal_filter, journal_name, title_keyword, author_keyword, results, created_at) SELECT hash, query, max_k, min_year, journal_filter, journal_name, title_keyword, author_keyword, CAST(results AS VARCHAR), created_at FROM src.saved_searches",
   search_logs: "INSERT INTO search_logs SELECT * FROM src.search_logs",
   person_search_logs: "INSERT INTO person_search_logs SELECT * FROM src.person_search_logs",
   saved_person_searches:

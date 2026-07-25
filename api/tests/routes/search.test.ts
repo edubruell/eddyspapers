@@ -93,6 +93,7 @@ describe("POST /search", () => {
       journalName: null,
       titleKeyword: null,
       authorKeyword: null,
+      jel: null,
     });
     const logged = await adb.query("SELECT * FROM search_logs WHERE query_hash = ?", [expected]);
     expect(logged.length).toBe(1);
@@ -136,11 +137,36 @@ describe("POST /search jel filter", () => {
     },
   );
 
-  it("POST /search/save with jel returns the specific 400", async () => {
-    const res = await post("/search/save", { query: "x", max_k: 5, jel: "J31" });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toMatch(/jel filter is not yet supported for saved searches/);
+  it("POST /search/save persists jel and GET /search/:hash restores it", async () => {
+    const save = await post("/search/save", { query: "jel roundtrip", max_k: 5, jel: "J31" });
+    expect(save.status).toBe(200);
+    const { hash } = (await save.json()) as { hash: string };
+
+    const load = await app.request(`/search/${hash}`);
+    const body = (await load.json()) as { jel: string | null };
+    expect(body.jel).toBe("J31");
+  });
+
+  it("a jel filter changes the saved-search hash; jel-less hashes are unchanged", async () => {
+    const withJel = await post("/search/save", { query: "hashcheck", max_k: 5, jel: "J31" });
+    const without = await post("/search/save", { query: "hashcheck", max_k: 5 });
+    const a = (await withJel.json()) as { hash: string };
+    const b = (await without.json()) as { hash: string };
+    expect(a.hash).not.toBe(b.hash);
+    // The jel-less hash must equal the pre-jel formula (no field appended when absent).
+    const { searchHash } = await import("../../src/db/classic.js");
+    expect(b.hash).toBe(
+      searchHash({
+        query: "hashcheck",
+        maxK: 5,
+        minYear: null,
+        journalFilter: null,
+        journalName: null,
+        titleKeyword: null,
+        authorKeyword: null,
+        jel: null,
+      }),
+    );
   });
 
   it("POST /search/save without jel is unaffected", async () => {

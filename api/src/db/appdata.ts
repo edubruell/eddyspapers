@@ -102,10 +102,14 @@ export async function openAppDataDb(): Promise<AppDataDb> {
       journal_name TEXT,
       title_keyword TEXT,
       author_keyword TEXT,
+      jel TEXT,
       results TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // Backfill the jel column onto pre-existing appdata files (CREATE ... IF NOT EXISTS
+  // never alters an existing table). Idempotent; older rows keep jel NULL.
+  await conn.run("ALTER TABLE saved_searches ADD COLUMN IF NOT EXISTS jel TEXT");
   await conn.run(`
     CREATE TABLE IF NOT EXISTS search_logs (
       search_id INTEGER PRIMARY KEY,

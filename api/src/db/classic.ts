@@ -31,6 +31,7 @@ export interface SavedSearchParams {
   journalName: string | null;
   titleKeyword: string | null;
   authorKeyword: string | null;
+  jel: string | null;
 }
 
 export interface SavedSearch extends SavedSearchParams {
@@ -52,8 +53,8 @@ export async function saveSearch(
   if (existing.length === 0) {
     await db.run(
       `INSERT INTO saved_searches
-         (hash, query, max_k, min_year, journal_filter, journal_name, title_keyword, author_keyword, results)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (hash, query, max_k, min_year, journal_filter, journal_name, title_keyword, author_keyword, jel, results)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         hash,
         p.query,
@@ -63,6 +64,7 @@ export async function saveSearch(
         p.journalName,
         p.titleKeyword,
         p.authorKeyword,
+        p.jel,
         JSON.stringify(results),
       ],
     );
@@ -83,6 +85,7 @@ export async function getSavedSearch(db: AppDataDb, hash: string): Promise<Saved
     journalName: optStr(r.journal_name),
     titleKeyword: optStr(r.title_keyword),
     authorKeyword: optStr(r.author_keyword),
+    jel: optStr(r.jel),
     createdAt: String(r.created_at),
     results: JSON.parse(String(r.results)) as SemanticResult[],
   };

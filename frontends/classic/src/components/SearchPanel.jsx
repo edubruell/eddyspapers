@@ -1,6 +1,7 @@
 import { useState } from "react";
 import SearchBox from "./SearchBox.jsx";
 import CategoryPills from "./CategoryPills.jsx";
+import JelPicker from "./JelPicker.jsx";
 
 export default function SearchPanel({
                                         query,
@@ -16,10 +17,13 @@ export default function SearchPanel({
                                         setTitleKeyword,
                                         authorKeyword,
                                         setAuthorKeyword,
+                                        jel,
+                                        setJel,
                                         maxK,
                                         setMaxK,
                                         onSearch,
-                                        lastUpdated
+                                        lastUpdated,
+                                        hasSearched
                                     }) {
     const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -45,6 +49,7 @@ export default function SearchPanel({
                     <SearchBox
                         value={query}
                         onChange={setQuery}
+                        rows={hasSearched ? 3 : 4}
                         onKeyDown={(e) => {
                             if ((e.metaKey || e.ctrlKey) && e.key === "Enter") onSearch();
                         }}
@@ -165,6 +170,9 @@ export default function SearchPanel({
                                 className="w-full rounded-md border border-stone-300 bg-white px-2 py-1 text-sm"
                             />
                         </div>
+
+                        {/* JEL codes */}
+                        <JelPicker value={jel} onChange={setJel} />
 
                     </div>
                 )}

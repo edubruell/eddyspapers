@@ -50,6 +50,32 @@ describe("corpus stats", () => {
     for (let i = 1; i < rows.length; i++) expect(rows[i - 1].n).toBeGreaterThanOrEqual(rows[i].n);
   });
 
+  it("GET /stats/jel returns the taxonomy sorted by code with a known root row", async () => {
+    const res = await app.request("/stats/jel");
+    expect(res.status).toBe(200);
+    const rows = (await res.json()) as { code: string; label: string | null; level: number; parent: string | null }[];
+    expect(Array.isArray(rows)).toBe(true);
+    expect(rows.length).toBeGreaterThan(0);
+
+    // Shape of the first row.
+    expect(typeof rows[0].code).toBe("string");
+    expect(typeof rows[0].level).toBe("number");
+
+    // Ordered by code (ascending) so each parent sorts before its children.
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i - 1].code <= rows[i].code).toBe(true);
+    }
+
+    // A known AEA root row: "A" is level-1 with no parent; its "A1" child points back to it.
+    const a = rows.find((r) => r.code === "A");
+    expect(a).toBeDefined();
+    expect(a?.level).toBe(1);
+    expect(a?.parent).toBeNull();
+    expect(typeof a?.label).toBe("string");
+    const a1 = rows.find((r) => r.code === "A1");
+    expect(a1?.parent).toBe("A");
+  });
+
   it("GET /stats/last_updated is unauthenticated and shaped {last_updated}", async () => {
     const res = await app.request("/stats/last_updated");
     expect(res.status).toBe(200);

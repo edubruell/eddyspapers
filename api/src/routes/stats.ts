@@ -55,6 +55,25 @@ statsRoute.get("/journals", requireKey("rest"), async (c) => {
   return c.json(rows.map((r) => ({ journal: r.journal as string | null, n: Number(r.n) })));
 });
 
+// ── JEL taxonomy for the classic advanced-filter picker. The full AEA tree (levels 1–3
+// with parent links) so the frontend can offer a searchable, hierarchical picker instead
+// of a raw code box. Ordering by code sorts each parent immediately before its children
+// (e.g. "J3" < "J31" < "J38" < "J4"). Reference data, cacheable client-side.
+statsRoute.get("/jel", requireKey("rest"), async (c) => {
+  const db = await getCorpusDb();
+  const rows = await db.query(
+    "SELECT code, label, level, parent FROM jel_codes ORDER BY code",
+  );
+  return c.json(
+    rows.map((r) => ({
+      code: r.code as string,
+      label: r.label as string | null,
+      level: Number(r.level),
+      parent: r.parent as string | null,
+    })),
+  );
+});
+
 statsRoute.get("/categories", requireKey("rest"), async (c) => {
   const db = await getCorpusDb();
   const rows = await db.query(
