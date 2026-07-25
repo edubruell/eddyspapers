@@ -15,7 +15,7 @@ container_backfill_snapshot(
 \arguments{
 \item{db_path}{Corpus DuckDB. Defaults to config$db_folder/articles.duckdb}
 
-\item{works_glob}{Local works parquet glob from \code{pull_openalex_works()}}
+\item{works_glob}{Local works parquet glob from \code{pull_openalex_source_works()}}
 
 \item{srcmap}{Tibble (journal, src_id) from \code{resolve_container_sources()}}
 

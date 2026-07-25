@@ -147,50 +147,30 @@ oa_meta_chunks <- function(con, files_per_chunk = 60L) {
     unname()
 }
 
-#' Pull OpenAlex work metrics for the corpus DOIs into local parquet
-#'
-#' Sweeps the whole `works` snapshot (partitioned by `updated_date`), projecting
-#' the flat metric columns and keeping only rows whose DOI is in the corpus set.
-#' Each part-file chunk runs in a short-lived `processx` worker; the parent polls
-#' for the chunk's atomically-renamed output and, on a `deadline_s` timeout,
-#' hard-kills the worker and retries on a fresh process WITHOUT waiting for it to
-#' be reaped — httpfs S3 reads intermittently stall on a dead TCP connection that
-#' neither `http_timeout` nor SIGKILL clears promptly, and waiting for the reap
-#' is what turned earlier pulls into multi-hour hangs. Completed chunks are
-#' skipped on resume.
-#'
-#' @param dois_path Corpus DOI parquet from `export_corpus_dois()`
-#' @param out_dir Directory for per-chunk parquet files
-#' @param files_per_chunk Max part files per chunk (default 60)
-#' @param deadline_s Per-attempt watchdog deadline in seconds (default 300)
-#' @param retries Max attempts per chunk (default 8)
-#' @param threads DuckDB threads per worker (default 4)
-#' @param con Optional DuckDB connection for the file listing
-#' @return `out_dir` (invisibly)
-#' @export
-pull_openalex_metrics <- function(dois_path, out_dir, files_per_chunk = 60L,
-                                  deadline_s = 300, retries = 8L, threads = 4L,
-                                  con = NULL) {
+# Shared watchdog runner for any snapshot pull. For each {name, globs} chunk it
+# writes the COPY SQL (built by `sql_of(globs, out_tmp)`) to a file, runs it in a
+# short-lived `processx` worker, polls for the chunk's atomically-renamed output
+# and, on a `deadline_s` timeout, hard-kills the worker and retries on a fresh
+# process WITHOUT waiting for the reap — httpfs S3 reads intermittently stall on
+# a dead TCP connection that neither `http_timeout` nor SIGKILL clears promptly,
+# and waiting for the reap is what turned earlier pulls into multi-hour hangs.
+# The worker (`pull_oa_meta_chunk.R`) is SQL-agnostic, so any projection/filter
+# reuses this identical stall-proof loop. Completed chunks are skipped on resume.
+oa_pull_chunks <- function(chunks, out_dir, sql_of, deadline_s = 300,
+                           retries = 8L, threads = 4L) {
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  if (is.null(con)) {
-    con <- DBI::dbConnect(duckdb::duckdb())
-    oa_s3_setup(con)
-    on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  }
   worker <- system.file("scripts", "pull_oa_meta_chunk.R",
                         package = "eddyspapersbackend")
   if (!nzchar(worker)) stop("pull_oa_meta_chunk.R worker script not found")
-  dois_path <- normalizePath(dois_path, winslash = "/", mustWork = TRUE)
   sql_dir <- file.path(out_dir, ".sql"); dir.create(sql_dir, showWarnings = FALSE)
-  chunks <- oa_meta_chunks(con, files_per_chunk)
-  info("OpenAlex metrics pull: ", length(chunks), " chunks -> ", out_dir)
+  info(length(chunks), " chunks -> ", out_dir)
 
   for (ch in chunks) {
     out <- file.path(out_dir, paste0(ch$name, ".parquet"))
     if (file.exists(out)) { info("  skip ", ch$name, " (exists)"); next }
     tmp <- paste0(out, ".tmp")
     sql_file <- file.path(sql_dir, paste0(ch$name, ".sql"))
-    writeLines(oa_meta_copy_sql(ch$globs, tmp, dois_path), sql_file)
+    writeLines(sql_of(ch$globs, tmp), sql_file)
     ok <- FALSE
     for (attempt in seq_len(retries)) {
       if (file.exists(out)) { ok <- TRUE; break }  # a prior attempt may have raced past the deadline
@@ -216,6 +196,38 @@ pull_openalex_metrics <- function(dois_path, out_dir, files_per_chunk = 60L,
     if (!ok) warn("  GAVE UP ", ch$name)
   }
   invisible(out_dir)
+}
+
+#' Pull OpenAlex work metrics for the corpus DOIs into local parquet
+#'
+#' Sweeps the whole `works` snapshot (partitioned by `updated_date`), projecting
+#' the flat metric columns and keeping only rows whose DOI is in the corpus set,
+#' via the shared stall-proof watchdog runner (`oa_pull_chunks`). Completed
+#' chunks are skipped on resume.
+#'
+#' @param dois_path Corpus DOI parquet from `export_corpus_dois()`
+#' @param out_dir Directory for per-chunk parquet files
+#' @param files_per_chunk Max part files per chunk (default 60)
+#' @param deadline_s Per-attempt watchdog deadline in seconds (default 300)
+#' @param retries Max attempts per chunk (default 8)
+#' @param threads DuckDB threads per worker (default 4)
+#' @param con Optional DuckDB connection for the file listing
+#' @return `out_dir` (invisibly)
+#' @export
+pull_openalex_metrics <- function(dois_path, out_dir, files_per_chunk = 60L,
+                                  deadline_s = 300, retries = 8L, threads = 4L,
+                                  con = NULL) {
+  if (is.null(con)) {
+    con <- DBI::dbConnect(duckdb::duckdb())
+    oa_s3_setup(con)
+    on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  }
+  dois_path <- normalizePath(dois_path, winslash = "/", mustWork = TRUE)
+  chunks <- oa_meta_chunks(con, files_per_chunk)
+  info("OpenAlex metrics pull: ", length(chunks), " chunks")
+  oa_pull_chunks(chunks, out_dir,
+    sql_of = function(globs, tmp) oa_meta_copy_sql(globs, tmp, dois_path),
+    deadline_s = deadline_s, retries = retries, threads = threads)
 }
 
 # --- Build the article_openalex table ---------------------------------------

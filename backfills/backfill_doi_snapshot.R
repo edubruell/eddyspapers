@@ -51,7 +51,7 @@ do_pull <- function() {
   map <- read_srcmap()
   ids <- unique(map$src_id[!is.na(map$src_id)])
   info("Pulling works for ", length(ids), " sources into ", works_dir)
-  pull_openalex_works(ids, works_dir)
+  pull_openalex_source_works(ids, works_dir)
 }
 do_match <- function() {
   map <- read_srcmap()

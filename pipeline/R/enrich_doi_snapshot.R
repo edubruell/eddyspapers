@@ -48,6 +48,31 @@ container_doi_less_journals <- function(db_path, hosts = NULL) {
     tibble::as_tibble()
 }
 
+#' DOI-less non-series journals in the corpus (widened past publisher hosts)
+#'
+#' All journals (with paper counts) of DOI-less, **non-series** articles carrying
+#' a title and year — the Phase-B title-match population. Unlike
+#' `container_doi_less_journals()` there is no host filter: working-paper series
+#' (`is_series`) are the only exclusion, since they are ~never DOI'd. Nearly all
+#' of these journals resolve to OpenAlex sources, so the title matcher is not
+#' limited to the eight publisher hosts Track A targeted.
+#'
+#' @param db_path Corpus DuckDB (read-only)
+#' @param min_papers Keep journals with at least this many such papers. The tail
+#'   of tiny journals resolves noisily and adds little recall; default 20
+#' @return Tibble (journal, n) ordered by descending count
+#' @export
+doi_less_journals <- function(db_path, min_papers = 20L) {
+  con <- get_db_con(db_path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbGetQuery(con, sprintf("
+    SELECT journal, count(*) AS n FROM articles
+    WHERE doi IS NULL AND is_series = FALSE
+      AND journal IS NOT NULL AND title IS NOT NULL AND year IS NOT NULL
+    GROUP BY journal HAVING count(*) >= %d ORDER BY n DESC", as.integer(min_papers))) |>
+    tibble::as_tibble()
+}
+
 # --- Journal -> OpenAlex source resolution ----------------------------------
 
 # Normalized-name SQL for a column: lowercase, '&' -> ' and ', drop
@@ -135,65 +160,61 @@ resolve_container_sources <- function(journals, sources_path) {
 
 # --- Works pull -------------------------------------------------------------
 
+# Flat projection + source filter for the title-match works pull: resolver-
+# stripped/lowercased DOI, title, year, source id — the columns
+# `snapshot_match_container_dois()` needs. Single source of truth for the pull
+# SQL, handed to the SQL-agnostic watchdog worker via `oa_pull_chunks()`.
+oa_source_works_copy_sql <- function(globs, out_tmp, source_ids) {
+  globlist <- paste(sprintf("'%s'", globs), collapse = ",")
+  idlist   <- paste(sprintf("'%s'", source_ids), collapse = ",")
+  sprintf("COPY (
+    SELECT id AS openalex_id,
+           lower(regexp_replace(doi,'^https?://(www\\.|dx\\.)?doi\\.org/','')) AS doi,
+           title,
+           publication_year AS year,
+           primary_location.source.id AS src_id
+    FROM read_parquet([%s], filename=false)
+    WHERE type IN ('article','review')
+      AND doi IS NOT NULL AND title IS NOT NULL
+      AND primary_location.source.id IN (%s)
+  ) TO '%s' (FORMAT parquet)", globlist, idlist, out_tmp)
+}
+
 #' Pull OpenAlex works for given source ids into local parquet
 #'
 #' The works snapshot (~510M rows / 725 GB) is partitioned by `updated_date`,
-#' not venue, so there is no cheap prefix filter: a single projected scan reads
-#' the `primary_location.source.id` leaf across every partition. To bound the
-#' blast radius of a network failure the scan is chunked by update-month; each
-#' chunk writes its own file and is skipped on resume, so a failed month re-runs
-#' alone. Only `article`/`review` rows in the given sources are kept.
+#' not venue, so there is no cheap prefix filter: every partition is scanned,
+#' projecting the `primary_location.source.id` leaf and keeping only
+#' `article`/`review` rows in the given sources. The scan runs through the shared
+#' stall-proof watchdog runner (`oa_pull_chunks`) — part-file chunking, a
+#' short-lived processx worker per chunk, atomic rename, and hard-kill/retry on
+#' the dead-socket S3 stall — the same machinery Track B's metrics pull uses.
+#' Completed chunks are skipped on resume.
 #'
 #' @param source_ids Character vector of OpenAlex source ids to keep
 #' @param out_dir Directory for per-chunk parquet files
-#' @param years Update-years to sweep. Defaults 2016..current
-#' @param con Optional DuckDB connection
+#' @param files_per_chunk Max part files per chunk (default 60)
+#' @param deadline_s Per-attempt watchdog deadline in seconds (default 300)
+#' @param retries Max attempts per chunk (default 8)
+#' @param threads DuckDB threads per worker (default 4)
+#' @param con Optional DuckDB connection for the file listing
 #' @return `out_dir` (invisibly)
 #' @export
-pull_openalex_works <- function(source_ids, out_dir, years = NULL, con = NULL) {
+pull_openalex_source_works <- function(source_ids, out_dir, files_per_chunk = 60L,
+                                       deadline_s = 300, retries = 8L, threads = 4L,
+                                       con = NULL) {
   stopifnot(length(source_ids) > 0)
-  if (is.null(years)) years <- 2016:as.integer(format(Sys.Date(), "%Y"))
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   if (is.null(con)) {
     con <- DBI::dbConnect(duckdb::duckdb())
+    oa_s3_setup(con)
     on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   }
-  oa_s3_setup(con)
-  idlist <- paste(sprintf("'%s'", source_ids), collapse = ",")
-
-  chunks <- c(
-    list(list(name = "pre2025",
-              globs = sprintf("%s/works/updated_date=%d-*/*.parquet", OA_S3_PARQUET,
-                              years[years < 2025]))),
-    unlist(lapply(years[years >= 2025], function(y) lapply(sprintf("%02d", 1:12), function(m)
-      list(name = sprintf("%d-%s", y, m),
-           globs = sprintf("%s/works/updated_date=%d-%s-*/*.parquet", OA_S3_PARQUET, y, m)))),
-      recursive = FALSE))
-
-  for (ch in chunks) {
-    out <- file.path(out_dir, paste0(ch$name, ".parquet"))
-    if (file.exists(out)) { info("  skip ", ch$name, " (exists)"); next }
-    tmp <- paste0(out, ".tmp")
-    globlist <- paste(sprintf("'%s'", ch$globs), collapse = ",")
-    sql <- sprintf("COPY (
-      SELECT id, doi, title, publication_year AS year, type,
-             primary_location.source.id AS src_id,
-             primary_location.source.display_name AS src_name,
-             cited_by_count, is_retracted
-      FROM read_parquet([%s], filename=false)
-      WHERE type IN ('article','review')
-        AND primary_location.source.id IN (%s)
-    ) TO '%s' (FORMAT parquet)", globlist, idlist, tmp)
-    t0 <- Sys.time()
-    ok <- tryCatch({ DBI::dbExecute(con, sql); TRUE },
-                   error = function(e) { info("  ERROR ", ch$name, ": ", conditionMessage(e)); FALSE })
-    if (ok) {
-      file.rename(tmp, out)  # rename-on-success: partial writes never look done
-      info("  done ", ch$name, " in ",
-           round(as.numeric(Sys.time() - t0, units = "mins"), 1), " min")
-    } else if (file.exists(tmp)) file.remove(tmp)
-  }
-  invisible(out_dir)
+  ids <- unique(source_ids[!is.na(source_ids)])
+  chunks <- oa_meta_chunks(con, files_per_chunk)
+  info("OpenAlex source-works pull: ", length(ids), " sources, ", length(chunks), " chunks")
+  oa_pull_chunks(chunks, out_dir,
+    sql_of = function(globs, tmp) oa_source_works_copy_sql(globs, tmp, ids),
+    deadline_s = deadline_s, retries = retries, threads = threads)
 }
 
 # --- Snapshot title+year match ----------------------------------------------
@@ -248,7 +269,7 @@ oa_content_key_sql <- function(col) {
 #' OpenAlex's foreign-DOI noise, data-driven).
 #'
 #' @param db_path Corpus DuckDB (read-only)
-#' @param works_glob Local works parquet glob from `pull_openalex_works()`
+#' @param works_glob Local works parquet glob from `pull_openalex_source_works()`
 #' @param srcmap Tibble (journal, src_id) from `resolve_container_sources()`
 #' @param min_content_tokens Min content words in the shorter title (default 3)
 #' @param prefix_min_share Min share of a source's DOIs a prefix must cover to
@@ -339,7 +360,7 @@ snapshot_match_container_dois <- function(db_path, works_glob, srcmap,
 #' `openalex`. Idempotent: existing ledger handles are kept, new ones appended.
 #'
 #' @param db_path Corpus DuckDB. Defaults to config$db_folder/articles.duckdb
-#' @param works_glob Local works parquet glob from `pull_openalex_works()`
+#' @param works_glob Local works parquet glob from `pull_openalex_source_works()`
 #' @param srcmap Tibble (journal, src_id) from `resolve_container_sources()`
 #' @param state_path Ledger parquet. Defaults to {pqt_patch}/openalex_attempts.parquet
 #' @param ... Guard parameters forwarded to `snapshot_match_container_dois()`

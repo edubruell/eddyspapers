@@ -18,7 +18,7 @@ snapshot_match_container_dois(
 \arguments{
 \item{db_path}{Corpus DuckDB (read-only)}
 
-\item{works_glob}{Local works parquet glob from \code{pull_openalex_works()}}
+\item{works_glob}{Local works parquet glob from \code{pull_openalex_source_works()}}
 
 \item{srcmap}{Tibble (journal, src_id) from \code{resolve_container_sources()}}
 

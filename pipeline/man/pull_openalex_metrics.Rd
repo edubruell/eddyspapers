@@ -34,12 +34,7 @@ pull_openalex_metrics(
 }
 \description{
 Sweeps the whole \code{works} snapshot (partitioned by \code{updated_date}), projecting
-the flat metric columns and keeping only rows whose DOI is in the corpus set.
-Each part-file chunk runs in a short-lived \code{processx} worker; the parent polls
-for the chunk's atomically-renamed output and, on a \code{deadline_s} timeout,
-hard-kills the worker and retries on a fresh process WITHOUT waiting for it to
-be reaped — httpfs S3 reads intermittently stall on a dead TCP connection that
-neither \code{http_timeout} nor SIGKILL clears promptly, and waiting for the reap
-is what turned earlier pulls into multi-hour hangs. Completed chunks are
-skipped on resume.
+the flat metric columns and keeping only rows whose DOI is in the corpus set,
+via the shared stall-proof watchdog runner (\code{oa_pull_chunks}). Completed
+chunks are skipped on resume.
 }
