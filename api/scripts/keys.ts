@@ -5,7 +5,7 @@
  * process that opens appdata.duckdb (DuckDB's file lock is exclusive), so keys are minted,
  * listed, and revoked through it rather than by opening the DB directly.
  *
- *   npm run keys -- new  "Alice (ZEW)" --scopes rest,mcp,lit_search
+ *   npm run keys -- new  "Alice (ZEW)" --scopes rest,mcp,lit_search [--tools find_papers,keyword_search]
  *   npm run keys -- list [--all]
  *   npm run keys -- revoke <id-or-hash-prefix>
  *
@@ -46,18 +46,30 @@ async function req(method: string, path: string, body?: unknown): Promise<unknow
   return data;
 }
 
+const csvFlag = (args: string[], name: string): string[] | undefined => {
+  const raw = getFlag(args, name);
+  return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+};
+
 async function cmdNew(args: string[]): Promise<void> {
   const label = args.find((a) => !a.startsWith("--"));
-  if (!label) die('Usage: keys new "<label>" [--scopes rest,mcp,lit_search,admin]');
-  const scopesFlag = getFlag(args, "scopes");
-  const scopes = scopesFlag ? scopesFlag.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
-  const data = (await req("POST", "/admin/keys", { label, scopes })) as {
+  if (!label)
+    die('Usage: keys new "<label>" [--scopes rest,mcp,lit_search,admin] [--tools find_papers,keyword_search,...]');
+  const scopes = csvFlag(args, "scopes");
+  // --tools omitted → all MCP tools (server stores null); --tools with a list → allowlist.
+  const tools = csvFlag(args, "tools");
+  const data = (await req("POST", "/admin/keys", { label, scopes, tools })) as {
     key: string;
     id: string;
     scopes: string[];
+    tools: string[] | null;
   };
+  // null = all tools (no marker); an array (incl. []) = an explicit allowlist.
+  const toolsNote = Array.isArray(data.tools)
+    ? `  tools=[${data.tools.length ? data.tools.join(", ") : "none"}]`
+    : "";
   process.stdout.write(
-    `Created key ${data.id} [${data.scopes.join(", ")}] for "${label}".\n\n` +
+    `Created key ${data.id} [${data.scopes.join(", ")}]${toolsNote} for "${label}".\n\n` +
       `  ${data.key}\n\n` +
       `Store it now — it is not recoverable.\n`,
   );
@@ -78,6 +90,7 @@ async function cmdList(args: string[]): Promise<void> {
       label: string;
       scopes: string[];
       rate_limit_overrides: Record<string, number> | null;
+      tools: string[] | null;
       created_at: string;
       revoked_at: string | null;
     }[];
@@ -89,7 +102,9 @@ async function cmdList(args: string[]): Promise<void> {
   for (const k of data.keys) {
     const state = k.revoked_at ? `revoked ${k.revoked_at}` : "active";
     const over = k.rate_limit_overrides ? `  overrides=${JSON.stringify(k.rate_limit_overrides)}` : "";
-    process.stdout.write(`${k.id}  [${k.scopes.join(",")}]  ${state}  ${k.label}${over}\n`);
+    // null tools = all MCP tools (no marker); a list (incl. []) = the allowlist.
+    const tools = Array.isArray(k.tools) ? `  tools=[${k.tools.length ? k.tools.join(",") : "none"}]` : "";
+    process.stdout.write(`${k.id}  [${k.scopes.join(",")}]  ${state}  ${k.label}${over}${tools}\n`);
   }
 }
 

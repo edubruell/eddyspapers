@@ -60,6 +60,10 @@ const CSV_COLUMNS = [
   "cites_internal",
   "cites_total",
   "percentile",
+  "oa_cites",
+  "fwci",
+  "retracted",
+  "oa_url",
 ] as const;
 
 function csvCell(value: unknown): string {
@@ -102,6 +106,11 @@ function buildCsv(papers: Record<string, Paper>, sections: Section[]): string {
       cites_internal: p.stats?.cites_internal ?? "",
       cites_total: p.stats?.cites_total ?? "",
       percentile: p.stats?.percentile ?? "",
+      oa_cites: p.openalex?.oa_cited_by_count ?? "",
+      fwci: p.openalex?.fwci ?? "",
+      // Flag-and-keep: retracted papers stay in the deliverable, marked, never silently dropped.
+      retracted: p.openalex?.is_retracted ? "RETRACTED" : "",
+      oa_url: p.openalex?.oa_url ?? "",
     };
     return CSV_COLUMNS.map((c) => csvCell(cells[c])).join(",");
   });

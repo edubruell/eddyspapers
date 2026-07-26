@@ -1,21 +1,3 @@
-capture_events <- function(expr) {
-  tmp <- tempfile()
-  con <- file(tmp, "w")
-  old <- .sandbox_state$fd3
-  .sandbox_state$fd3 <- con
-  on.exit({
-    try(close(con), silent = TRUE)
-    .sandbox_state$fd3 <- old
-    unlink(tmp)
-  })
-  force(expr)
-  flush(con)
-  close(con)
-  .sandbox_state$fd3 <- old
-  lines <- readLines(tmp)
-  lapply(lines[nchar(lines) > 0], jsonlite::fromJSON)
-}
-
 test_that("emit_progress produces event with type=progress and correct label", {
   events <- capture_events(emit_progress("hello"))
   expect_length(events, 1)

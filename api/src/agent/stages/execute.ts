@@ -54,6 +54,7 @@ export async function executeScript(
 
         case "paper": {
           if (raw.similarity != null) similarityMap.set(raw.handle, raw.similarity);
+          const oa = raw.openalex;
           const paper: Paper = {
             handle: raw.handle,
             title: raw.title,
@@ -65,6 +66,23 @@ export async function executeScript(
             doi: raw.doi ?? null,
             abstract: raw.abstract ?? null,
             bibtex: "",
+            // Coerce the schema's `T | null | undefined` fields to the Paper type's `T | null`;
+            // attach the key only when a block was emitted (see Paper.openalex rationale).
+            ...(oa
+              ? {
+                  openalex: {
+                    openalex_id: oa.openalex_id,
+                    oa_cited_by_count: oa.oa_cited_by_count ?? null,
+                    fwci: oa.fwci ?? null,
+                    is_retracted: oa.is_retracted ?? null,
+                    is_oa: oa.is_oa ?? null,
+                    oa_url: oa.oa_url ?? null,
+                    oa_status: oa.oa_status ?? null,
+                    primary_topic: oa.primary_topic ?? null,
+                    primary_field: oa.primary_field ?? null,
+                  },
+                }
+              : {}),
           };
           papers[raw.handle] = paper;
           onEvent({ type: "paper", paper });

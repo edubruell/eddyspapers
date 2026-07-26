@@ -19,6 +19,8 @@ export interface KeyIdentity {
   label: string;
   scopes: Scope[];
   rateLimitOverrides: Record<string, number> | null;
+  // MCP tool allowlist (M9 G). null = all tools; otherwise only these cheap tools register.
+  tools: string[] | null;
 }
 
 export function hashKey(plaintext: string): string {
@@ -47,6 +49,7 @@ const rowToIdentity = (r: ApiKeyRow): KeyIdentity => ({
   label: r.label,
   scopes: r.scopes,
   rateLimitOverrides: r.rateLimitOverrides,
+  tools: r.tools,
 });
 
 const LEGACY_IDENTITY: KeyIdentity = {
@@ -54,6 +57,7 @@ const LEGACY_IDENTITY: KeyIdentity = {
   label: "legacy-password",
   scopes: [...ALL_SCOPES],
   rateLimitOverrides: null,
+  tools: null,
 };
 
 const RELOAD_TTL_MS = 30_000;

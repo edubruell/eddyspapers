@@ -37,6 +37,7 @@ const key = (overrides: Record<string, number> | null = null): KeyIdentity => ({
   label: "t",
   scopes: ["rest", "mcp"],
   rateLimitOverrides: overrides,
+  tools: null,
 });
 
 beforeEach(async () => {
@@ -82,5 +83,42 @@ describe("find_papers hourly cap at the boundary", () => {
 
     const b = await makeClient({ ...key({ find_papers: 1 }), id: "otherkey02" });
     expect((await b.callTool({ name: "find_papers", arguments: { query: "different key first prose query about trade flows" } })).isError).toBeFalsy();
+  });
+});
+
+describe("per-key MCP tool allowlist (M9 G)", () => {
+  // lit_search is always registered (it is gated by its own scope at call time, not by the
+  // per-key tool allowlist), so it appears regardless — the allowlist governs only the cheap tools.
+  const ALL_CHEAP = ["corpus_context", "find_papers", "find_people", "keyword_search", "verify_references"];
+  const toolNames = async (k: KeyIdentity | null): Promise<string[]> =>
+    (await (await makeClient(k)).listTools()).tools.map((t) => t.name).sort();
+
+  it("a null tools list exposes every cheap tool (plus lit_search)", async () => {
+    expect(await toolNames(key())).toEqual([...ALL_CHEAP, "lit_search"].sort());
+  });
+
+  it("an allowlist registers only the named cheap tools (lit_search still present)", async () => {
+    const restricted: KeyIdentity = { ...key(), tools: ["keyword_search", "corpus_context"] };
+    expect(await toolNames(restricted)).toEqual(["corpus_context", "keyword_search", "lit_search"]);
+  });
+
+  it("a gated-out tool cannot be called (it never registered)", async () => {
+    const restricted: KeyIdentity = { ...key(), tools: ["corpus_context"] };
+    const client = await makeClient(restricted);
+    const res = await client.callTool({
+      name: "find_papers",
+      arguments: { query: "prose query the caller should not be able to reach at all" },
+    });
+    expect(res.isError).toBe(true);
+    expect(semanticSearch).not.toHaveBeenCalled();
+  });
+
+  it("an empty allowlist exposes no cheap tools (only lit_search)", async () => {
+    const none: KeyIdentity = { ...key(), tools: [] };
+    expect(await toolNames(none)).toEqual(["lit_search"]);
+  });
+
+  it("a null key (gate disabled / stdio) exposes every tool", async () => {
+    expect(await toolNames(null)).toEqual([...ALL_CHEAP, "lit_search"].sort());
   });
 });

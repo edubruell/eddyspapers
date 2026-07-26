@@ -1,3 +1,5 @@
+import type { OpenAlexPaperMetrics } from "../search/openalex.js";
+
 export type Stage = "clarify" | "write" | "validate" | "execute" | "synthesize";
 
 export interface SectionRow {
@@ -48,6 +50,10 @@ export interface Paper {
   bibtex: string;
   stats?: PaperStats;
   versions?: string[];
+  // Whole-literature OpenAlex signals (retraction, open-access link, FWCI). Present only when
+  // the run's snapshot carries article_openalex and the paper matched a work; omitted otherwise
+  // so the synthesis <papers> JSON stays lean for the ~half of the corpus with no OpenAlex row.
+  openalex?: OpenAlexPaperMetrics | null;
 }
 
 export interface PersonEvidence {

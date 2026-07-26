@@ -2,6 +2,7 @@ import { pipe } from "effect";
 import * as A from "effect/Array";
 import type { CorpusDb } from "../db/corpus.js";
 import { embedQuery, vectorLiteral } from "./embed.js";
+import { OPENALEX_COLS, OPENALEX_JOIN, hasOpenAlexTable, rowToOpenAlex } from "./openalex.js";
 import type {
   BibEntry,
   KeywordField,
@@ -18,6 +19,16 @@ import type {
 // ports) selects and maps the same article columns without redefining them.
 export const PAPER_COLS =
   "a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.doi, a.bib_tex, a.abstract";
+
+// Compose the paper projection, opting into the OpenAlex metrics join when the snapshot
+// carries article_openalex. Callers splice `cols` into the SELECT and `join` after
+// `FROM articles a`; rowToPaper then finds the ox.* columns and attaches the openalex block.
+// On pre-Track-B snapshots both are the plain paper shape, so responses are unchanged.
+export async function paperSelect(db: CorpusDb): Promise<{ cols: string; join: string }> {
+  return (await hasOpenAlexTable(db))
+    ? { cols: `${PAPER_COLS}, ${OPENALEX_COLS}`, join: OPENALEX_JOIN }
+    : { cols: PAPER_COLS, join: "" };
+}
 
 // Filter fragments carry their bind values with them so WHERE assembly stays a
 // pure fold and user input never lands in the SQL string (the Plumber version
@@ -50,18 +61,23 @@ const whereClause = (fragments: Fragment[]): Fragment =>
         params: fragments.flatMap((f) => f.params),
       };
 
-export const rowToPaper = (r: Record<string, unknown>): PaperResult => ({
-  Handle: String(r.Handle),
-  title: (r.title as string | null) ?? null,
-  year: r.year == null ? null : Number(r.year),
-  authors: (r.authors as string | null) ?? null,
-  journal: (r.journal as string | null) ?? null,
-  category: (r.category as string | null) ?? null,
-  url: (r.url as string | null) ?? null,
-  doi: (r.doi as string | null) ?? null,
-  bib_tex: (r.bib_tex as string | null) ?? null,
-  abstract: (r.abstract as string | null) ?? null,
-});
+export const rowToPaper = (r: Record<string, unknown>): PaperResult => {
+  const base: PaperResult = {
+    Handle: String(r.Handle),
+    title: (r.title as string | null) ?? null,
+    year: r.year == null ? null : Number(r.year),
+    authors: (r.authors as string | null) ?? null,
+    journal: (r.journal as string | null) ?? null,
+    category: (r.category as string | null) ?? null,
+    url: (r.url as string | null) ?? null,
+    doi: (r.doi as string | null) ?? null,
+    bib_tex: (r.bib_tex as string | null) ?? null,
+    abstract: (r.abstract as string | null) ?? null,
+  };
+  // The openalex key rides along only when the query opted into the join (ox.* selected).
+  // Absent otherwise, keeping non-OpenAlex responses byte-identical to the Plumber shape.
+  return "openalex_id" in r ? { ...base, openalex: rowToOpenAlex(r) } : base;
+};
 
 // JEL inputs are codes or prefixes ("J31", "J3"); prefix LIKE covers both since
 // codes cap at letter+2 digits. Uppercase + shape-check here so raw callers
@@ -116,11 +132,13 @@ export async function semanticSearchWithVector(
   p: Omit<SemanticParams, "query">,
 ): Promise<SemanticResult[]> {
   const where = whereClause(paperFilters(p));
+  const { cols, join } = await paperSelect(db);
 
   const rows = await db.query(
-    `SELECT ${PAPER_COLS},
+    `SELECT ${cols},
             array_cosine_distance(a.embeddings, ${vectorLiteral(vec)}) AS similarity
      FROM articles a
+     ${join}
      ${where.sql}
      ORDER BY similarity ASC
      LIMIT ?`,
@@ -174,11 +192,16 @@ export async function keywordSearch(db: CorpusDb, p: KeywordParams): Promise<Key
   // handle_stats.handle is stored lowercase; articles.Handle is mixed case.
   const statsJoin =
     p.orderBy === "citations" ? "LEFT JOIN handle_stats hs ON hs.handle = LOWER(a.Handle)" : "";
+  const { cols, join } = await paperSelect(db);
 
+  // The count query omits both joins: they are LEFT JOINs (never drop a row) and each is
+  // one-row-per-`a.Handle` (handle_stats keyed by handle; article_openalex likewise — see
+  // enrich_openalex.R), so neither fans the row set out. If that invariant ever regresses,
+  // COUNT(*) would diverge from results.length and the joins would emit duplicate papers.
   const [countRows, rows] = await Promise.all([
     db.query(`SELECT COUNT(*) AS n FROM articles a ${where.sql}`, where.params),
     db.query(
-      `SELECT ${PAPER_COLS} FROM articles a ${statsJoin} ${where.sql} ${orderBy} LIMIT ? OFFSET ?`,
+      `SELECT ${cols} FROM articles a ${statsJoin} ${join} ${where.sql} ${orderBy} LIMIT ? OFFSET ?`,
       [...where.params, p.limit ?? 100, p.offset ?? 0],
     ),
   ]);
@@ -216,6 +239,7 @@ const lookupPaper = async (db: CorpusDb, sql: string, params: unknown[]): Promis
 
 const matchEntry = async (
   db: CorpusDb,
+  sel: { cols: string; join: string },
   e: BibEntry,
 ): Promise<{ status: VerifiedEntry["status"]; paper: PaperResult | null }> => {
   // Tier 1: direct handle lookup. LOWER() on both sides — RePEc handles are
@@ -225,7 +249,7 @@ const matchEntry = async (
   if (e.handle) {
     const paper = await lookupPaper(
       db,
-      `SELECT ${PAPER_COLS} FROM articles a WHERE LOWER(a.Handle) = LOWER(?)`,
+      `SELECT ${sel.cols} FROM articles a ${sel.join} WHERE LOWER(a.Handle) = LOWER(?)`,
       [e.handle],
     );
     if (paper) return { status: "handle_match", paper };
@@ -239,7 +263,7 @@ const matchEntry = async (
   if (titleKw) {
     const paper = await lookupPaper(
       db,
-      `SELECT ${PAPER_COLS} FROM articles a
+      `SELECT ${sel.cols} FROM articles a ${sel.join}
        WHERE a.year = ? AND LOWER(a.authors) LIKE ? ${LIKE_ESC} AND LOWER(a.title) LIKE ? ${LIKE_ESC}
        LIMIT 5`,
       [e.year, likeParam(author), likeParam(titleKw)],
@@ -252,7 +276,7 @@ const matchEntry = async (
   if (shortKw) {
     const paper = await lookupPaper(
       db,
-      `SELECT ${PAPER_COLS} FROM articles a
+      `SELECT ${sel.cols} FROM articles a ${sel.join}
        WHERE a.year BETWEEN ? AND ? AND LOWER(a.authors) LIKE ? ${LIKE_ESC} AND LOWER(a.title) LIKE ? ${LIKE_ESC}
        LIMIT 5`,
       [e.year - 1, e.year + 1, likeParam(author), likeParam(shortKw)],
@@ -297,9 +321,10 @@ const entryStats = async (db: CorpusDb, handle: string): Promise<VerifiedEntry["
 export async function verifyReferences(db: CorpusDb, entries: BibEntry[]): Promise<VerifiedEntry[]> {
   // Sequential on purpose: batches arrive tens-of-entries sized and each entry is
   // 1-3 indexed lookups; parallelising would just contend for the small pool.
+  const sel = await paperSelect(db);
   const out: VerifiedEntry[] = [];
   for (const entry of entries) {
-    const { status, paper } = await matchEntry(db, entry);
+    const { status, paper } = await matchEntry(db, sel, entry);
     out.push({
       entry,
       status,

@@ -21,6 +21,10 @@ export interface ApiKeyRow {
   label: string;
   scopes: Scope[];
   rateLimitOverrides: Record<string, number> | null;
+  // MCP tool allowlist (M9 G). null = every MCP tool (the default, backward-compatible);
+  // a name array = only those cheap tools are registered for this key. lit_search stays
+  // governed by its own scope, not this list.
+  tools: string[] | null;
   createdAt: string;
   revokedAt: string | null;
 }
@@ -33,6 +37,7 @@ export interface AppDataDb {
     label: string;
     scopes: Scope[];
     rateLimitOverrides?: Record<string, number> | null;
+    tools?: string[] | null;
   }): Promise<void>;
   revokeKey(hashPrefix: string): Promise<number>;
   listKeys(includeRevoked: boolean): Promise<ApiKeyRow[]>;
@@ -64,6 +69,7 @@ const toRow = (r: Record<string, unknown>): ApiKeyRow => ({
   rateLimitOverrides: r.rate_limit_overrides
     ? (JSON.parse(r.rate_limit_overrides as string) as Record<string, number>)
     : null,
+  tools: r.tools != null ? (JSON.parse(r.tools as string) as string[]) : null,
   createdAt: String(r.created_at),
   revokedAt: r.revoked_at != null ? String(r.revoked_at) : null,
 });
@@ -110,6 +116,9 @@ export async function openAppDataDb(): Promise<AppDataDb> {
   // Backfill the jel column onto pre-existing appdata files (CREATE ... IF NOT EXISTS
   // never alters an existing table). Idempotent; older rows keep jel NULL.
   await conn.run("ALTER TABLE saved_searches ADD COLUMN IF NOT EXISTS jel TEXT");
+  // Per-key MCP tool allowlist (M9 G) onto pre-existing api_keys rows. NULL = all tools, so
+  // every existing key keeps today's behaviour. Folded into the CHECKPOINT below (WAL landmine).
+  await conn.run("ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS tools TEXT");
   await conn.run(`
     CREATE TABLE IF NOT EXISTS search_logs (
       search_id INTEGER PRIMARY KEY,
@@ -167,12 +176,13 @@ export async function openAppDataDb(): Promise<AppDataDb> {
   return {
     async createKey(row) {
       await conn.run(
-        "INSERT INTO api_keys (key_hash, label, scopes, rate_limit_overrides) VALUES (?, ?, ?, ?)",
+        "INSERT INTO api_keys (key_hash, label, scopes, rate_limit_overrides, tools) VALUES (?, ?, ?, ?, ?)",
         [
           row.keyHash,
           row.label,
           JSON.stringify(row.scopes),
           row.rateLimitOverrides ? JSON.stringify(row.rateLimitOverrides) : null,
+          row.tools != null ? JSON.stringify(row.tools) : null,
         ] as never,
       );
     },

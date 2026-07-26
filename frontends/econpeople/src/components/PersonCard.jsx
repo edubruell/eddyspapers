@@ -50,6 +50,46 @@ function handleToIdeasUrl(handle, workType) {
   return `https://ideas.repec.org/${prefix}/${path}.html`;
 }
 
+// OpenAlex per-paper badges (M9). Whole-literature signals matched by DOI (~half the corpus);
+// absent for the rest, so the row simply shows nothing extra. Retracted is flag-and-keep.
+function fmtFwci(v) {
+  if (v == null) return null;
+  return v >= 10 ? Math.round(v).toString() : v.toFixed(1);
+}
+
+function OpenAlexBadges({ oa }) {
+  if (!oa) return null;
+  const fwci = fmtFwci(oa.fwci);
+  const showOa = oa.is_oa && oa.oa_url;
+  if (!oa.is_retracted && fwci == null && !showOa) return null;
+  const pill = "inline-flex items-center rounded-full border px-1.5 py-0 text-[9px]";
+  return (
+    <div className="flex flex-wrap gap-1 mt-0.5">
+      {oa.is_retracted && (
+        <span className={`${pill} border-red-300 bg-red-50 font-semibold text-red-600`}>⚠ Retracted</span>
+      )}
+      {fwci != null && (
+        <span
+          className={`${pill} border-[var(--border-soft)] bg-[var(--bg-card-2)] text-stone-500`}
+          title="Field-Weighted Citation Impact (OpenAlex): 1.0 = field average"
+        >
+          FWCI {fwci}
+        </span>
+      )}
+      {showOa && (
+        <a
+          href={oa.oa_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`${pill} border-[var(--border-soft)] bg-[var(--bg-card-2)] text-[var(--accent-green)] hover:underline`}
+        >
+          Open access
+        </a>
+      )}
+    </div>
+  );
+}
+
 function CorpusPaper({ paper }) {
   const cites = paper.citations ? formatCitations(paper.citations) : null;
   const href  = paper.url || handleToIdeasUrl(paper.handle, paper.work_type);
@@ -68,6 +108,7 @@ function CorpusPaper({ paper }) {
         {paper.journal && (
           <div className="text-stone-400 text-[10px] mt-0.5 truncate">{paper.journal}</div>
         )}
+        <OpenAlexBadges oa={paper.openalex} />
       </div>
       {cites && cites !== "0" && (
         <span className="shrink-0 text-[10px] text-stone-400 tabular-nums">{cites} cit.</span>

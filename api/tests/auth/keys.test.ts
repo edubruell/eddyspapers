@@ -167,6 +167,20 @@ describe("KeyRegistry", () => {
     await reg.ensureFresh(true);
     expect(reg.verify(key)?.rateLimitOverrides).toEqual({ lit_search: 100 });
   });
+
+  it("carries the MCP tool allowlist through to the identity (null default = all)", async () => {
+    const { keys, singleton } = await load("");
+    const db = await singleton.getAppDataDb();
+    const scoped = keys.generateKey();
+    const open = keys.generateKey();
+    await db.createKey({ keyHash: scoped.keyHash, label: "Scoped", scopes: ["mcp"], tools: ["keyword_search"] });
+    await db.createKey({ keyHash: open.keyHash, label: "Open", scopes: ["mcp"] });
+    const reg = keys.getKeyRegistry();
+    await reg.ensureFresh(true);
+    expect(reg.verify(scoped.key)?.tools).toEqual(["keyword_search"]);
+    // Omitted on create → null (backward-compatible "all tools").
+    expect(reg.verify(open.key)?.tools).toBeNull();
+  });
 });
 
 describe("AppDataDb", () => {

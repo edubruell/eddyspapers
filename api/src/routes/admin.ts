@@ -4,6 +4,7 @@ import { getAppDataDb, reloadCorpusDb } from "../db/singleton.js";
 import { getKeyRegistry, generateKey } from "../auth/keys.js";
 import { requireKey } from "../middleware/requireKey.js";
 import { ALL_SCOPES, type Scope } from "../db/appdata.js";
+import { MCP_TOOL_NAMES } from "../mcp/tools.js";
 
 // Admin surface for the API-key registry (PLAN.md §D1). The `scripts/keys.ts` CLI drives
 // these over HTTP so only the server process ever opens appdata.duckdb (its cross-process
@@ -19,6 +20,10 @@ const createSchema = z.object({
   label: z.string().min(1).max(200),
   scopes: z.array(z.enum(["rest", "mcp", "lit_search", "admin"])).min(1).optional(),
   rate_limit_overrides: z.record(z.number().int().positive()).nullish(),
+  // MCP tool allowlist (M9 G). Omitted / null = all tools; a validated subset otherwise.
+  // An empty array is allowed (an mcp key exposing no cheap tools — lit_search still rides
+  // its own scope). Unknown tool names are rejected by the enum.
+  tools: z.array(z.enum(MCP_TOOL_NAMES)).nullish(),
 });
 
 export const adminRoute = new Hono();
@@ -36,6 +41,7 @@ adminRoute.post("/keys", async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
 
   const scopes = (parsed.data.scopes as Scope[] | undefined) ?? DEFAULT_SCOPES;
+  const tools = parsed.data.tools ? [...parsed.data.tools] : (parsed.data.tools ?? null);
   const { key, keyHash } = generateKey();
   const db = await getAppDataDb();
   await db.createKey({
@@ -43,11 +49,12 @@ adminRoute.post("/keys", async (c) => {
     label: parsed.data.label,
     scopes,
     rateLimitOverrides: parsed.data.rate_limit_overrides ?? null,
+    tools,
   });
   await getKeyRegistry().ensureFresh(true);
 
   // The one and only time the plaintext key crosses the wire.
-  return c.json({ key, key_hash: keyHash, id: keyHash.slice(0, 12), label: parsed.data.label, scopes }, 201);
+  return c.json({ key, key_hash: keyHash, id: keyHash.slice(0, 12), label: parsed.data.label, scopes, tools }, 201);
 });
 
 adminRoute.delete("/keys/:prefix", async (c) => {
@@ -77,11 +84,13 @@ adminRoute.get("/keys", async (c) => {
   const keys = await db.listKeys(includeRevoked);
   return c.json({
     scopes: ALL_SCOPES,
+    available_tools: MCP_TOOL_NAMES,
     keys: keys.map((k) => ({
       id: k.keyHash.slice(0, 12),
       label: k.label,
       scopes: k.scopes,
       rate_limit_overrides: k.rateLimitOverrides,
+      tools: k.tools,
       created_at: k.createdAt,
       revoked_at: k.revokedAt,
     })),

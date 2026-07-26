@@ -49,4 +49,49 @@ describe("paper event null tolerance", () => {
     const e = parseRawEvent({ type: "paper", title: "x", url: "https://e/z" });
     expect(e).toBeNull();
   });
+
+  it("accepts an openalex block (eddysearch.sandbox >= 0.5.0) and preserves its fields", () => {
+    const e = parseRawEvent({
+      type: "paper",
+      handle: "RePEc:aea:x:1",
+      title: "Matched",
+      year: 2019,
+      authors: "Card",
+      journal: "AER",
+      category: "Top 5 Journals",
+      url: "https://example.org/x",
+      openalex: {
+        openalex_id: "https://openalex.org/W1",
+        oa_cited_by_count: 42,
+        fwci: 1.75,
+        is_retracted: true,
+        is_oa: true,
+        oa_url: "https://oa/1",
+        oa_status: "gold",
+        primary_topic: "Labour economics",
+        primary_field: "Economics",
+      },
+    });
+    expect(e).not.toBeNull();
+    if (e?.type === "paper") {
+      expect(e.openalex?.is_retracted).toBe(true);
+      expect(e.openalex?.fwci).toBe(1.75);
+      expect(e.openalex?.oa_url).toBe("https://oa/1");
+    }
+  });
+
+  it("accepts a paper with no openalex block (unmatched work / pre-Track-B snapshot)", () => {
+    const e = parseRawEvent({
+      type: "paper",
+      handle: "RePEc:none:9",
+      title: "Unmatched",
+      year: 2019,
+      authors: "X",
+      journal: "WP",
+      category: "Working Papers",
+      url: "https://example.org/z",
+    });
+    expect(e).not.toBeNull();
+    if (e?.type === "paper") expect(e.openalex ?? null).toBeNull();
+  });
 });

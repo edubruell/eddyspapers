@@ -125,9 +125,12 @@ describe("resources", () => {
     const overview = JSON.parse(res.contents[0].text as string) as {
       paper: { Handle: string } | null;
       versions: unknown[];
+      openalex: unknown;
     };
     expect(overview.paper?.Handle.toLowerCase()).toBe(sampleHandle.toLowerCase());
     expect(Array.isArray(overview.versions)).toBe(true);
+    // The OpenAlex bundle key is always present (null on pre-Track-B fixtures / unmatched works).
+    expect("openalex" in overview).toBe(true);
   });
 
   it("reads cites and citedby for a handle", async () => {

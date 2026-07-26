@@ -72,7 +72,7 @@ async function makeClient(key: KeyIdentity | null): Promise<Client> {
   return client;
 }
 
-const scopedKey = (scopes: KeyIdentity["scopes"]): KeyIdentity => ({ id: "testkey01", label: "t", scopes, rateLimitOverrides: null });
+const scopedKey = (scopes: KeyIdentity["scopes"]): KeyIdentity => ({ id: "testkey01", label: "t", scopes, rateLimitOverrides: null, tools: null });
 
 let tmp: string;
 

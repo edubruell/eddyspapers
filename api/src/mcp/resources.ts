@@ -67,8 +67,9 @@ export function registerResources(server: McpServer): void {
     {
       title: "Paper overview",
       description:
-        "One paper's record plus precomputed citation stats (handle_stats) and version links — the " +
-        "canonical lookup that replaces separate versions/stats tools.",
+        "One paper's record plus precomputed RePEc citation stats (handle_stats), version links, and " +
+        "OpenAlex metrics (whole-literature cited-by, FWCI, percentiles, retraction, open-access link) " +
+        "when available — the canonical lookup that replaces separate versions/stats tools.",
       mimeType: "application/json",
     },
     async (uri, variables) => json(uri, await paperOverview(await getCorpusDb(), decodeHandle(variables.handle))),

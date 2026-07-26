@@ -27,6 +27,22 @@ const rawPaperEventSchema = z.object({
   similarity: z.number().nullable().optional(),
   abstract: z.string().nullable().optional(),
   doi: z.string().nullable().optional(),
+  // OpenAlex block (eddysearch.sandbox >= 0.5.0). Absent on papers with no matched work and
+  // on pre-Track-B snapshots; each inner field is nullable-optional (R drops NULL scalars).
+  openalex: z
+    .object({
+      openalex_id: z.string(),
+      oa_cited_by_count: z.number().nullable().optional(),
+      fwci: z.number().nullable().optional(),
+      is_retracted: z.boolean().nullable().optional(),
+      is_oa: z.boolean().nullable().optional(),
+      oa_url: z.string().nullable().optional(),
+      oa_status: z.string().nullable().optional(),
+      primary_topic: z.string().nullable().optional(),
+      primary_field: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 const SECTION_MODES = [

@@ -156,13 +156,19 @@ export async function listAdminKeys({ token, all = false, signal } = {}) {
 }
 
 // Mint a key. The plaintext in the response is the ONLY time it exists — never recoverable.
-export async function createAdminKey({ label, scopes, token } = {}) {
+// `tools` is the MCP tool allowlist: pass an array to restrict, or omit/undefined for all tools
+// (the backend stores null = every tool). An empty array means "no cheap tools".
+export async function createAdminKey({ label, scopes, tools, token } = {}) {
   const { ok, status, data } = await adminReq("POST", "/admin/keys", {
     token,
-    body: { label, ...(scopes && scopes.length ? { scopes } : {}) },
+    body: {
+      label,
+      ...(scopes && scopes.length ? { scopes } : {}),
+      ...(tools !== undefined ? { tools } : {}),
+    },
   });
   if (!ok) throw adminError(status, data, `create failed (${status})`);
-  return data; // { key, key_hash, id, label, scopes }
+  return data; // { key, key_hash, id, label, scopes, tools }
 }
 
 export async function revokeAdminKey(prefix, { token } = {}) {

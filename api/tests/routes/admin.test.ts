@@ -165,6 +165,58 @@ describe("/admin/keys", () => {
     expect(res.status).toBe(403);
   });
 
+  it("accepts a validated MCP tool allowlist on create and echoes it back", async () => {
+    const app = await buildAppWith("boot");
+    const ok = await app.request("/admin/keys", {
+      method: "POST",
+      headers: admin("boot"),
+      body: JSON.stringify({ label: "Scoped", scopes: ["mcp"], tools: ["keyword_search", "corpus_context"] }),
+    });
+    expect(ok.status).toBe(201);
+    expect(((await ok.json()) as { tools: string[] }).tools).toEqual(["keyword_search", "corpus_context"]);
+
+    // Unknown tool names are rejected by the enum.
+    const bad = await app.request("/admin/keys", {
+      method: "POST",
+      headers: admin("boot"),
+      body: JSON.stringify({ label: "Bad", scopes: ["mcp"], tools: ["not_a_tool"] }),
+    });
+    expect(bad.status).toBe(400);
+  });
+
+  it("an empty tools allowlist round-trips as [] (no cheap tools), distinct from null", async () => {
+    const app = await buildAppWith("boot");
+    const created = await app.request("/admin/keys", {
+      method: "POST",
+      headers: admin("boot"),
+      body: JSON.stringify({ label: "NoTools", scopes: ["mcp"], tools: [] }),
+    });
+    expect(created.status).toBe(201);
+    expect(((await created.json()) as { tools: string[] | null }).tools).toEqual([]);
+
+    const res = await app.request("/admin/keys", { headers: { authorization: "Bearer boot" } });
+    const body = (await res.json()) as { keys: { label: string; tools: string[] | null }[] };
+    // [] must survive as [] — an mcp key exposing zero cheap tools, not null (= all tools).
+    expect(body.keys.find((k) => k.label === "NoTools")?.tools).toEqual([]);
+  });
+
+  it("omitting tools stores null (all tools) and the list exposes available_tools + per-key tools", async () => {
+    const app = await buildAppWith("boot");
+    await app.request("/admin/keys", {
+      method: "POST",
+      headers: admin("boot"),
+      body: JSON.stringify({ label: "AllTools", scopes: ["mcp"] }),
+    });
+    const res = await app.request("/admin/keys", { headers: { authorization: "Bearer boot" } });
+    const body = (await res.json()) as {
+      available_tools: string[];
+      keys: { label: string; tools: string[] | null }[];
+    };
+    expect(body.available_tools).toContain("find_papers");
+    expect(body.available_tools).toContain("verify_references");
+    expect(body.keys.find((k) => k.label === "AllTools")?.tools).toBeNull();
+  });
+
   it("bootstraps openly when the gate is disabled (dev, no password/keys)", async () => {
     const app = await buildAppWith("");
     const res = await app.request("/admin/keys", {

@@ -47,7 +47,25 @@ const guarded =
 const splitJournalName = (s: string | undefined): string[] | null =>
   s == null ? null : s.split(",").map((v) => v.trim()).filter(Boolean);
 
+// The canonical set of cheap MCP tools, and the single source of truth for the admin
+// tool-allowlist UI (routes/admin.ts surfaces this as available_tools). lit_search is NOT
+// here — it stays gated by its own 'lit_search' scope, not the per-key allowlist (M9 G).
+export const MCP_TOOL_NAMES = [
+  "find_papers",
+  "keyword_search",
+  "find_people",
+  "verify_references",
+  "corpus_context",
+] as const;
+
 export function registerTools(server: McpServer, key: KeyIdentity | null = null): void {
+  // Per-key allowlist gate: a null key (dev/gate-disabled/stdio) or a null tools list means
+  // every tool registers; otherwise a tool is registered only when named. A gated-out tool
+  // simply never appears in the client's tool list — cleaner than registering-and-403'ing.
+  const allowed = (name: (typeof MCP_TOOL_NAMES)[number]): boolean =>
+    key == null || key.tools == null || key.tools.includes(name);
+
+  if (allowed("find_papers"))
   server.registerTool(
     "find_papers",
     {
@@ -58,7 +76,9 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
         "labels. Good: 'Causal effects of minimum wage increases on low-wage employment, using " +
         "border-discontinuity and synthetic-control designs across US states.' Bad: 'minimum wage " +
         "employment'. Use keyword_search instead for exhaustive term sweeps or known-title lookups. " +
-        "Call corpus_context for valid category and journal filter values.",
+        "Call corpus_context for valid category and journal filter values. Each result may carry an " +
+        "`openalex` block (matched by DOI, ~half the corpus) with a retraction flag, open-access " +
+        "link, and field-weighted citation impact — absence means unmatched, not low impact.",
       inputSchema: {
         query: z.string().min(1).describe("Abstract-style prose describing what to find"),
         max_k: z.number().int().min(1).max(100).optional().describe("Max results (default 30)"),
@@ -95,6 +115,7 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
       })()),
   );
 
+  if (allowed("keyword_search"))
   server.registerTool(
     "keyword_search",
     {
@@ -143,6 +164,7 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
       })()),
   );
 
+  if (allowed("find_people"))
   server.registerTool(
     "find_people",
     {
@@ -183,6 +205,7 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
       })()),
   );
 
+  if (allowed("verify_references"))
   server.registerTool(
     "verify_references",
     {
@@ -191,8 +214,11 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
         "Batch-verify bibliography entries against the corpus using three-tier matching: handle " +
         "lookup, then exact year + first author + title keyword, then year±1 + author + first two " +
         "title words. Per entry returns a match status (handle_match | fuzzy_match | loose_match | " +
-        "not_found), the matched paper, citation stats, and any year/journal mismatches. Give as " +
-        "much of handle, author_lastnames (semicolon-separated), year, title, journal as you have.",
+        "not_found), the matched paper, citation stats, and any year/journal mismatches. The matched " +
+        "paper carries an `openalex` block when available (matched by DOI, ~half the corpus): check " +
+        "`openalex.is_retracted` to flag retracted citations, `openalex.oa_url` for a free full text, " +
+        "and `openalex.fwci` for field-normalised impact. Give as much of handle, author_lastnames " +
+        "(semicolon-separated), year, title, journal as you have.",
       inputSchema: {
         entries: z
           .array(
@@ -222,6 +248,7 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
       })()),
   );
 
+  if (allowed("corpus_context"))
   server.registerTool(
     "corpus_context",
     {

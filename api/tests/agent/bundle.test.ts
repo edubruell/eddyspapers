@@ -93,7 +93,7 @@ describe("buildBundle", () => {
     const b = buildBundle("abc123", "brief", events);
     const lines = b.papers_csv.split("\n");
     expect(lines[0]).toBe(
-      "handle,title,authors,year,journal,category,url,abstract,max_similarity,sections,cites_internal,cites_total,percentile",
+      "handle,title,authors,year,journal,category,url,abstract,max_similarity,sections,cites_internal,cites_total,percentile,oa_cites,fwci,retracted,oa_url",
     );
     const rowA = lines.find((l) => l.startsWith("repec:a"))!;
     const cols = rowA.split(",");
@@ -105,7 +105,33 @@ describe("buildBundle", () => {
     void cols;
     const rowB = lines.find((l) => l.startsWith("repec:b"))!;
     expect(rowB).toContain("0.44");
-    expect(rowB.endsWith(",,,")).toBe(true); // no stats → trailing empty cites/percentile cells
+    // No stats and no openalex → 7 trailing empty cells (cites_internal…oa_url).
+    expect(rowB.endsWith(",,,,,,,")).toBe(true);
+  });
+
+  it("emits OpenAlex columns (oa_cites, fwci, RETRACTED flag, oa_url) when present", () => {
+    const retracted = paper("repec:oa", {
+      openalex: {
+        openalex_id: "https://openalex.org/W9",
+        oa_cited_by_count: 130,
+        fwci: 2.4,
+        is_retracted: true,
+        is_oa: true,
+        oa_url: "https://oa/full",
+        oa_status: "gold",
+        primary_topic: "Labour economics",
+        primary_field: "Economics",
+      },
+    });
+    const b = buildBundle("id", "brief", [
+      ev({ type: "paper", paper: retracted }),
+      ev({ type: "done", ms_total: 1 }),
+    ]);
+    const row = b.papers_csv.split("\n").find((l) => l.startsWith("repec:oa"))!;
+    expect(row).toContain("130");
+    expect(row).toContain("2.4");
+    expect(row).toContain("RETRACTED");
+    expect(row).toContain("https://oa/full");
   });
 
   it("escapes CSV cells containing commas, quotes, and newlines", () => {

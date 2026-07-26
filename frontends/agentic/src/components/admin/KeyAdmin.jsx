@@ -19,6 +19,8 @@ import { Card, SectionLabel, PrimaryButton, GhostButton } from "../primitives/in
 const DEFAULT_SCOPES = ["rest", "mcp"];
 // Fallback if the list response predates the `scopes` field; the backend echoes ALL_SCOPES.
 const FALLBACK_SCOPES = ["rest", "mcp", "lit_search", "admin"];
+// Fallback MCP tool list if the response predates `available_tools`; the backend echoes it.
+const FALLBACK_TOOLS = ["find_papers", "keyword_search", "find_people", "verify_references", "corpus_context"];
 
 function fmtDate(s) {
   if (!s) return "—";
@@ -32,6 +34,7 @@ export default function KeyAdmin() {
   const [lockError, setLockError] = useState(null);
 
   const [allScopes, setAllScopes] = useState(FALLBACK_SCOPES);
+  const [allTools, setAllTools] = useState(FALLBACK_TOOLS);
   const [keys, setKeys] = useState([]);
   const [includeRevoked, setIncludeRevoked] = useState(false);
   const [listError, setListError] = useState(null);
@@ -40,6 +43,7 @@ export default function KeyAdmin() {
   // New-key form
   const [label, setLabel] = useState("");
   const [scopes, setScopes] = useState(DEFAULT_SCOPES);
+  const [tools, setTools] = useState(FALLBACK_TOOLS); // selected MCP tools; all = send null
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState(null);
 
@@ -49,6 +53,7 @@ export default function KeyAdmin() {
 
   function applyList(data) {
     if (Array.isArray(data.scopes) && data.scopes.length) setAllScopes(data.scopes);
+    if (Array.isArray(data.available_tools) && data.available_tools.length) setAllTools(data.available_tools);
     setKeys(data.keys ?? []);
   }
 
@@ -102,8 +107,21 @@ export default function KeyAdmin() {
     }
   }
 
+  // Seed the form to all-selected only when the *content* of available_tools changes (not on
+  // every refresh — applyList hands a fresh array each fetch). Keying on the joined names means
+  // toggling "Show revoked" mid-edit no longer clobbers a partial tool selection.
+  const allToolsKey = allTools.join(",");
+  useEffect(() => {
+    setTools(allTools);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allToolsKey]);
+
   function toggleScope(s) {
     setScopes((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
+  }
+
+  function toggleTool(t) {
+    setTools((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
   }
 
   async function onCreate(e) {
@@ -113,11 +131,17 @@ export default function KeyAdmin() {
     setCreating(true);
     setFormError(null);
     try {
-      const res = await createAdminKey({ label: trimmed, scopes });
+      // Tools only matter with the mcp scope. All-selected (or no mcp) → undefined, which the
+      // backend stores as null = every tool (and forward-compatibly picks up tools added later).
+      const mcpOn = scopes.includes("mcp");
+      const allSelected = tools.length === allTools.length && allTools.every((t) => tools.includes(t));
+      const toolsPayload = !mcpOn || allSelected ? undefined : tools;
+      const res = await createAdminKey({ label: trimmed, scopes, tools: toolsPayload });
       setMinted(res);
       setCopied(false);
       setLabel("");
       setScopes(DEFAULT_SCOPES);
+      setTools(allTools);
       refresh();
     } catch (err) {
       if (isAuthError(err)) setStatus("locked");
@@ -260,6 +284,41 @@ export default function KeyAdmin() {
               </p>
             )}
           </div>
+          {scopes.includes("mcp") && (
+            <div>
+              <div className="text-[13px] font-medium text-stone-700">
+                MCP tools
+                <span className="ml-2 font-normal text-stone-400">
+                  which tools this key may call (lit_search rides its own scope)
+                </span>
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {allTools.map((t) => {
+                  const on = tools.includes(t);
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleTool(t)}
+                      className={
+                        "rounded-full border px-3 py-1 text-xs font-medium transition " +
+                        (on
+                          ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                          : "border-stone-300 text-stone-600 hover:bg-stone-100")
+                      }
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+              {tools.length === 0 && (
+                <p className="mt-2 text-xs text-amber-700">
+                  No tools selected — this mcp key exposes no cheap tools.
+                </p>
+              )}
+            </div>
+          )}
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div>
             <PrimaryButton type="submit" disabled={creating || !label.trim() || !scopes.length}>
@@ -313,6 +372,11 @@ export default function KeyAdmin() {
                         {k.rate_limit_overrides && (
                           <span className="ml-2 text-[11px] text-stone-500">
                             {JSON.stringify(k.rate_limit_overrides)}
+                          </span>
+                        )}
+                        {Array.isArray(k.tools) && (
+                          <span className="ml-2 text-[11px] text-stone-500">
+                            tools: {k.tools.length ? k.tools.join(", ") : "none"}
                           </span>
                         )}
                       </td>
@@ -378,7 +442,10 @@ export default function KeyAdmin() {
               <GhostButton onClick={copyMinted}>{copied ? "Copied" : "Copy"}</GhostButton>
             </div>
             <p className="mt-2 text-[12px] text-stone-500">
-              Scopes: {(minted.scopes ?? []).join(", ")} · id {minted.id}
+              Scopes: {(minted.scopes ?? []).join(", ")}
+              {Array.isArray(minted.tools) ? ` · tools: ${minted.tools.length ? minted.tools.join(", ") : "none"}` : ""}
+              {" · id "}
+              {minted.id}
             </p>
             <div className="mt-4 flex justify-end">
               <PrimaryButton onClick={() => setMinted(null)}>I’ve saved it</PrimaryButton>

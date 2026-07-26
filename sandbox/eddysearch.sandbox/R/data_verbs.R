@@ -54,6 +54,9 @@ semantic_search <- function(query, max_k = 30, min_year = NULL, journal_filter =
   }
 
   result <- dplyr::slice_head(candidates, n = max_k)
+  # Enrich AFTER the HNSW-accelerated scan + filters so the fast path is untouched; the join is
+  # a second keyed lookup over the small result set (same shape as the JEL post-filter).
+  result <- enrich_openalex(con, result)
 
   emit_progress(paste0("  ↳ ", nrow(result), " results in ", round(as.numeric(Sys.time() - t0, units = "secs"), 1), "s"))
   result
@@ -89,6 +92,45 @@ filter_by_jel <- function(con, candidates, jel) {
   dplyr::filter(candidates, tolower(Handle) %in% matched)
 }
 
+# OpenAlex per-paper metrics (M8 Wave 2 Track B). Probed per call rather than cached: a
+# script runs a handful of verb/section calls, so an information_schema lookup each time is
+# negligible, and not caching keeps the helper stateless (the JEL filter follows the same
+# no-state rule). Absent table (pre-Track-B snapshot) or NULL connection (con-less unit
+# tests) → not available, so enrichment is a no-op.
+openalex_available <- function(con) {
+  if (is.null(con)) return(FALSE)
+  n <- DBI::dbGetQuery(
+    con, "SELECT 1 FROM information_schema.tables WHERE table_name = 'article_openalex' LIMIT 1"
+  )
+  nrow(n) > 0
+}
+
+# Left-join the lean OpenAlex block (global cited-by, FWCI, retraction, open-access link,
+# primary topic/field) onto any result frame carrying a Handle column, so paper events can
+# surface those whole-literature signals to the agent. article_openalex.handle is the
+# mixed-case corpus Handle stored lowercase → LOWER-join on a temporary key (same hazard as
+# cites/handle_stats, fixed 2026-07-10). A missing table / empty frame returns df untouched.
+enrich_openalex <- function(con, df) {
+  if (nrow(df) == 0 || !openalex_available(con)) return(df)
+
+  placeholders <- paste(rep("?", nrow(df)), collapse = ", ")
+  sql <- paste0(
+    "SELECT LOWER(handle) AS oa_join_key, openalex_id, oa_cited_by_count, fwci, ",
+    "is_retracted, is_oa, oa_url, oa_status, primary_topic, primary_field ",
+    "FROM article_openalex WHERE LOWER(handle) IN (", placeholders, ")"
+  )
+  oa <- DBI::dbGetQuery(con, sql, params = as.list(tolower(df$Handle)))
+  # Guard the join against ever fanning rows out: article_openalex is one-row-per-handle
+  # (pipeline/R/enrich_openalex.R), but a regression there must not silently multiply paper
+  # rows — enrich runs after slice_head(max_k), so a duplicate match would push a section past
+  # its cap. distinct() on the lookup key keeps the left_join strictly 1:1.
+  oa <- dplyr::distinct(dplyr::as_tibble(oa), oa_join_key, .keep_all = TRUE)
+  df$oa_join_key <- tolower(df$Handle)
+  merged <- dplyr::left_join(df, oa, by = "oa_join_key")
+  merged$oa_join_key <- NULL
+  merged
+}
+
 sql_query <- function(sql, params = list()) {
   t0 <- Sys.time()
   emit_progress(paste0("SQL query: ", stringr::str_trunc(sql, 60)))
@@ -117,7 +159,7 @@ cites <- function(handle, limit = 50) {
           LIMIT ?"
 
   result <- DBI::dbGetQuery(.sandbox_state$con, sql, params = list(handle, limit))
-  result <- dplyr::as_tibble(result)
+  result <- enrich_openalex(.sandbox_state$con, dplyr::as_tibble(result))
 
   emit_progress(paste0("  ↳ ", nrow(result), " results in ", round(as.numeric(Sys.time() - t0, units = "secs"), 1), "s"))
   result
@@ -134,7 +176,7 @@ citedby <- function(handle, limit = 50) {
           LIMIT ?"
 
   result <- DBI::dbGetQuery(.sandbox_state$con, sql, params = list(handle, limit))
-  result <- dplyr::as_tibble(result)
+  result <- enrich_openalex(.sandbox_state$con, dplyr::as_tibble(result))
 
   emit_progress(paste0("  ↳ ", nrow(result), " results in ", round(as.numeric(Sys.time() - t0, units = "secs"), 1), "s"))
   result
@@ -182,7 +224,7 @@ versions <- function(handle) {
   "
 
   result <- DBI::dbGetQuery(.sandbox_state$con, sql, params = list(handle, handle, handle))
-  result <- dplyr::as_tibble(result)
+  result <- enrich_openalex(.sandbox_state$con, dplyr::as_tibble(result))
 
   emit_progress(paste0("  ↳ ", nrow(result), " results in ", round(as.numeric(Sys.time() - t0, units = "secs"), 1), "s"))
   result

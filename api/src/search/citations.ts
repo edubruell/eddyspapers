@@ -1,5 +1,6 @@
 import type { CorpusDb } from "../db/corpus.js";
 import { PAPER_COLS, rowToPaper } from "./papers.js";
+import { hasOpenAlexTable } from "./openalex.js";
 import type { PaperResult } from "./types.js";
 
 // Citation / version / stats lookups against the corpus snapshot — the read-only
@@ -20,6 +21,7 @@ export type PaperOverview = {
   paper: PaperResult | null;
   stats: HandleStatsRow | null;
   versions: VersionRow[];
+  openalex: OpenAlexStats | null;
 };
 
 export async function paperByHandle(db: CorpusDb, handle: string): Promise<PaperResult | null> {
@@ -82,10 +84,7 @@ export type OpenAlexStats = {
 };
 
 export async function openalexStatsOf(db: CorpusDb, handle: string): Promise<OpenAlexStats | null> {
-  const exists = await db.query(
-    "SELECT 1 FROM information_schema.tables WHERE table_name = 'article_openalex' LIMIT 1",
-  );
-  if (exists.length === 0) return null;
+  if (!(await hasOpenAlexTable(db))) return null;
   const rows = await db.query(
     `SELECT openalex_id, oa_cited_by_count, fwci, pctl_value, is_top1, is_top10,
             is_retracted, is_oa, oa_status, oa_url, primary_topic, primary_field
@@ -244,11 +243,16 @@ export async function citationCountsOf(db: CorpusDb, handle: string): Promise<Ci
 // links the old get_handle_stats / get_versions tools returned separately
 // (01_design.md §7.6 "subsumes … into resources"). Total-vs-internal live counts
 // off cit_all belong to the Phase 5 /citationcounts port, not this read.
+//
+// `openalex` carries the fuller OpenAlexStats shape (percentiles, top-1/10%) rather than the
+// lean block that rides on search-result papers — this is the detail view, so it mirrors what
+// /openalexstats surfaces on the classic card. Null on pre-Track-B snapshots or unmatched works.
 export async function paperOverview(db: CorpusDb, handle: string): Promise<PaperOverview> {
-  const [paper, stats, versions] = await Promise.all([
+  const [paper, stats, versions, openalex] = await Promise.all([
     paperByHandle(db, handle),
     handleStatsOf(db, handle),
     versionsOf(db, handle),
+    openalexStatsOf(db, handle),
   ]);
-  return { paper, stats, versions };
+  return { paper, stats, versions, openalex };
 }

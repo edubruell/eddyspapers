@@ -1,4 +1,5 @@
 import type { CorpusDb } from "../db/corpus.js";
+import { OPENALEX_COLS, OPENALEX_JOIN, hasOpenAlexTable, rowToOpenAlex } from "./openalex.js";
 
 // Person lookup / profile / papers — read-only ports of the retired Plumber persons.R
 // (lookup_persons_by_name, get_person_profile, get_person_papers, handle_to_ideas_url),
@@ -203,14 +204,21 @@ export async function personPapers(
     p.sortBy === "citations" ? "hs.total_citations" : p.sortBy === "journal" ? "a.journal" : "a.year";
   const orderDir = (p.order ?? "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
 
+  // Per-paper OpenAlex badges (M9 E): opt into the join only on Track-B+ snapshots so older
+  // corpora / fixtures without article_openalex still answer.
+  const hasOA = await hasOpenAlexTable(db);
+  const oaCols = hasOA ? `, ${OPENALEX_COLS}` : "";
+  const oaJoin = hasOA ? OPENALEX_JOIN : "";
+
   const inCorpus = await db.query(
     `SELECT a.Handle AS handle, a.title, a.journal, a.year, a.category,
             a.abstract, a.bib_tex, a.authors, a.url, a.is_series,
             pw.work_type,
-            COALESCE(hs.total_citations, 0) AS citations
+            COALESCE(hs.total_citations, 0) AS citations${oaCols}
      FROM person_works pw
      JOIN articles a ON LOWER(a.Handle) = pw.work_handle
      LEFT JOIN handle_stats hs ON LOWER(hs.handle) = pw.work_handle
+     ${oaJoin}
      WHERE pw.short_id = ?
      ORDER BY ${sortCol} ${orderDir} NULLS LAST, a.Handle
      LIMIT ? OFFSET ?`,
@@ -258,6 +266,7 @@ export async function personPapers(
     is_series: r.is_series == null ? null : Boolean(r.is_series),
     work_type: optStr(r.work_type),
     citations: num(r.citations),
+    ...(hasOA ? { openalex: rowToOpenAlex(r) } : {}),
   }));
 
   return {

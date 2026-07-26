@@ -82,6 +82,23 @@ heavily and misses many citations everywhere. So:
 - When impact matters, lean on venue/tier and the nature of the contribution; use citation figures
   only as supporting colour, and add a one-line caveat if the ranking leans on them.
 
+## OpenAlex signals — retractions, open access, field-normalised impact
+
+Some papers carry an \`openalex\` block: whole-literature metrics matched from OpenAlex by DOI.
+It is present for roughly half the corpus — its **absence means "unmatched / unknown", never
+"low impact"**. When a paper has one:
+
+- **Retractions are non-negotiable.** If \`openalex.is_retracted\` is true, never present the
+  paper as sound evidence. You may still mention it, but flag it explicitly (e.g. "⚠ retracted")
+  and never rest a conclusion on it — prefer an un-retracted alternative. Do not silently drop it.
+- **Open access.** When \`openalex.oa_url\` is set there is a free full text. If you point the
+  reader at a paper to actually read, prefer that link; when a paper has no \`url\` of its own,
+  use \`oa_url\`. Still follow the citation rules below for the in-prose link.
+- **FWCI** (field-weighted citation impact) normalises citations to field and year — a cleaner
+  prominence signal than raw counts, where >1 is above the field average. Use it as supporting
+  colour for impact claims, with the same hedge as citation counts: it is an external estimate
+  and missing for many papers, so never treat its absence as weakness.
+
 ## Citation format — mandatory
 
 Every citation in the prose must be a markdown link using the paper's url field:

@@ -12,4 +12,6 @@ For a synthesised answer from one call, use lit_search — it writes and runs a 
 - find_people — find economists by research area (topic overlap rolled up from their papers).
 - verify_references — batch-check a bibliography against the corpus (three-tier matching + citation stats + mismatch flags).
 
-Paper details (citations, versions, stats) are resources under agenticsearch://papers/{handle}; a completed lit_search run is readable under agenticsearch://searches/{id}.`;
+Paper results and details carry an optional \`openalex\` block (matched by DOI, ~half the corpus): a retraction flag, an open-access full-text link, and field-weighted citation impact. Treat its absence as "unmatched", not "low impact", and always flag \`is_retracted\` papers rather than citing them as sound.
+
+Paper details (citations, versions, stats, OpenAlex metrics) are resources under agenticsearch://papers/{handle}; a completed lit_search run is readable under agenticsearch://searches/{id}.`;

@@ -2,6 +2,8 @@
 // /search row so the parity harness and, later, the Phase 5 route ports can diff
 // responses field-for-field.
 
+import type { OpenAlexPaperMetrics } from "./openalex.js";
+
 export type PaperResult = {
   Handle: string;
   title: string | null;
@@ -13,6 +15,10 @@ export type PaperResult = {
   doi: string | null;
   bib_tex: string | null;
   abstract: string | null;
+  // Present only when the snapshot carries article_openalex (M8 Wave 2 Track B) and the
+  // query opted into the join; null when no matched OpenAlex work; key omitted entirely on
+  // pre-Track-B snapshots so those responses stay byte-identical to the Plumber shape.
+  openalex?: OpenAlexPaperMetrics | null;
 };
 
 export type SemanticResult = PaperResult & {

@@ -30,6 +30,30 @@ emit_section <- function(title, df, n = 25, note = NULL, mode = NULL) {
   if (!mode %in% .section_modes) mode <- "custom"
   top_df <- head(df, n)
 
+  # OpenAlex columns ride in from the data verbs (enrich_openalex) when the snapshot has them;
+  # make_openalex_block reads them if present and is a no-op otherwise (custom-SQL sections,
+  # pre-Track-B snapshots). emit_event serialises with null="null", so a NULL scalar becomes an
+  # explicit JSON null (like similarity/doi today), which the TS paper schema tolerates via
+  # nullable-optional; execute.ts then omits a null block from the Paper.
+  na_null <- function(x) if (is.null(x) || length(x) == 0 || is.na(x)) NULL else x
+
+  make_openalex_block <- function(row) {
+    if (!"openalex_id" %in% names(row)) return(NULL)
+    oid <- na_null(row$openalex_id)
+    if (is.null(oid)) return(NULL) # a row exists only for matched works → id is the anchor
+    list(
+      openalex_id       = oid,
+      oa_cited_by_count = na_null(row$oa_cited_by_count),
+      fwci              = na_null(row$fwci),
+      is_retracted      = na_null(row$is_retracted),
+      is_oa             = na_null(row$is_oa),
+      oa_url            = na_null(row$oa_url),
+      oa_status         = na_null(row$oa_status),
+      primary_topic     = na_null(row$primary_topic),
+      primary_field     = na_null(row$primary_field)
+    )
+  }
+
   make_paper_event <- function(row) list(
     type       = "paper",
     handle     = row$Handle,
@@ -41,7 +65,8 @@ emit_section <- function(title, df, n = 25, note = NULL, mode = NULL) {
     url        = paper_url(row$Handle, if ("url" %in% names(row)) row$url else NULL),
     similarity = if ("similarity" %in% names(row)) row$similarity else NULL,
     abstract   = if ("abstract" %in% names(row)) row$abstract else NULL,
-    doi        = if ("doi" %in% names(row)) row$doi else NULL
+    doi        = if ("doi" %in% names(row)) row$doi else NULL,
+    openalex   = make_openalex_block(row)
   )
 
   purrr::walk(seq_len(nrow(top_df)), function(i) {
