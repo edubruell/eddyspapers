@@ -40,7 +40,8 @@ emit_section <- function(title, df, n = 25, note = NULL, mode = NULL) {
     category   = row$category,
     url        = paper_url(row$Handle, if ("url" %in% names(row)) row$url else NULL),
     similarity = if ("similarity" %in% names(row)) row$similarity else NULL,
-    abstract   = if ("abstract" %in% names(row)) row$abstract else NULL
+    abstract   = if ("abstract" %in% names(row)) row$abstract else NULL,
+    doi        = if ("doi" %in% names(row)) row$doi else NULL
   )
 
   purrr::walk(seq_len(nrow(top_df)), function(i) {

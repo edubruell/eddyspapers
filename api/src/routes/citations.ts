@@ -7,6 +7,7 @@ import {
   versionLinksOf,
   citationCountsOf,
   handleStatsOf,
+  openalexStatsOf,
 } from "../search/citations.js";
 
 // Citation / version / handle-stats routes ported from Plumber (PLAN.md §A2). These are
@@ -80,4 +81,15 @@ citationsRoute.get("/handlestats", requireKey("rest"), async (c) => {
   const row = await handleStatsOf(db, handle);
   if (!row) return c.json({ error: ["Handle not found in statistics table"] });
   return c.json(boxRow(row));
+});
+
+// /openalexstats — OpenAlex work-level metrics for one paper (article_openalex). A NEW
+// endpoint, so no Plumber auto_unbox parity to honour: returns the plain object (or null
+// when the paper has no OpenAlex row / the snapshot predates Track B). The classic detail
+// expander fetches it alongside /handlestats to render the OpenAlex-cites badge + link.
+citationsRoute.get("/openalexstats", requireKey("rest"), async (c) => {
+  const handle = requireHandle(c);
+  if (!handle) return c.json({ error: "handle required" }, 400);
+  const db = await getCorpusDb();
+  return c.json(await openalexStatsOf(db, handle));
 });

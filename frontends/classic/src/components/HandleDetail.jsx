@@ -4,7 +4,8 @@ import {
     getVersions,
     getCites,
     getCitedBy,
-    getHandleStats
+    getHandleStats,
+    getOpenAlexStats
 } from "../lib/api";
 
 import StatsBadges from "./StatsBadges";
@@ -14,6 +15,7 @@ export default function HandleDetail({ handle }) {
     const [cites, setCites] = useState(null);
     const [citedBy, setCitedBy] = useState(null);
     const [stats, setStats] = useState(null);
+    const [openalex, setOpenalex] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -22,11 +24,12 @@ export default function HandleDetail({ handle }) {
 
         async function load() {
             try {
-                const [v, ci, cb, st] = await Promise.all([
+                const [v, ci, cb, st, oa] = await Promise.all([
                     getVersions(handle),
                     getCites(handle),
                     getCitedBy(handle),
-                    getHandleStats(handle)
+                    getHandleStats(handle),
+                    getOpenAlexStats(handle)
                 ]);
 
                 if (!active) return;
@@ -35,6 +38,7 @@ export default function HandleDetail({ handle }) {
                 setCites(ci || []);
                 setCitedBy(cb || []);
                 setStats(st || null);
+                setOpenalex(oa || null);
                 setLoading(false);
             } catch (err) {
                 console.error("Detail fetch failed", err);
@@ -58,7 +62,7 @@ export default function HandleDetail({ handle }) {
 
     return (
         <div className="mt-3 border-t border-stone-200 pt-3 text-xs space-y-4">
-            <StatsBadges stats={stats} />
+            <StatsBadges stats={stats} openalex={openalex} />
 
             {versions && versions.length > 0 && (
                 <div>

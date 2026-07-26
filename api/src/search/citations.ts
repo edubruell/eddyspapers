@@ -59,6 +59,57 @@ export async function handleStatsOf(db: CorpusDb, handle: string): Promise<Handl
   return rows.length > 0 ? rows[0] : null;
 }
 
+// OpenAlex work-level metrics for one paper (M8 Wave 2 Track B, article_openalex). Distinct
+// from handle_stats: those are RePEc-internal citation metrics; these are whole-literature
+// OpenAlex numbers (global cited-by, FWCI, OA status, retraction) keyed on the same handle.
+// `article_openalex.handle` carries the mixed-case corpus Handle, so LOWER-join both sides.
+// The table only exists on Track-B+ snapshots (absent from older DBs and the test fixture),
+// so guard on its presence rather than letting a catalog error escape — a missing table just
+// means "no OpenAlex data", the same as a handle with no row.
+export type OpenAlexStats = {
+  openalex_id: string | null;
+  oa_cited_by_count: number | null;
+  fwci: number | null;
+  pctl_value: number | null;
+  is_top1: boolean | null;
+  is_top10: boolean | null;
+  is_retracted: boolean | null;
+  is_oa: boolean | null;
+  oa_status: string | null;
+  oa_url: string | null;
+  primary_topic: string | null;
+  primary_field: string | null;
+};
+
+export async function openalexStatsOf(db: CorpusDb, handle: string): Promise<OpenAlexStats | null> {
+  const exists = await db.query(
+    "SELECT 1 FROM information_schema.tables WHERE table_name = 'article_openalex' LIMIT 1",
+  );
+  if (exists.length === 0) return null;
+  const rows = await db.query(
+    `SELECT openalex_id, oa_cited_by_count, fwci, pctl_value, is_top1, is_top10,
+            is_retracted, is_oa, oa_status, oa_url, primary_topic, primary_field
+     FROM article_openalex WHERE LOWER(handle) = LOWER(?)`,
+    [handle],
+  );
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    openalex_id: optStr(r.openalex_id),
+    oa_cited_by_count: optNum(r.oa_cited_by_count),
+    fwci: optNum(r.fwci),
+    pctl_value: optNum(r.pctl_value),
+    is_top1: optBool(r.is_top1),
+    is_top10: optBool(r.is_top10),
+    is_retracted: optBool(r.is_retracted),
+    is_oa: optBool(r.is_oa),
+    oa_status: optStr(r.oa_status),
+    oa_url: optStr(r.oa_url),
+    primary_topic: optStr(r.primary_topic),
+    primary_field: optStr(r.primary_field),
+  };
+}
+
 export async function versionsOf(db: CorpusDb, handle: string): Promise<VersionRow[]> {
   // version_links(source, target, type) are directed edges; return the *other*
   // endpoint of every edge touching `handle`, joined to article metadata. The

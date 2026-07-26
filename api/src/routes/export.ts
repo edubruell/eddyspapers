@@ -13,6 +13,7 @@ const paperSchema = z.object({
   journal: z.string().default(""),
   category: z.string().default(""),
   url: z.string().default(""),
+  doi: z.string().nullable().optional(),
   abstract: z.string().nullable().optional(),
 });
 
@@ -44,6 +45,7 @@ exportRoute.post("/xlsx", async (c) => {
     { header: "Journal", key: "journal", width: 34 },
     { header: "Category", key: "category", width: 18 },
     { header: "Handle", key: "handle", width: 28 },
+    { header: "DOI", key: "doi", width: 28 },
     { header: "URL", key: "url", width: 40 },
     { header: "Abstract", key: "abstract", width: 80 },
   ];
@@ -58,6 +60,7 @@ exportRoute.post("/xlsx", async (c) => {
       journal: p.journal,
       category: p.category,
       handle: p.handle,
+      doi: p.doi ?? "",
       url: p.url,
       abstract: p.abstract ?? "",
     });

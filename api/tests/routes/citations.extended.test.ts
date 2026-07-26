@@ -11,6 +11,8 @@ import type { CorpusDb } from "../../src/db/corpus.js";
 let app: Hono;
 let statsHandle = "";
 let jsonCols: string[] = [];
+let hasOpenAlexTable = false;
+let oaHandle: string | null = null; // a handle with an article_openalex row, if the table exists
 
 beforeAll(async () => {
   requireFixture();
@@ -24,6 +26,16 @@ beforeAll(async () => {
       "SELECT column_name FROM information_schema.columns WHERE table_name = 'handle_stats' AND data_type = 'JSON'",
     )
   ).map((r) => String(r.column_name));
+  hasOpenAlexTable =
+    (
+      await fx.query(
+        "SELECT 1 FROM information_schema.tables WHERE table_name = 'article_openalex' LIMIT 1",
+      )
+    ).length > 0;
+  if (hasOpenAlexTable) {
+    const rows = await fx.query("SELECT handle FROM article_openalex LIMIT 1");
+    oaHandle = rows.length > 0 ? String(rows[0].handle) : null;
+  }
   fx.close();
 
   const { buildApp } = await import("../../src/app.js");
@@ -76,5 +88,34 @@ describe("GET /handlestats — full boxing invariants", () => {
     expect((data.error as unknown[]).length).toBe(1);
     expect("handle" in data).toBe(false);
     expect("status" in data).toBe(false);
+  });
+});
+
+// /openalexstats (M8 Wave 2 Track B). Unlike /handlestats this is a NEW endpoint with no
+// Plumber boxing: it returns a plain object or null. The committed fixture predates the
+// article_openalex table, so the resilience path (missing table → null, still 200) is the
+// live assertion; the data-shape assertions engage automatically once the fixture is rebuilt.
+describe("GET /openalexstats", () => {
+  it("returns 200 with null when the paper has no OpenAlex row / the table is absent", async () => {
+    const res = await app.request("/openalexstats?handle=RePEc:zzz:never");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toBeNull();
+  });
+
+  it("400s without a handle", async () => {
+    const res = await app.request("/openalexstats");
+    expect(res.status).toBe(400);
+  });
+
+  it("returns the OpenAlex metric shape for a handle that has one", async () => {
+    if (!hasOpenAlexTable || !oaHandle) return; // fixture predates Track B — resilience path covers it
+    const res = await app.request(`/openalexstats?handle=${q(oaHandle)}`);
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as Record<string, unknown> | null;
+    expect(data).not.toBeNull();
+    expect("oa_cited_by_count" in (data as object)).toBe(true);
+    expect("openalex_id" in (data as object)).toBe(true);
+    const cites = (data as Record<string, unknown>).oa_cited_by_count;
+    expect(cites === null || typeof cites === "number").toBe(true);
   });
 });

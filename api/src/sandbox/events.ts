@@ -26,6 +26,7 @@ const rawPaperEventSchema = z.object({
   url: z.string(),
   similarity: z.number().nullable().optional(),
   abstract: z.string().nullable().optional(),
+  doi: z.string().nullable().optional(),
 });
 
 const SECTION_MODES = [

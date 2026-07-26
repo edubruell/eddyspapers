@@ -122,4 +122,26 @@ describe("POST /xlsx export route", () => {
     });
     expect(res.status).toBe(200);
   });
+
+  it("writes a DOI column carrying the paper's DOI", async () => {
+    vi.stubEnv("AGENTIC_PASSWORD", "");
+    const route = await loadRoute();
+    const res = await route.request("/xlsx", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        papers: [{ ...samplePapers[0], doi: "10.1234/abc.2021" }],
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    const { default: ExcelJS } = await import("exceljs");
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await res.arrayBuffer());
+    const ws = wb.getWorksheet("Sources")!;
+    const header = (ws.getRow(1).values as unknown[]).map((v) => String(v ?? ""));
+    expect(header).toContain("DOI");
+    const doiCol = header.indexOf("DOI");
+    expect(String(ws.getRow(2).getCell(doiCol).value)).toBe("10.1234/abc.2021");
+  });
 });

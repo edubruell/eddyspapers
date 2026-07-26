@@ -180,6 +180,19 @@ export async function getHandleStats(handle) {
     return stats;
 }
 
+// OpenAlex work-level metrics for one paper (article_openalex). Returns the plain object
+// or null (no OpenAlex row / snapshot predates Track B). Separate from getHandleStats: those
+// are RePEc-internal metrics, these are whole-literature OpenAlex numbers.
+export async function getOpenAlexStats(handle) {
+    const url = `${API_BASE}/openalexstats?handle=${encodeURIComponent(handle)}`;
+    const res = await fetch(url, {
+        headers: apiHeaders(false)
+    });
+    await check(res);
+    const data = await res.json();
+    return data && typeof data === "object" && !data.error ? data : null;
+}
+
 let _jelCache = null;
 export async function getJelCodes() {
     if (_jelCache) return _jelCache;

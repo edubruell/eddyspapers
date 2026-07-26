@@ -43,6 +43,7 @@ export interface Paper {
   journal: string;
   category: string;
   url: string;
+  doi: string | null;
   abstract: string | null;
   bibtex: string;
   stats?: PaperStats;

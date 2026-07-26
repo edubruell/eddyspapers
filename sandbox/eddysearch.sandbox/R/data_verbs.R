@@ -110,7 +110,7 @@ cites <- function(handle, limit = 50) {
   # cit_internal stores lowercase handles; articles.Handle is mixed case. Joining
   # without LOWER() returns zero rows for every call (found 2026-07-10 while
   # building the Phase 1 test fixture).
-  sql <- "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.abstract, a.bib_tex
+  sql <- "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.doi, a.abstract, a.bib_tex
           FROM cit_internal ci
           JOIN articles a ON ci.cited = LOWER(a.Handle)
           WHERE ci.citing = LOWER(?)
@@ -127,7 +127,7 @@ citedby <- function(handle, limit = 50) {
   t0 <- Sys.time()
   emit_progress(paste0("citedby: ", stringr::str_trunc(handle, 60)))
 
-  sql <- "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.abstract, a.bib_tex
+  sql <- "SELECT a.Handle, a.title, a.year, a.authors, a.journal, a.category, a.url, a.doi, a.abstract, a.bib_tex
           FROM cit_internal ci
           JOIN articles a ON ci.citing = LOWER(a.Handle)
           WHERE ci.cited = LOWER(?)
@@ -176,7 +176,7 @@ versions <- function(handle) {
     SELECT
       COALESCE(a.Handle, l.related) AS Handle,
       l.type AS type,
-      a.title, a.year, a.authors, a.journal, a.category, a.url, a.bib_tex, a.abstract
+      a.title, a.year, a.authors, a.journal, a.category, a.url, a.doi, a.bib_tex, a.abstract
     FROM links l
     LEFT JOIN articles a ON LOWER(a.Handle) = LOWER(l.related)
   "

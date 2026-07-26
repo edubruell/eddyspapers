@@ -131,6 +131,10 @@ await conn.run(
 );
 await conn.run("CREATE TABLE institutions AS SELECT * FROM src.institutions");
 await conn.run("CREATE TABLE journal_quality AS SELECT * FROM src.journal_quality");
+// M8 Wave 2 Track B: OpenAlex work metrics, keyed on the mixed-case corpus Handle.
+await conn.run(
+  "CREATE TABLE article_openalex AS SELECT o.* FROM src.article_openalex o WHERE LOWER(o.handle) IN (SELECT LOWER(Handle) FROM articles)",
+);
 
 // A real query vector for Ollama-free tests: the embedding of a canonical
 // minimum-wage paper. Searching with a paper's own vector must rank it first —

@@ -116,17 +116,28 @@ layout: null
 <details>
     <summary>How should I read the citation badges?</summary>
     <p>
-        Each result card shows a few small badges that summarise how influential a paper is
-        within the RePEc dataset. These statistics are based only on the subset of journals
-        and working paper series included in this search engine.
+        Expanding a result shows a few small badges that summarise how influential a paper is.
+        They come from two different sources: the <strong>RePEc</strong> citation graph (limited to
+        the curated journals and working-paper series in this search engine) and
+        <strong>OpenAlex</strong> (a whole-of-literature open bibliographic database). The two
+        rarely agree — OpenAlex sees citations from books, reports and journals well outside RePEc,
+        so its numbers are usually higher.
     </p>
 
     <ul>
-        <li><strong>Citations</strong>: Total number of papers in the full RePEc citation graph that cite this paper.</li>
+        <li><strong>RePEc cites</strong>: Total number of papers in the full RePEc citation graph that cite this paper.</li>
 
-        <li><strong>Citations (in DB)</strong>: How many of those citing papers are part of the curated database used by the search engine.</li>
+        <li><strong>RePEc cites (in DB)</strong>: How many of those citing papers are part of the curated database used by the search engine.</li>
 
         <li><strong>References</strong>: Number of papers that this paper cites (within the curated dataset).</li>
+
+        <li><strong>OpenAlex Cites</strong>: The whole-literature citation count from OpenAlex, matched to
+            the paper by its DOI. Available only where we hold a DOI and OpenAlex has the work; coverage is
+            strongest for recent journal articles.</li>
+
+        <li><strong>FWCI</strong> / <strong>Top 10% (field)</strong>: OpenAlex's field-weighted citation
+            impact — citations relative to what is typical for the paper's field and year. 1.0 is average;
+            the star marks papers in the top 10% of their field.</li>
 
         <li><strong>Top Percentile</strong>: A percentile rank showing how this paper compares to all other papers in the database by citation count.
             Higher values mean the paper is more cited. For example, “96 Top Percentile” means it is among the most cited four percent of papers in the dataset.
@@ -135,6 +146,11 @@ layout: null
         <li><strong>Med. Cited-by Percentile</strong>: A percentile rank for the papers that cite this one.
             It captures the typical influence level of the citing papers. A higher number means that this paper is cited by more influential papers on average.
         </li>
+
+        <li><strong>OpenAlex</strong> / <strong>Open Access</strong> links: a link to the paper's OpenAlex record,
+            and — when the work is open access — a direct link to the free full text.</li>
+
+        <li><strong>⚠ Retracted</strong>: shown when OpenAlex flags the work as retracted.</li>
 
         <li><strong>DOI link</strong>: When we hold a DOI for a paper, the card shows a
             <code>doi.org/…</code> link straight to the publisher's version of record. Not every
@@ -145,7 +161,8 @@ layout: null
 
     <p>
         These indicators are meant to provide a quick sense of a paper’s visibility and the influence of the papers that cite it.
-        They should not be interpreted as full citation metrics for the entire RePEc corpus as citation data here is unfortunetaly incomplete.
+        The RePEc numbers should not be read as full citation metrics for the entire literature — that graph is
+        unfortunately incomplete — which is exactly why the OpenAlex count is shown alongside them.
     </p>
 </details>
 

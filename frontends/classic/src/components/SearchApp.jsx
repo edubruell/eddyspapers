@@ -294,6 +294,7 @@ function exportExcel(results) {
         Journal: r.journal,
         Year: r.year,
         Similarity: r.similarity_score,
+        DOI: r.doi ?? "",
         Abstract: r.abstract,
         URL: r.url
     }));

@@ -62,6 +62,7 @@ export async function executeScript(
             journal: raw.journal,
             category: raw.category,
             url: raw.url,
+            doi: raw.doi ?? null,
             abstract: raw.abstract ?? null,
             bibtex: "",
           };

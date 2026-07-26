@@ -13,6 +13,30 @@ export function StatBadge({ icon, label, value }) {
     );
 }
 
+// A badge that is itself a link (OpenAlex record, open-access full text).
+export function LinkBadge({ icon, label, href }) {
+    if (!href) return null;
+
+    return (
+        <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-sky-300 bg-sky-50 text-[11px] md:text-xs text-sky-800 hover:bg-sky-100"
+        >
+            {icon}
+            <span className="font-semibold">{label}</span>
+        </a>
+    );
+}
+
+export const OpenAlexIcon = (
+    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M10 3v14M3 10h14" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+);
+
 export const CitIcon = (
     <svg className="w-3 h-3" viewBox="0 0 20 20" fill="none">
         <path d="M5 5h10M5 10h10M5 15h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -81,31 +105,55 @@ export function MiniHistogram({ years, counts }) {
     );
 }
 
-export default function StatsBadges({ stats }) {
-    if (!stats) return null;
-
+export default function StatsBadges({ stats, openalex }) {
     const citationYears = stats?.citations_by_year?.years || null;
     const citationCounts = stats?.citations_by_year?.counts || null;
 
-    // IDEAS-style coverage rule
-    const hasCoverage =
-        stats.internal_citations != null ||
-        (citationCounts && citationCounts.length > 0) ||
-        stats.total_references != null;
+    // IDEAS-style coverage rule, now also satisfied by OpenAlex data — a paper can carry
+    // whole-literature OpenAlex metrics even when it has no RePEc-internal citation stats.
+    const hasRepecCoverage =
+        !!stats &&
+        (stats.internal_citations != null ||
+            (citationCounts && citationCounts.length > 0) ||
+            stats.total_references != null);
 
-    if (!hasCoverage) return null;
+    const hasOpenAlex =
+        !!openalex && (openalex.oa_cited_by_count != null || openalex.openalex_id);
+
+    if (!hasRepecCoverage && !hasOpenAlex) return null;
 
     return (
         <div className="flex flex-wrap items-center gap-2">
-            <StatBadge icon={CitIcon} label="Citations" value={stats.total_citations} />
-            <StatBadge icon={CitIcon} label="Citations (in Database)" value={stats.internal_citations} />
-            <StatBadge icon={CitIcon} label="References" value={stats.total_references} />
+            {/* RePEc citation graph (curated corpus subset) */}
+            <StatBadge icon={CitIcon} label="RePEc cites" value={stats?.total_citations} />
+            <StatBadge icon={CitIcon} label="RePEc cites (in DB)" value={stats?.internal_citations} />
+            <StatBadge icon={RefIcon} label="References" value={stats?.total_references} />
+
+            {/* OpenAlex — whole-literature citation count + link to the record */}
+            {openalex && (
+                <StatBadge
+                    icon={OpenAlexIcon}
+                    label="OpenAlex Cites"
+                    value={openalex.oa_cited_by_count}
+                />
+            )}
+            {openalex?.fwci != null && (
+                <StatBadge icon={UpArrowIcon} label="FWCI" value={openalex.fwci.toFixed(2)} />
+            )}
+            {openalex?.is_top10 && (
+                <StatBadge icon={UpArrowIcon} label="Top 10% (field)" value={"★"} />
+            )}
+            {openalex?.is_retracted && (
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-red-400 bg-red-50 text-[11px] md:text-xs font-semibold text-red-700">
+                    ⚠ Retracted
+                </div>
+            )}
 
             <StatBadge
                 icon={UpArrowIcon}
                 label="Top Percentile"
                 value={
-                    stats.citation_percentile != null
+                    stats?.citation_percentile != null
                         ? (stats.citation_percentile * 100).toFixed(0)
                         : null
                 }
@@ -115,11 +163,16 @@ export default function StatsBadges({ stats }) {
                 icon={CentralityIcon}
                 label="Med. Cited-by Percentile"
                 value={
-                    stats.median_citer_percentile != null
+                    stats?.median_citer_percentile != null
                         ? (stats.median_citer_percentile * 100).toFixed(0)
                         : null
                 }
             />
+
+            <LinkBadge icon={OpenAlexIcon} label="OpenAlex" href={openalex?.openalex_id} />
+            {openalex?.is_oa && (
+                <LinkBadge icon={RefIcon} label="Open Access" href={openalex?.oa_url} />
+            )}
 
             {citationYears && citationCounts && (
                 <div className="ml-auto flex items-center">
