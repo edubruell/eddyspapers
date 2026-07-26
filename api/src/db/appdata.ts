@@ -156,6 +156,14 @@ export async function openAppDataDb(): Promise<AppDataDb> {
     )
   `);
 
+  // Fold any schema change just applied above (notably the jel ADD COLUMN) into the main
+  // file NOW, so the WAL never carries an ALTER into a cold-start replay. DuckDB 1.5.3's
+  // WAL replay crashes on `ReplayAlter` for ADD COLUMN (BindDefaultValues → "GetDefaultDatabase
+  // with no default database set"), regardless of whether the column had a DEFAULT. Left
+  // uncheckpointed, a migration detonates on the next restart (the 2026-07-26 outage). This
+  // does not rely on a clean shutdown — systemd may SIGKILL before close() checkpoints.
+  await conn.run("CHECKPOINT");
+
   return {
     async createKey(row) {
       await conn.run(

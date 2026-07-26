@@ -95,13 +95,18 @@ export async function openSearchDb(): Promise<SearchDb> {
   `);
 
   // Migrate pre-existing tables (created before the blocking clarifier / multistage landed).
-  // NOTE: never use a DEFAULT clause in these ALTERs. DuckDB's WAL replay crashes on
-  // `ReplayAlter` for an ADD COLUMN that carries a DEFAULT (the column is nullable here and
-  // reads coerce NULL → false, so a default is unnecessary anyway). The DEFAULT on the CREATE
-  // TABLE above is fine — only ALTERs are replayed through the crashing path.
+  // DuckDB 1.5.3's WAL replay crashes on `ReplayAlter` for ANY ADD COLUMN (with or without a
+  // DEFAULT — it binds a NULL default internally). The real safeguard is the CHECKPOINT below,
+  // which folds these ALTERs into the main file at startup so the WAL never replays a schema
+  // change on a cold restart. Keeping the columns DEFAULT-free is still tidy, but is NOT what
+  // prevents the crash (an earlier comment here wrongly claimed it was; see the 2026-07-26
+  // appdata outage — a no-DEFAULT ADD COLUMN detonated all the same).
   await conn.run("ALTER TABLE searches ADD COLUMN IF NOT EXISTS clarify_question TEXT");
   await conn.run("ALTER TABLE searches ADD COLUMN IF NOT EXISTS clarify_answer TEXT");
   await conn.run("ALTER TABLE searches ADD COLUMN IF NOT EXISTS refine BOOLEAN");
+
+  // Fold the ALTERs into the main file now — see the appdata.ts CHECKPOINT for the full why.
+  await conn.run("CHECKPOINT");
 
   return {
     async upsertSearch(id, input) {
