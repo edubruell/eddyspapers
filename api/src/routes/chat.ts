@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { resolveSnapshot } from "../sandbox/snapshot.js";
-import { computeSearchId } from "../agent/cache.js";
+import { computeSearchId, legacySearchId } from "../agent/cache.js";
 import { runAgent, type RunOpts } from "../agent/runAgent.js";
 import { bus } from "../stream/bus.js";
 import { getSearchDb } from "../db/singleton.js";
@@ -107,6 +107,16 @@ chatRoute.post("/", requireKey("rest"), async (c) => {
   const existing = await db.getSearch(id);
   if (existing?.status === "done") {
     return c.json({ id }, 200);
+  }
+
+  // Backward compat (test-phase shares): runs created before the HMAC-ID cutover are stored
+  // under the old plain-hash id. If this brief already has a completed run there, serve it —
+  // so a pre-cutover brief still cache-hits its result and keeps its shareable id instead of
+  // minting a duplicate under the new scheme. Only completed runs (avoids resuming stale
+  // legacy in-flight rows); new runs always use the HMAC id below.
+  const legacyExisting = await db.getSearch(legacySearchId({ brief, categories, minYear, mustInclude, refine, dbSnapshotDate }));
+  if (legacyExisting?.status === "done") {
+    return c.json({ id: legacyExisting.id }, 200);
   }
 
   // Atomic claim: only the caller that inserts the row (or reclaims a previously errored

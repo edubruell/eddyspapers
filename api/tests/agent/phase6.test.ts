@@ -36,6 +36,23 @@ describe("computeSearchId", () => {
     expect(computeSearchId(base)).not.toBe(plain);
   });
 
+  it("legacySearchId reproduces the pre-HMAC plain-hash id (backward-compat lookup)", async () => {
+    const { legacySearchId } = await import("../../src/agent/cache.js");
+    const { createHash } = await import("crypto");
+    const payload = JSON.stringify({
+      brief: base.brief,
+      categories: [],
+      minYear: null,
+      mustInclude: [],
+      refine: false,
+      dbSnapshotDate: base.dbSnapshotDate,
+    });
+    const plain = createHash("sha256").update(payload).digest("hex").slice(0, 16);
+    expect(legacySearchId(base)).toBe(plain);
+    // …and it is distinct from the live HMAC id, so the two lookups don't collide.
+    expect(legacySearchId(base)).not.toBe(computeSearchId(base));
+  });
+
   it("different briefs produce different ids", () => {
     const id1 = computeSearchId({ ...base, brief: "minimum wages employment" });
     const id2 = computeSearchId({ ...base, brief: "monetary policy inflation" });
