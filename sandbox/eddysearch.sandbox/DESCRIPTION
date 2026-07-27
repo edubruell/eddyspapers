@@ -1,6 +1,6 @@
 Package: eddysearch.sandbox
 Title: Hardened R Sandbox for Agentic Literature Search
-Version: 0.5.0
+Version: 0.6.0
 Authors@R: person("Eduard", "Bruell", email = "eduard.bruell@zew.de", role = c("aut", "cre"))
 Description: Provides the only allowed data verbs and output emitters for
     LLM-generated R scripts running inside the agentic search sandbox.
