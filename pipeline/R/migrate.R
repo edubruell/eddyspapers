@@ -81,7 +81,7 @@ schema_migrations <- function() {
          oa_year                INTEGER,
          updated_date           DATE
        )",
-      "CREATE INDEX IF NOT EXISTS idx_article_openalex_handle ON article_openalex(handle)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_article_openalex_handle ON article_openalex(handle)",
       "CREATE INDEX IF NOT EXISTS idx_article_openalex_doi    ON article_openalex(doi)"
     )
   )

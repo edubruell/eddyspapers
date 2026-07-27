@@ -60,6 +60,9 @@ export interface SearchDb {
   getSearch(id: string): Promise<StoredSearch | null>;
   getStats(days: number): Promise<SearchStats>;
   getDailyLogs(day: string): Promise<DailyLogRow[]>;
+  // Flip runs still awaiting a clarifier reply older than maxAgeHours to 'error' so they
+  // don't linger forever (the user never came back). Returns how many rows were expired.
+  expireStaleClarifications(maxAgeHours: number): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -107,6 +110,28 @@ export async function openSearchDb(): Promise<SearchDb> {
 
   // Fold the ALTERs into the main file now — see the appdata.ts CHECKPOINT for the full why.
   await conn.run("CHECKPOINT");
+
+  const expireStaleClarifications = async (maxAgeHours: number): Promise<number> => {
+    const rows = await rowsToObjects(
+      conn,
+      `UPDATE searches SET status = 'error'
+         WHERE status = 'awaiting_clarification'
+           AND created_at < now() - to_hours(CAST(? AS INTEGER))
+         RETURNING id`,
+      [maxAgeHours],
+    );
+    return rows.length;
+  };
+
+  // Sweep once at open, then hourly on an unref'd timer so a stale run created after startup
+  // still ages out without a restart. STALE_CLARIFY_HOURS/_SWEEP_MS are overridable for tests.
+  const staleHours = Number(process.env.STALE_CLARIFY_HOURS ?? 24);
+  const sweepMs = Number(process.env.STALE_CLARIFY_SWEEP_MS ?? 3_600_000);
+  await expireStaleClarifications(staleHours);
+  const sweepTimer = setInterval(() => {
+    void expireStaleClarifications(staleHours).catch(() => undefined);
+  }, sweepMs);
+  if (typeof sweepTimer === "object" && "unref" in sweepTimer) sweepTimer.unref();
 
   return {
     async upsertSearch(id, input) {
@@ -226,7 +251,10 @@ export async function openSearchDb(): Promise<SearchDb> {
       }));
     },
 
+    expireStaleClarifications,
+
     async close() {
+      clearInterval(sweepTimer);
       conn.disconnectSync();
     },
   };
