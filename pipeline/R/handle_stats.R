@@ -297,14 +297,20 @@ get_handle_stats <- function(con, handles) {
   }
   
   handles_lower <- tolower(handles)
-  
-  query <- "SELECT * FROM handle_stats WHERE handle IN (?)"
-  result <- DBI::dbGetQuery(con, query, params = list(handles_lower))
-  
+  if (length(handles_lower) == 0) {
+    return(NULL)
+  }
+
+  # A single `?` cannot expand a vector into an IN list — bind one placeholder per handle
+  # (the pattern used across the pipeline, e.g. enrich_openalex.R).
+  placeholders <- paste(rep("?", length(handles_lower)), collapse = ", ")
+  query <- paste0("SELECT * FROM handle_stats WHERE handle IN (", placeholders, ")")
+  result <- DBI::dbGetQuery(con, query, params = as.list(handles_lower))
+
   if (nrow(result) == 0) {
     return(NULL)
   }
-  
+
   result
 }
 

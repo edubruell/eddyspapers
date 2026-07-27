@@ -24,6 +24,19 @@ const replyBodySchema = z.object({
 
 export const chatRoute = new Hono();
 
+// Once a run reaches a terminal state, its buffered events on the bus are no longer needed
+// for the live stream (late viewers read the persisted copy via GET /searches/:id). Drop
+// them after a grace period so in-flight streams drain first; guard on isDone so a stale
+// timer from a since-retried run can't wipe an active entry. unref so it never holds the
+// process open.
+const BUS_CLEANUP_GRACE_MS = 60_000;
+function scheduleBusCleanup(id: string): void {
+  const t = setTimeout(() => {
+    if (bus.isDone(id)) bus.cleanup(id);
+  }, BUS_CLEANUP_GRACE_MS);
+  t.unref?.();
+}
+
 // Drives one pass of runAgent (Phase A start or Phase B resume): mirrors events onto
 // the live bus, buffers them, then persists — either suspending on a clarifier pause or
 // finalizing the run. Fire-and-forget; the client follows the SSE stream.
@@ -54,12 +67,14 @@ function runPhase(db: SearchDb, id: string, input: AgentInput, dbPath: string, o
       const hasError = buffered.some((e) => e.type === "error" && !e.recoverable);
       const status = hasError ? "error" : hasDone ? "done" : "error";
       await db.finalizeSearch(id, status, synthesis);
+      scheduleBusCleanup(id);
     })
     .catch(async (err) => {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[runAgent] uncaught error for ${id}: ${message}`);
       await db.appendEvents(id, buffered).catch(() => undefined);
       await db.finalizeSearch(id, "error", "").catch(() => undefined);
+      scheduleBusCleanup(id);
     });
 }
 
@@ -94,7 +109,17 @@ chatRoute.post("/", requireKey("rest"), async (c) => {
     return c.json({ id }, 200);
   }
 
-  await db.upsertSearch(id, { brief, categories, minYear, mustInclude, refine, dbSnapshotDate });
+  // Atomic claim: only the caller that inserts the row (or reclaims a previously errored
+  // one) launches runAgent. A concurrent identical brief — or a re-POST of a still-running
+  // or awaiting-clarification run — gets `claimed === false` and just attaches to the live
+  // stream, so two runners never publish to one bus with colliding seqs.
+  const claimed = await db.claimSearch(id, { brief, categories, minYear, mustInclude, refine, dbSnapshotDate });
+  if (!claimed) {
+    return c.json({ id }, 202);
+  }
+
+  // Fresh start: drop any stale bus entry left by a prior errored attempt of this id.
+  bus.cleanup(id);
 
   const input: AgentInput = { brief, categories, minYear, mustInclude, skipClarify, refine };
   runPhase(db, id, input, snapshot.path, { startSeq: 0, runClarify: true });

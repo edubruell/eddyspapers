@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import { fileURLToPath } from "url";
 import { dirname, resolve, join } from "path";
 import { parseRawEvent, type RawSandboxEvent } from "./events.js";
+import { sandboxEnv } from "./env.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const RUN_R = resolve(__dir, "../../../sandbox/run.R");
@@ -118,6 +119,7 @@ export async function runSandbox(
     const timeoutSecs = String(Math.ceil(timeoutMs / 1000));
     const child = spawn(SANDBOX_SH, [scriptPath, dbPath, RUN_R, timeoutSecs], {
       stdio: ["ignore", "pipe", "pipe", wfd],
+      env: sandboxEnv(),
     });
 
     const poll = setInterval(drainFd3, FD3_POLL_MS);

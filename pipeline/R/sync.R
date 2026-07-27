@@ -62,7 +62,9 @@ sync_repec_folder <- function(.archive, .journal = NULL,
   dest <- normalizePath(dest, winslash = "/", mustWork = FALSE)
   
   withr::with_dir(dest, {
-    args <- c("-av", "-s", "--delete", "--contimeout=20", "--timeout=60", "--exclude=*.pdf", src, "./")
+    # --max-delete guards against a transient upstream blip (empty/partial listing)
+    # turning --delete into a wipe of the local mirror; rsync aborts past the cap.
+    args <- c("-av", "-s", "--delete", "--max-delete=10000", "--contimeout=20", "--timeout=60", "--exclude=*.pdf", src, "./")
     status <- system2(rsync_bin, args)
     if (status != 0) stop("rsync failed with status ", status)
   })
@@ -126,7 +128,8 @@ sync_repec_cpd_conf <- function(
   dest <- normalizePath(dest, winslash = "/", mustWork = FALSE)
   
   withr::with_dir(dest, {
-    args <- c("-av", "-s", "--delete", "--contimeout=20", "--timeout=60", src, "./")
+    # --max-delete: see sync_repec_folder — guards against an upstream blip wiping the mirror.
+    args <- c("-av", "-s", "--delete", "--max-delete=10000", "--contimeout=20", "--timeout=60", src, "./")
     status <- system2(rsync_bin, args)
     if (status != 0) stop("rsync failed with status ", status)
   })
@@ -203,6 +206,7 @@ sync_repec_pers <- function(dest_root = NULL,
       "-av",
       "-s",
       "--delete",
+      "--max-delete=10000",  # guard: an upstream blip must not wipe the local pers mirror
       "--contimeout=20", "--timeout=60",
       src,
       "./"

@@ -99,6 +99,48 @@ describe("checkScript", () => {
     const result = await checkScript("/tmp/does_not_exist_xyz.R");
     expect(result.ok).toBe(false);
   });
+
+  it("accepts higher-order functions with allowlisted function values", async () => {
+    const result = await checkScript(join(GOOD_SCRIPTS_DIR, "09_hof_function_values.R"));
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts locally-bound names that collide with blocked base functions (S1)", async () => {
+    const result = await checkScript(join(GOOD_SCRIPTS_DIR, "10_shadowed_names.R"));
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts legitimate glue interpolation of allowlisted expressions", async () => {
+    const result = await checkScript(join(GOOD_SCRIPTS_DIR, "12_glue_interpolation.R"));
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts common base + dplyr helpers (ifelse/unlist/setNames/if_else)", async () => {
+    const result = await checkScript(join(GOOD_SCRIPTS_DIR, "13_base_helpers.R"));
+    expect(result.ok).toBe(true);
+  });
+
+  it.each([
+    "bad_hof_symbol_system.R",
+    "bad_map_symbol_system.R",
+    "bad_sapply_ns_symbol_system.R",
+    "bad_do_call_reduce_symbol.R",
+    "bad_self_assign_launder.R",
+    "bad_ns_value_launder.R",
+    "bad_basenamespaceenv_call.R",
+    "bad_basenamespaceenv_value.R",
+    "bad_basenamespaceenv_dollar.R",
+    "bad_get_exported_value.R",
+    "bad_computed_callee_index.R",
+    "bad_glue_system.R",
+    "bad_glue_launder_var.R",
+    "bad_glue_open_override.R",
+    "bad_reduce_make_socket.R",
+    "bad_hof_file_append.R",
+  ])("rejects the AST-bypass payload %s (S1)", async (file) => {
+    const result = await checkScript(join(BAD_SCRIPTS_DIR, file));
+    expect(result.ok).toBe(false);
+  });
 });
 
 // ── Integration: resolveSnapshot ─────────────────────────────────────────────

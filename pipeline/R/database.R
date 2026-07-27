@@ -429,7 +429,10 @@ write_version_links_to_db <- function(db_path = NULL,
   
   processed_handles_norm <- tolower(processed_handles)
   
-  rw_filtered <- rw[processed_handles_norm %in% names(rw)]
+  # Subset rw (length N, named by handle) to entries whose handle is in the corpus. The mask
+  # must be indexed over names(rw), NOT processed_handles_norm (length M ≈ 479k) — the latter
+  # produces an M-length logical that misaligns/NA-pads the N-length rw.
+  rw_filtered <- rw[names(rw) %in% processed_handles_norm]
   
   version_links <- purrr::imap_dfr(
     rw_filtered,

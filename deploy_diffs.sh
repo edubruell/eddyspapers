@@ -24,7 +24,12 @@
 # Overridable via environment variables:
 #   EDDY_HOST, EDDY_ROOT_USER, EDDY_APP_USER,
 #   EDDY_LOCAL_DIFF_DIR, EDDY_REMOTE_DIFF_DIR, EDDY_SERVICE,
-#   EDDY_DB_DIR, EDDY_STOP_SERVICE
+#   EDDY_DB_DIR, EDDY_STOP_SERVICE, EDDY_KEEP_PREV
+#
+# Rollback: set EDDY_KEEP_PREV=1 to retain the previous served snapshot as
+# articles_agentic.duckdb.prev (costs one extra ~13G copy). To revert a bad deploy:
+#   ssh <app>@<host> 'cd <db_dir> && mv -f articles_agentic.duckdb.prev articles_agentic.duckdb'
+#   ssh root@<host> 'systemctl restart eddyspapers-api'
 #
 # Usage: ./deploy_diffs.sh
 
@@ -38,6 +43,7 @@ REMOTE_DIFF_DIR="${EDDY_REMOTE_DIFF_DIR:-/srv/eddyspapers/data/pqt_diff}"
 SERVICE="${EDDY_SERVICE:-eddyspapers-api}"
 DB_DIR="${EDDY_DB_DIR:-/srv/eddyspapers/data/db}"
 STOP_SERVICE="${EDDY_STOP_SERVICE:-0}"
+KEEP_PREV="${EDDY_KEEP_PREV:-0}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APPLY_SCRIPT="$SCRIPT_DIR/server_apply_diff.R"
@@ -74,11 +80,15 @@ rsync -av --no-perms --no-owner --no-group \
   "${ROOT_USER}@${HOST}:${REMOTE_DIFF_DIR}/"
 
 say "2/5 Fixing permissions (root)${STOP_SERVICE:+; STOP_SERVICE=${STOP_SERVICE}}"
-ssh "${ROOT_USER}@${HOST}" bash -s <<EOF
+# Quoted heredoc (<<'EOF') so the body is NOT expanded locally: values are shell-quoted
+# with printf %q and passed through the remote environment, never interpolated into the
+# root shell's command text.
+ssh "${ROOT_USER}@${HOST}" \
+  "REMOTE_DIFF_DIR=$(printf %q "${REMOTE_DIFF_DIR}") STOP_SERVICE=$(printf %q "${STOP_SERVICE}") SERVICE=$(printf %q "${SERVICE}") bash -s" <<'EOF'
 set -euo pipefail
-chmod 755 ${REMOTE_DIFF_DIR}
-chmod 644 ${REMOTE_DIFF_DIR}/*.parquet
-if [[ "${STOP_SERVICE}" == "1" ]]; then systemctl stop ${SERVICE}; fi
+chmod 755 "$REMOTE_DIFF_DIR"
+chmod 644 "$REMOTE_DIFF_DIR"/*.parquet
+if [[ "$STOP_SERVICE" == "1" ]]; then systemctl stop "$SERVICE"; fi
 EOF
 [[ "${STOP_SERVICE}" == "1" ]] && api_stopped=1
 
@@ -89,10 +99,17 @@ say "4/5 Refreshing the Hono snapshot (atomic swap, as ${APP_USER})"
 # The mv replaces the inode while the running service still holds the OLD snapshot open
 # read-only; POSIX unlink-on-open keeps that handle valid until step 5's /admin/reload swaps
 # it. A read-only DuckDB open creates no WAL, so the rm -f is a defensive no-op (W3, review).
-ssh "${APP_USER}@${HOST}" bash -s <<EOF
+ssh "${APP_USER}@${HOST}" \
+  "DB_DIR=$(printf %q "${DB_DIR}") KEEP_PREV=$(printf %q "${KEEP_PREV}") bash -s" <<'EOF'
 set -euo pipefail
-cd "${DB_DIR}"
+cd "$DB_DIR"
 cp -f articles.duckdb articles_agentic.duckdb.new
+# Opt-in rollback point (EDDY_KEEP_PREV=1): retain the previous served snapshot so a bad
+# apply can be reverted with `mv articles_agentic.duckdb.prev articles_agentic.duckdb` +
+# restart, without re-shipping a full dump. Off by default (it costs one extra ~13G copy).
+if [[ "$KEEP_PREV" == "1" && -f articles_agentic.duckdb ]]; then
+  cp -f articles_agentic.duckdb articles_agentic.duckdb.prev
+fi
 mv -f articles_agentic.duckdb.new articles_agentic.duckdb
 rm -f articles_agentic.duckdb.wal
 EOF

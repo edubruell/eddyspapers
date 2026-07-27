@@ -18,7 +18,10 @@
 #
 # Overridable via environment variables:
 #   EDDY_HOST, EDDY_ROOT_USER, EDDY_APP_USER,
-#   EDDY_LOCAL_PATCH_DIR, EDDY_REMOTE_PATCH_DIR, EDDY_SERVICE, EDDY_DB_DIR
+#   EDDY_LOCAL_PATCH_DIR, EDDY_REMOTE_PATCH_DIR, EDDY_SERVICE, EDDY_DB_DIR, EDDY_KEEP_PREV
+#
+# Rollback: EDDY_KEEP_PREV=1 keeps the previous snapshot as articles_agentic.duckdb.prev
+# (see deploy_diffs.sh header for the revert command).
 #
 # Usage: ./deploy_patches.sh
 
@@ -31,6 +34,7 @@ LOCAL_PATCH_DIR="${EDDY_LOCAL_PATCH_DIR:-$HOME/eddyspapers/pqt_patch}"
 REMOTE_PATCH_DIR="${EDDY_REMOTE_PATCH_DIR:-/srv/eddyspapers/data/pqt_patch}"
 SERVICE="${EDDY_SERVICE:-eddyspapers-api}"
 DB_DIR="${EDDY_DB_DIR:-/srv/eddyspapers/data/db}"
+KEEP_PREV="${EDDY_KEEP_PREV:-0}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APPLY_SCRIPT="$SCRIPT_DIR/server_apply_patch.R"
@@ -56,21 +60,28 @@ rsync -av --no-perms --no-owner --no-group \
   "${ROOT_USER}@${HOST}:${REMOTE_PATCH_DIR}/"
 
 say "2/5 Fixing permissions (root)"
-ssh "${ROOT_USER}@${HOST}" bash -s <<EOF
+# Quoted heredoc + printf %q env-passing: nothing is interpolated into the remote root
+# shell's command text (see deploy_diffs.sh for the rationale).
+ssh "${ROOT_USER}@${HOST}" \
+  "REMOTE_PATCH_DIR=$(printf %q "${REMOTE_PATCH_DIR}") bash -s" <<'EOF'
 set -euo pipefail
-mkdir -p ${REMOTE_PATCH_DIR}
-chmod 755 ${REMOTE_PATCH_DIR}
-chmod 644 ${REMOTE_PATCH_DIR}/* 2>/dev/null || true
+mkdir -p "$REMOTE_PATCH_DIR"
+chmod 755 "$REMOTE_PATCH_DIR"
+chmod 644 "$REMOTE_PATCH_DIR"/* 2>/dev/null || true
 EOF
 
 say "3/5 Applying pending patches on server (as ${APP_USER})"
 ssh "${APP_USER}@${HOST}" 'Rscript -' < "$APPLY_SCRIPT"
 
 say "4/5 Refreshing the Hono snapshot (atomic swap, as ${APP_USER})"
-ssh "${APP_USER}@${HOST}" bash -s <<EOF
+ssh "${APP_USER}@${HOST}" \
+  "DB_DIR=$(printf %q "${DB_DIR}") KEEP_PREV=$(printf %q "${KEEP_PREV}") bash -s" <<'EOF'
 set -euo pipefail
-cd "${DB_DIR}"
+cd "$DB_DIR"
 cp -f articles.duckdb articles_agentic.duckdb.new
+if [[ "$KEEP_PREV" == "1" && -f articles_agentic.duckdb ]]; then
+  cp -f articles_agentic.duckdb articles_agentic.duckdb.prev
+fi
 mv -f articles_agentic.duckdb.new articles_agentic.duckdb
 rm -f articles_agentic.duckdb.wal
 EOF

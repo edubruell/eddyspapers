@@ -23,7 +23,10 @@ ALLOWED_BASE <- c(
   "Sys.Date", "Sys.time", "format.Date", "difftime",
   "head", "tail", "append", "setdiff", "union", "intersect", "match",
   "Reduce", "Map", "Filter", "Find", "Position", "mapply", "vapply",
-  "sapply", "lapply",
+  "sapply", "lapply", "apply", "tapply", "outer", "aggregate",
+  "ifelse", "unlist", "setNames", "factor", "cut", "na.omit", "replace",
+  "rowSums", "rowMeans", "colSums", "colMeans", "merge", "split",
+  "class", "oldClass", "levels", "nlevels", "droplevels",
   "print", "message", "warning", "stop",
   "identity", "invisible", "structure", "attr", "attributes",
   "tryCatch", "try", "withCallingHandlers", "on.exit",
@@ -32,7 +35,6 @@ ALLOWED_BASE <- c(
   "which.min", "which.max", "cummax", "cummin", "cumprod",
   "rep", "rep_len",
   "nargs", "missing", "sys.call",
-  "Sys.getenv",
   "proc.time", "system.time", "date",
   "do.call", "return", "switch", "match.arg",
   "stopifnot", "exists",
@@ -50,6 +52,7 @@ ALLOWED_DPLYR <- c(
   "semi_join", "cross_join", "bind_rows", "bind_cols",
   "case_when", "case_match", "if_else", "coalesce", "na_if", "between", "near",
   "n", "n_distinct", "row_number", "cur_group_id", "cur_group_rows",
+  "c_across", "if_any", "if_all", "cur_column", "cur_group", "cur_data", "pick", "reframe",
   "lag", "lead", "first", "last", "nth",
   "across", "where", "everything", "starts_with", "ends_with", "contains",
   "matches", "num_range", "all_of", "any_of", "last_col",
@@ -64,7 +67,7 @@ ALLOWED_STRINGR <- c(
   "str_to_upper", "str_to_title", "str_to_sentence", "str_trim",
   "str_squish", "str_pad", "str_trunc", "str_split", "str_split_fixed",
   "str_split_i", "str_c", "str_flatten", "str_flatten_comma",
-  "str_length", "str_starts", "str_ends", "str_glue", "str_glue_data",
+  "str_length", "str_starts", "str_ends", "str_glue",
   "str_locate", "str_locate_all", "str_sub", "str_sub_all",
   "str_dup", "str_wrap", "str_conv",
   "fixed", "regex", "coll", "boundary", "word"
@@ -94,9 +97,17 @@ ALLOWED_PURRR <- c(
   "modify2", "imodify"
 )
 
+# glue()/str_glue() interpolate — and evaluate — R inside `{ }`, so they are a code
+# channel the string scanner can't see. They are allowlisted but SPECIALLY GUARDED in
+# check_call (literal template required, `{ }` expressions re-checked). The data-first
+# variants glue_data()/str_glue_data() are NOT allowlisted (their positional data arg
+# makes the template ambiguous to locate statically); glue_collapse()/trim() do not
+# interpolate and are safe.
 ALLOWED_GLUE <- c(
-  "glue", "glue_data", "glue_collapse", "trim"
+  "glue", "str_glue", "glue_collapse", "trim"
 )
+
+GLUE_INTERP_FNS <- c("glue", "str_glue")
 
 ALLOWED_SANDBOX <- c(
   "connect_db",
@@ -152,8 +163,35 @@ BLOCKED <- c(
   "quit", "q",
   "options",
   "browser", "debug", "undebug", "debugonce", "trace", "untrace",
-  "traceback", "recover"
+  "traceback", "recover",
+  # Value-position hardening: these are dangerous whether *called* or passed as a
+  # *value* to a higher-order function (`lapply(x, .Call)`), so they must be on the
+  # denylist that `check_symbol` consults for bare symbols — not just call position.
+  ".Internal", ".Primitive", ".Call", ".External", ".External2", ".C", ".Fortran",
+  "str2lang", "str2expression", "as.name", "as.symbol", "quote", "substitute", "bquote",
+  "environment", "as.environment", "emptyenv", "topenv", "environmentName", "list2env",
+  "sys.frame", "sys.frames", "sys.calls", "eval.parent", "local", "with", "within",
+  "unloadNamespace",
+  # Base environment objects and function-fetchers: reachable as bare-symbol *values*,
+  # they hand back the real base functions (`.BaseNamespaceEnv[["system"]]`,
+  # `getExportedValue("base","system")`) and so bypass the call/`::` guards entirely.
+  ".BaseNamespaceEnv", ".GlobalEnv", ".AutoloadEnv", "pos.to.env",
+  "getExportedValue", "getNamespaceExports", "getFunction", "getAnywhere",
+  "getMethod", "selectMethod", "getS3method", "loadedNamespaces", "search", "dynGet",
+  # Network sockets and extra filesystem/serialisation primitives — dangerous whether
+  # called or passed as a value to a higher-order function (`Reduce(make.socket, …)`).
+  "make.socket", "close.socket", "read.socket", "write.socket", "serverSocket", "fifo",
+  "readRenviron", "Sys.chmod", "Sys.setFileTime", "Sys.readlink",
+  "file.append", "file.link", "writeChar", "writeBin", "serialize", "unserialize",
+  "Sys.getenv", "Sys.info", "Sys.glob", "Sys.getpid", "commandArgs", ".libPaths",
+  "install.packages", "remove.packages", "getwd", "list.files", "list.dirs",
+  "dir.exists", "file.exists", "file.info", "tempfile", "tempdir"
 )
+
+# Names that are blocked as a *call* (e.g. `q()` = quit) but are legitimate and safe
+# as bare data identifiers — `q` (quantity) is ubiquitous in economics as a column name.
+# Exempted only in value position (check_symbol); the call-position guard still fires.
+VALUE_SAFE <- c("q")
 
 BLOCKED_HINTS <- list(
   system           = "Remove shell calls. Use sandbox data verbs to query the database.",
@@ -188,6 +226,7 @@ BLOCKED_HINTS <- list(
   globalenv        = "Global environment access is not allowed.",
   baseenv          = "Base environment access is not allowed.",
   parent.frame     = "Frame access is not allowed.",
+  Sys.getenv       = "Environment variables (which may hold service secrets) are not readable from the sandbox.",
   Sys.setenv       = "Environment variable modification is not allowed.",
   Sys.unsetenv     = "Environment variable modification is not allowed.",
   Sys.setlocale    = "Locale modification is not allowed.",
@@ -236,7 +275,83 @@ reject <- function(node, reason, hint = "") {
   stop(cond)
 }
 
-check_call <- function(node) {
+# Walk a glue template literal and pull out the `{ ... }` interpolation expressions,
+# honouring `{{`/`}}` escapes and nested braces. Returns NULL on unbalanced braces.
+extract_glue_exprs <- function(template) {
+  chars <- strsplit(template, "", fixed = TRUE)[[1]]
+  n <- length(chars)
+  exprs <- character(0)
+  i <- 1L
+  while (i <= n) {
+    ch <- chars[[i]]
+    if (ch == "{") {
+      if (i < n && chars[[i + 1L]] == "{") { i <- i + 2L; next }  # {{ literal
+      depth <- 1L
+      j <- i + 1L
+      buf <- character(0)
+      while (j <= n && depth > 0L) {
+        cj <- chars[[j]]
+        if (cj == "{") {
+          depth <- depth + 1L
+        } else if (cj == "}") {
+          depth <- depth - 1L
+          if (depth == 0L) break
+        }
+        buf <- c(buf, cj)
+        j <- j + 1L
+      }
+      if (depth != 0L) return(NULL)  # unbalanced
+      exprs <- c(exprs, paste(buf, collapse = ""))
+      i <- j + 1L
+    } else if (ch == "}") {
+      if (i < n && chars[[i + 1L]] == "}") { i <- i + 2L; next }  # }} literal
+      i <- i + 1L
+    } else {
+      i <- i + 1L
+    }
+  }
+  exprs
+}
+
+# glue()/str_glue() evaluate the R inside `{ }`. Require a literal template (so it can't
+# be laundered through a variable), forbid delimiter/env/transformer overrides, and run
+# every embedded expression back through the checker exactly like top-level code.
+check_glue_call <- function(node, bound) {
+  arg_names <- names(node)
+  if (is.null(arg_names)) arg_names <- rep("", length(node))
+  for (k in seq_along(node)[-1]) {
+    an <- arg_names[[k]]
+    if (an %in% c(".open", ".close", ".envir", ".transformer")) {
+      reject(node,
+             "Overriding glue delimiters, environment, or transformer is not permitted",
+             "Use the default `{ }` interpolation without `.open`/`.close`/`.envir`/`.transformer`.")
+    }
+    if (nzchar(an) && startsWith(an, ".")) next  # other control args (.sep, .na, …)
+    if (nzchar(an)) next                          # named glue data — checked by recursion
+    arg <- node[[k]]
+    if (!(is.character(arg) && length(arg) == 1)) {
+      reject(node,
+             "glue()/str_glue() templates must be string literals",
+             "Write the template inline, e.g. `glue(\"n = {nrow(df)}\")` — not `glue(a_variable)`.")
+    }
+    exprs <- extract_glue_exprs(arg)
+    if (is.null(exprs)) {
+      reject(node, "Malformed glue template (unbalanced `{ }`)",
+             "Double braces `{{`/`}}` to include literal braces.")
+    }
+    for (e in exprs) {
+      parsed_e <- tryCatch(parse(text = e, keep.source = FALSE),
+                           error = function(err) NULL)
+      if (is.null(parsed_e)) {
+        reject(node, paste0("Uncheckable glue expression: {", e, "}"),
+               "Simplify the interpolation to a plain allowlisted expression.")
+      }
+      lapply(as.list(parsed_e), check_node, bound = bound)
+    }
+  }
+}
+
+check_call <- function(node, bound = character(0)) {
   fn_part <- node[[1]]
 
   if (is.call(fn_part)) {
@@ -253,20 +368,26 @@ check_call <- function(node) {
     if (op == "::") {
       pkg  <- tryCatch(as.character(fn_part[[2]]), error = function(e) "?")
       func <- tryCatch(as.character(fn_part[[3]]), error = function(e) "?")
-      if (!(pkg == "magrittr" && func == "%>%")) {
-        hint <- if (pkg %in% c("DBI", "duckdb", "pool", "RSQLite")) {
-          "Use `sql_query()` to run custom SQL against the database."
-        } else if (pkg %in% c("ggplot2", "lattice", "plotly")) {
-          "Plotting is not available in the sandbox. Return data via `emit_section()`."
-        } else {
-          "Use the pre-loaded sandbox verbs and allowlisted tidyverse functions."
-        }
-        reject(node,
-               paste0("Direct `::` access to `", pkg, "` is not permitted"),
-               hint)
+      if (pkg == "magrittr" && func == "%>%") return()
+      hint <- if (pkg %in% c("DBI", "duckdb", "pool", "RSQLite")) {
+        "Use `sql_query()` to run custom SQL against the database."
+      } else if (pkg %in% c("ggplot2", "lattice", "plotly")) {
+        "Plotting is not available in the sandbox. Return data via `emit_section()`."
+      } else {
+        "Use the pre-loaded sandbox verbs and allowlisted tidyverse functions."
       }
+      reject(node,
+             paste0("Direct `::` access to `", pkg, "` is not permitted"),
+             hint)
     }
-    return()
+
+    # Any other call in callee position is a computed/dynamic call — `x[["fn"]](...)`,
+    # `x$fn(...)`, `(getter())(...)` — whose target the allowlist cannot see. This is
+    # the channel that turns `.BaseNamespaceEnv[["system"]]("id")` into RCE, so reject
+    # every callee that is not a plain allowlisted name (or `magrittr::%>%`).
+    reject(node,
+           "Computed or dynamic function calls are not permitted",
+           "Call sandbox verbs and allowlisted functions directly by name — not via `[[`, `$`, or an expression that returns a function.")
   }
 
   if (!is.symbol(fn_part)) return()
@@ -284,7 +405,21 @@ check_call <- function(node) {
            "Use the documented sandbox verbs and allowlisted tidyverse functions.")
   }
 
-  if (fn_name == "::") return()
+  if (fn_name == "::") {
+    pkg  <- tryCatch(as.character(node[[2]]), error = function(e) "?")
+    func <- tryCatch(as.character(node[[3]]), error = function(e) "?")
+    if (pkg == "magrittr" && func == "%>%") return()
+    hint <- if (pkg %in% c("DBI", "duckdb", "pool", "RSQLite")) {
+      "Use `sql_query()` to run custom SQL against the database."
+    } else if (pkg %in% c("ggplot2", "lattice", "plotly")) {
+      "Plotting is not available in the sandbox. Return data via `emit_section()`."
+    } else {
+      "Use the pre-loaded sandbox verbs and allowlisted tidyverse functions."
+    }
+    reject(node,
+           paste0("Direct `::` access to `", pkg, "` is not permitted"),
+           hint)
+  }
 
   if (fn_name %in% BLOCKED) {
     hint <- BLOCKED_HINTS[[fn_name]]
@@ -317,6 +452,11 @@ check_call <- function(node) {
     return()
   }
 
+  if (fn_name %in% GLUE_INTERP_FNS) {
+    check_glue_call(node, bound)
+    return()
+  }
+
   if (!fn_name %in% ALL_ALLOWED) {
     reject(node,
            paste0("Function `", fn_name, "()` is not on the allowlist"),
@@ -324,16 +464,66 @@ check_call <- function(node) {
   }
 }
 
-check_node <- function(node) {
-  if (is.null(node)) return(invisible(NULL))
-  if (is.call(node)) {
-    check_call(node)
-    lapply(as.list(node), check_node)
-  } else if (is.character(node) && length(node) == 1) {
-    scan_string_literal(node)
-  } else if (is.recursive(node)) {
-    lapply(as.list(node), check_node)
+# A bare symbol in argument/value position (e.g. `system` in `lapply(x, system)`) is
+# neither a call, a string, nor recursive, so before this branch existed it slipped
+# through the walk unexamined — letting a blocked function reach a higher-order
+# function as a value and execute. We reject symbols naming blocked functions wherever
+# they appear, EXCEPT names that are lexically bound locally (a lambda formal or a
+# for-loop variable): such a name shadows the base function, so `function(q) q` is the
+# user's `q`, not `quit`. Only formals/loop-vars are treated as bound — never an
+# assignment target — so `system <- system` cannot launder the base function through
+# its own RHS. The denylist (not an allowlist) is used here on purpose: bare symbols
+# are also legitimate NSE column names (`arrange(year)`), indistinguishable from
+# function references at parse time, so an allowlist would reject every column ref.
+check_symbol <- function(node, bound) {
+  nm <- as.character(node)
+  if (nm %in% bound) return(invisible(NULL))
+  if (nm %in% VALUE_SAFE) return(invisible(NULL))
+  if (nm %in% BLOCKED) {
+    hint <- BLOCKED_HINTS[[nm]]
+    if (is.null(hint)) hint <- paste0("`", nm, "` is not available in the sandbox.")
+    reject(node,
+           paste0("`", nm, "` is not permitted in sandbox scripts, even as a value"),
+           hint)
   }
+}
+
+check_node <- function(node, bound = character(0)) {
+  if (is.null(node)) return(invisible(NULL))
+  if (is.symbol(node)) {
+    check_symbol(node, bound)
+    return(invisible(NULL))
+  }
+  if (!is.call(node)) {
+    if (is.character(node) && length(node) == 1) {
+      scan_string_literal(node)
+    } else if (is.recursive(node)) {
+      lapply(as.list(node), check_node, bound = bound)
+    }
+    return(invisible(NULL))
+  }
+
+  check_call(node, bound)
+  head <- node[[1]]
+  hname <- if (is.symbol(head)) as.character(head) else ""
+
+  # `function(a, b = default) body`: formals bind names for the defaults and body.
+  if (hname == "function") {
+    inner <- unique(c(bound, names(node[[2]])))
+    lapply(as.list(node[[2]]), check_node, bound = inner)  # default-arg expressions
+    check_node(node[[3]], inner)                           # body
+    return(invisible(NULL))
+  }
+
+  # `for (v in seq) body`: the loop variable is bound inside the body only.
+  if (hname == "for" && length(node) >= 4) {
+    vname <- if (is.symbol(node[[2]])) as.character(node[[2]]) else ""
+    check_node(node[[3]], bound)                      # sequence, outer scope
+    check_node(node[[4]], unique(c(bound, vname)))    # body
+    return(invisible(NULL))
+  }
+
+  lapply(as.list(node), check_node, bound = bound)
   invisible(NULL)
 }
 

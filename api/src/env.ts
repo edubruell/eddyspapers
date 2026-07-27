@@ -13,4 +13,11 @@ export const env = {
   // Shared password gating the costly LLM routes. Empty string disables the gate
   // (dev convenience); set it in production to keep the per-query spend behind a wall.
   AGENTIC_PASSWORD:   process.env.AGENTIC_PASSWORD   ?? "",
+  // Server-only key that makes agentic run IDs (computeSearchId) an HMAC rather than a
+  // plain hash of the brief — so the ungated share/stream endpoints can't be trawled by
+  // guessing colleagues' briefs. MUST be a dedicated secret (not any user-facing key)
+  // before MCP keys go self-serve; until then it falls back to AGENTIC_PASSWORD, which at
+  // least excludes outsiders who lack the shared preview password. Keep it STABLE — a
+  // change re-keys every ID (cache reset + existing share links stop resolving).
+  SEARCH_ID_SECRET:   process.env.SEARCH_ID_SECRET   ?? "",
 } as const;

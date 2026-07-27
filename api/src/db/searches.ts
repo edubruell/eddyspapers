@@ -49,6 +49,11 @@ export interface DailyLogRow {
 
 export interface SearchDb {
   upsertSearch(id: string, input: AgentInput & { dbSnapshotDate: string }): Promise<void>;
+  // Atomically claim a run for execution: insert it if absent, or reclaim it if a previous
+  // attempt errored (resetting it to running). Returns false when a run is already active
+  // (running/awaiting_clarification) or done — so only ONE runAgent ever launches per id,
+  // closing the concurrent-duplicate-POST race that let two runners publish to one bus.
+  claimSearch(id: string, input: AgentInput & { dbSnapshotDate: string }): Promise<boolean>;
   appendEvents(id: string, newEvents: StreamEvent[]): Promise<void>;
   finalizeSearch(id: string, status: "done" | "error", synthesis: string): Promise<void>;
   // Suspend a run awaiting the user's clarifier reply (06_clarifier.md §3, Phase A).
@@ -149,6 +154,28 @@ export async function openSearchDb(): Promise<SearchDb> {
           input.refine ?? false,
         ] as never,
       );
+    },
+
+    async claimSearch(id, input) {
+      const claimed = await rowsToObjects(
+        conn,
+        `INSERT INTO searches (id, brief, categories, min_year, db_snapshot_date, events, refine)
+         VALUES (?, ?, ?, ?, ?, '[]', ?)
+         ON CONFLICT (id) DO UPDATE
+           SET status = 'running', events = '[]', synthesis = NULL,
+               clarify_question = NULL, clarify_answer = NULL
+           WHERE searches.status = 'error'
+         RETURNING id`,
+        [
+          id,
+          input.brief,
+          input.categories ? JSON.stringify(input.categories) : null,
+          input.minYear ?? null,
+          input.dbSnapshotDate,
+          input.refine ?? false,
+        ],
+      );
+      return claimed.length > 0;
     },
 
     async appendEvents(id, newEvents) {

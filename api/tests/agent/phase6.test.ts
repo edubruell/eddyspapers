@@ -20,6 +20,22 @@ describe("computeSearchId", () => {
     expect(computeSearchId(base)).toBe(computeSearchId(base));
   });
 
+  it("is HMAC-keyed, not a plain hash of the payload (S6 — id must not be brief-derivable)", async () => {
+    // The run id doubles as an ungated share/stream token; a plain SHA-256 of the payload
+    // would let anyone reconstruct it from the brief. Guard against a revert to plain hash.
+    const { createHash } = await import("crypto");
+    const payload = JSON.stringify({
+      brief: base.brief,
+      categories: [],
+      minYear: null,
+      mustInclude: [],
+      refine: false,
+      dbSnapshotDate: base.dbSnapshotDate,
+    });
+    const plain = createHash("sha256").update(payload).digest("hex").slice(0, 16);
+    expect(computeSearchId(base)).not.toBe(plain);
+  });
+
   it("different briefs produce different ids", () => {
     const id1 = computeSearchId({ ...base, brief: "minimum wages employment" });
     const id2 = computeSearchId({ ...base, brief: "monetary policy inflation" });

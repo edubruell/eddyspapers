@@ -29,6 +29,14 @@ local_hacks.R
 local_test.R
 repec_wip.R
 
+# Environment files anywhere in the tree — may hold API keys (e.g. the PUBLIC_ frontend
+# keys that Astro inlines into the bundle). Repo-wide catch-all so no single .gitignore's
+# exact-filename rule is the only thing standing between a key and a commit. Keep *.example
+# templates tracked.
+.env
+.env.*
+!.env*.example
+
 # Contains a plaintext API key — never commit
 SKILL.md
 

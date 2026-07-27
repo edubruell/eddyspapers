@@ -10,10 +10,13 @@ TIMEOUT_SECS="${4:-150}"
 #
 # Security model: the untrusted, model-written R is constrained at the
 # application layer by check.R (the AST allow-list — no system/url/socket/
-# eval/library/file-writes), and `Rscript --vanilla` disables Rprofile/Renviron/
-# site-library. Resource exhaustion is bounded by the systemd unit's cgroup caps
-# (MemoryMax/TasksMax/CPUQuota on agentic-api.service), which the R children
-# inherit, plus this timeout(1).
+# eval/library/file-writes, and no blocked functions even in value position), and
+# `Rscript --vanilla` disables Rprofile/Renviron/site-library. The Node parent also
+# passes a scrubbed environment (see sandbox/env.ts): only PATH/HOME/locale/R-lib/
+# Ollama vars reach the child, so service secrets are not present to be read even if
+# Sys.getenv were reachable. Resource exhaustion is bounded by the systemd unit's
+# cgroup caps (MemoryMax/TasksMax/CPUQuota on agentic-api.service), which the R
+# children inherit, plus this timeout(1).
 #
 # The result comes back on fd 3 (a pipe from the Node parent), so R must run as
 # the SAME uid as the backend — a uid drop would break the fd-3 reopen. A full

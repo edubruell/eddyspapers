@@ -97,6 +97,50 @@ test_that("CTE referencing a non-allowlisted table inside the CTE body is reject
   )
 })
 
+test_that("CTE over an allowlisted table passes (the CTE alias is allowlisted)", {
+  con <- setup_test_con()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  expect_invisible(
+    validate_sql("WITH recent AS (SELECT Handle, title FROM articles) SELECT * FROM recent", con)
+  )
+})
+
+test_that("a window-function query via a CTE passes", {
+  con <- setup_test_con()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  expect_invisible(validate_sql(
+    "WITH r AS (SELECT Handle, row_number() OVER (ORDER BY title) rn FROM articles) SELECT * FROM r WHERE rn <= 5",
+    con
+  ))
+})
+
+test_that("multiple statements are rejected", {
+  con <- setup_test_con()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  expect_error(
+    validate_sql("SELECT Handle FROM articles; SELECT * FROM journals", con),
+    "single SELECT statement"
+  )
+})
+
+test_that("external-source and settings functions are blocked", {
+  con <- setup_test_con()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  expect_error(validate_sql("SELECT * FROM sqlite_scan('x.db', 'y')", con), "Blocked function")
+  expect_error(validate_sql("SELECT current_setting('memory_limit')", con), "Blocked function")
+  expect_error(validate_sql("SELECT * FROM duckdb_settings()", con), "Blocked function")
+})
+
+test_that("inject_limit wraps rather than appends, defeating a trailing comment", {
+  con <- setup_test_con()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  result <- inject_limit("SELECT * FROM articles -- no limit here", con = con)
+  # The cap must be OUTSIDE the comment: it lands after the wrapping subquery close.
+  expect_match(result, "\\) AS __sandbox_lim LIMIT 5000$")
+  # And the wrapped query is executable with the cap in force.
+  expect_no_error(DBI::dbGetQuery(con, result))
+})
+
 test_that("read_csv inside a subquery is rejected", {
   con <- setup_test_con()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))

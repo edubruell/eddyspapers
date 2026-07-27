@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 import { z } from "zod";
+import { sandboxEnv } from "./env.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const CHECK_R = resolve(__dir, "../../../sandbox/check.R");
@@ -41,6 +42,7 @@ export async function checkScript(scriptPath: string): Promise<CheckResult> {
     const child = spawn(CHECK_SH, [scriptPath, CHECK_R], {
       stdio: ["ignore", "pipe", "ignore"],
       signal: controller.signal,
+      env: sandboxEnv(),
     });
 
     let stdout = "";

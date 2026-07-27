@@ -38,9 +38,9 @@ get_folder_config <- function(data_root = Sys.getenv("PAPER_SEARCH_DATA_ROOT",
                                   unset = file.path(data_root, "pqt_patch")),
     db_folder = Sys.getenv("PAPER_SEARCH_DB", 
                            unset = file.path(data_root, "db")),
-    logs      = Sys.getenv("PAPER_SEARCH_JOURNALS_CSV", 
+    logs      = Sys.getenv("PAPER_SEARCH_LOGS",
                               unset = file.path(data_root, "logs")),
-    journals_csv = Sys.getenv("PAPER_SEARCH_LOGS", 
+    journals_csv = Sys.getenv("PAPER_SEARCH_JOURNALS_CSV",
                               unset = file.path(data_root, "journals.csv"))
   )
 }
