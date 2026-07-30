@@ -244,10 +244,13 @@ find_redif_files <- function(repec_folder = NULL) {
     repec_folder <- config$repec_folder
   }
   
+  # Archives synced for other pipeline steps that hold non-paper ReDIF templates
+  # (related works, ReDIF-Person, ReDIF-Institution) — each has its own parser.
+  non_paper_dirs <- c("cpd/conf", "per/pers", "edi/inst")
+
   journal_base <- list.dirs(repec_folder, full.names = FALSE) |>
     purrr::keep(~stringr::str_detect(.x, "/")) |>
-    purrr::discard(~{.x == "cpd/conf"}) |>
-    purrr::discard(~stringr::str_detect(.x,"per/pers")) 
+    purrr::discard(~any(stringr::str_starts(.x, non_paper_dirs)))
   
   journal_base |>
     purrr::map_dfr(~{
