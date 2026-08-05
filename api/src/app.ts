@@ -13,7 +13,7 @@ import { papersRoute } from "./routes/papers.js";
 import { corpusRoute } from "./routes/corpus.js";
 import { mcpRoute } from "./routes/mcp.js";
 import { adminRoute } from "./routes/admin.js";
-import { requireAuth } from "./middleware/auth.js";
+import { requireKey } from "./middleware/requireKey.js";
 
 // App construction is separate from serving (index.ts) so route tests can drive
 // it through app.request() without binding a port.
@@ -33,9 +33,11 @@ export function buildApp(): Hono {
   );
 
   app.get("/healthz", (c) => c.json({ status: "ok", service: "api" }));
-  // Login probe: 200 when the presented password is valid (or the gate is disabled),
-  // 401 otherwise. The frontend gate uses this to decide whether to show the lock screen.
-  app.get("/auth/check", requireAuth, (c) => c.json({ ok: true }));
+  // Login probe: 200 when the presented credential opens the routes the search app calls
+  // (all of which sit behind requireKey('rest')), 401/403 otherwise. Gating it on the same
+  // scope means one minted key is both the site login and the MCP token; the grandfathered
+  // AGENTIC_PASSWORD still passes as an all-scope legacy identity.
+  app.get("/auth/check", requireKey("rest"), (c) => c.json({ ok: true }));
   app.route("/chat", chatRoute);
   app.route("/chat", streamRoute);
   app.route("/searches", searchesRoute);
