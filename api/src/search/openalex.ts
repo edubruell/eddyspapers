@@ -49,8 +49,12 @@ export const OPENALEX_COLS =
   "ox.openalex_id, ox.oa_cited_by_count, ox.fwci, ox.is_retracted, ox.is_oa, " +
   "ox.oa_url, ox.oa_status, ox.primary_topic, ox.primary_field";
 
-export const OPENALEX_JOIN =
-  "LEFT JOIN article_openalex ox ON LOWER(ox.handle) = LOWER(a.Handle)";
+// Alias-parameterised so a caller can attach the metrics to something other than
+// `articles a` — the semantic search joins onto its top-k CTE, not onto the scan.
+export const openAlexJoinOn = (alias: string): string =>
+  `LEFT JOIN article_openalex ox ON LOWER(ox.handle) = LOWER(${alias}.Handle)`;
+
+export const OPENALEX_JOIN = openAlexJoinOn("a");
 
 // Null openalex_id ⇒ either the join wasn't present (pre-Track-B snapshot) or no matched
 // work for this handle; both mean "no OpenAlex data".

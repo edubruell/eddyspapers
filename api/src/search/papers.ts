@@ -2,7 +2,13 @@ import { pipe } from "effect";
 import * as A from "effect/Array";
 import type { CorpusDb } from "../db/corpus.js";
 import { embedQuery, vectorLiteral } from "./embed.js";
-import { OPENALEX_COLS, OPENALEX_JOIN, hasOpenAlexTable, rowToOpenAlex } from "./openalex.js";
+import {
+  OPENALEX_COLS,
+  OPENALEX_JOIN,
+  hasOpenAlexTable,
+  openAlexJoinOn,
+  rowToOpenAlex,
+} from "./openalex.js";
 import type {
   BibEntry,
   KeywordField,
@@ -132,18 +138,29 @@ export async function semanticSearchWithVector(
   p: Omit<SemanticParams, "query">,
 ): Promise<SemanticResult[]> {
   const where = whereClause(paperFilters(p));
-  const { cols, join } = await paperSelect(db);
 
-  const rows = await db.query(
-    `SELECT ${cols},
+  // The top-k stands alone so the VSS optimizer can rewrite it into an HNSW_INDEX_SCAN.
+  // Any join in the same SELECT as `ORDER BY array_cosine_distance(...) LIMIT k` defeats
+  // that rule and the plan degrades to a sequential scan over every embedding in the
+  // corpus (~2s vs ~10ms on prod) — the same failure mode filtered search hit in M7.
+  // The OpenAlex metrics therefore attach ABOVE the top-k, over k rows, not 480k.
+  const topK = `SELECT ${PAPER_COLS},
             array_cosine_distance(a.embeddings, ${vectorLiteral(vec)}) AS similarity
      FROM articles a
-     ${join}
      ${where.sql}
      ORDER BY similarity ASC
-     LIMIT ?`,
-    [...where.params, p.maxK ?? 100],
-  );
+     LIMIT ?`;
+
+  // The hash join does not preserve the CTE's order, so the outer query re-sorts.
+  const sql = (await hasOpenAlexTable(db))
+    ? `WITH top AS (${topK})
+       SELECT t.*, ${OPENALEX_COLS}
+       FROM top t
+       ${openAlexJoinOn("t")}
+       ORDER BY t.similarity ASC`
+    : topK;
+
+  const rows = await db.query(sql, [...where.params, p.maxK ?? 100]);
 
   // similarity_score is unrounded here; the Plumber endpoint rounds to 5 digits
   // before serialising — the Phase 5 /search route port must add that rounding
