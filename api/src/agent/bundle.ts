@@ -117,11 +117,28 @@ function buildCsv(papers: Record<string, Paper>, sections: Section[]): string {
   return [header, ...rows].join("\n");
 }
 
+export type Delivery = "inline" | "handle";
+
+// One sentence telling the caller where the artifacts it does NOT have in hand live. Under
+// handle delivery that is the difference between a usable result and a dead end, so it names
+// the tool and the resource URI rather than gesturing at "the resource".
+export function whereTheRestIs(bundle: SearchBundle, delivery: Delivery): string {
+  return delivery === "inline"
+    ? "Full rows, BibTeX and CSV are in structuredContent; the R script that produced them is in `script`."
+    : `The full artifacts were NOT inlined (too large). Fetch them with ` +
+        `fetch_search(search_id="${bundle.search_id}", part="bibtex"|"csv"|"papers"|"script"), or read ` +
+        `${bundle.resource_uri}/bibtex etc. The list below is complete — you can write the review from it ` +
+        `without fetching anything.`;
+}
+
 // Script-only mode returns no LLM-written review, so the tool's text block carries this
 // instead: the strategy, the section structure the script produced, and every retrieved
-// paper as a citable line. It is a rendering of data the caller already has in
-// structuredContent — deliberately mechanical, so the calling agent does the writing.
-export function resultsDigest(bundle: SearchBundle): string {
+// paper as a citable line. Deliberately mechanical — the calling agent does the writing.
+//
+// It is also the whole deliverable under handle delivery (parts.ts): the digest carries
+// enough per paper (authors, year, title, journal, handle, cites, doi) to write a review
+// without fetching anything, which is why it never inlines abstracts.
+export function resultsDigest(bundle: SearchBundle, delivery: Delivery = "inline"): string {
   const paperLine = (handle: string, i: number): string => {
     const p = bundle.papers[handle];
     if (!p) return `${i + 1}. ${handle}`;
@@ -164,8 +181,7 @@ export function resultsDigest(bundle: SearchBundle): string {
     "",
     bundle.strategy ? `**Strategy.** ${bundle.strategy}` : null,
     "",
-    `**Retrieved.** ${totals} across ${bundle.sections.length} section(s). Full rows, BibTeX and CSV ` +
-      `are in structuredContent; the R script that produced them is in \`script\`.`,
+    `**Retrieved.** ${totals} across ${bundle.sections.length} section(s). ` + whereTheRestIs(bundle, delivery),
     "",
     ...sectionBlocks,
   ]

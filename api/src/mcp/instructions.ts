@@ -5,7 +5,7 @@
 
 export const MCP_INSTRUCTIONS = `This server searches a corpus of ~455k RePEc/EconLit economics papers and ~88k registered authors (the RePEc Author Service), snapshotted from the same database that powers econpapers.eduard-bruell.de.
 
-To sweep a whole literature in one call, use lit_search — it writes and runs a tailored search script server-side and returns the papers, BibTeX, CSV, section structure and the script itself. It returns RESULTS ONLY by default: you write the review from the rows it gives you. Asking the server to write the review instead (synthesize=true) requires an API key granted the 'lit_search_synth' scope, and is refused without it — so treat script-only as the normal mode, not a degraded one.
+To sweep a whole literature in one call, use lit_search — it writes and runs a tailored search script server-side and returns the papers, BibTeX, CSV, section structure and the script itself. It returns RESULTS ONLY by default: you write the review from the rows it gives you. Asking the server to write the review instead (synthesize=true) requires an API key granted the 'lit_search_synth' scope, and is refused without it — so treat script-only as the normal mode, not a degraded one. A large run is handed back as a HANDLE rather than inlined — the result carries the citable digest of every paper plus a search_id, and you pull the BibTeX, CSV, full records or script from it with fetch_search (which also re-reads any earlier run, free).
 
 For surgical lookups where you want raw rows, prefer the cheap tools below (no LLM, faster):
 - corpus_context — free; returns the valid category/journal filter values, corpus sizes, and query-writing guidance. Call it before guessing filter values.
@@ -18,4 +18,4 @@ Every tool documents its own field conventions in its input schema; read them be
 
 Paper results and details carry an optional \`openalex\` block (matched by DOI, ~half the corpus): a retraction flag, an open-access full-text link, and field-weighted citation impact. Treat its absence as "unmatched", not "low impact", and always flag \`is_retracted\` papers rather than citing them as sound.
 
-Paper details (citations, versions, stats, OpenAlex metrics) are resources under agenticsearch://papers/{handle}; a completed lit_search run is readable under agenticsearch://searches/{id}.`;
+Paper details (citations, versions, stats, OpenAlex metrics) are resources under agenticsearch://papers/{handle}; a completed lit_search run is readable under agenticsearch://searches/{id} (same cuts as fetch_search, for clients that support resources).`;

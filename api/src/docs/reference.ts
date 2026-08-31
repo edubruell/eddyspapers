@@ -215,10 +215,12 @@ export const apiReference = () => ({
   mcp: {
     endpoint: "/mcp",
     scope: "mcp",
-    tools: [...MCP_TOOL_NAMES, "lit_search"],
+    tools: [...MCP_TOOL_NAMES, "lit_search", "fetch_search"],
     note:
       "The MCP tools mirror these REST endpoints and carry the same field conventions in their " +
-      "own schemas. lit_search rides the 'lit_search' scope, not the per-key tool allowlist.",
+      "own schemas. lit_search and fetch_search ride the 'lit_search' scope, not the per-key tool " +
+      "allowlist. A large lit_search run is delivered as a handle (digest + search_id) rather than " +
+      "inlined; fetch_search reads its parts, as do the agenticsearch://searches/{id} resources.",
   },
   conventions: FIELD_DOCS,
   endpoints: ENDPOINTS,

@@ -1,8 +1,9 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getCorpusDb, getSearchDb } from "../db/singleton.js";
+import { getCorpusDb } from "../db/singleton.js";
 import { corpusGuide } from "../search/guide.js";
 import { citedByOf, citesOf, paperOverview } from "../search/citations.js";
-import { buildBundle } from "../agent/bundle.js";
+import { loadRun } from "../agent/loadRun.js";
+import { sectionSummaries } from "../agent/parts.js";
 
 // MCP resources (01_design.md §7.6). Phase 2 shipped the read-only reference surface:
 // the corpus guide and the paper-level lookups that subsume the old get_versions /
@@ -30,16 +31,6 @@ const json = (uri: URL, data: unknown) => ({
 const text = (uri: URL, mimeType: string, body: string) => ({
   contents: [{ uri: uri.href, mimeType, text: body }],
 });
-
-// Rebuild a stored run into the same bundle the lit_search tool returned. Returns null
-// for an unknown id so the resource handlers can answer with a structured not-found
-// instead of throwing (mirrors the paper resources returning a null paper).
-async function loadRun(id: string) {
-  const db = await getSearchDb();
-  const search = await db.getSearch(id);
-  if (!search) return null;
-  return { search, bundle: buildBundle(id, search.brief, search.events) };
-}
 
 // Note: the ?limit=N shown for these resources in 01_design.md §7.6 is NOT wired —
 // the SDK's ResourceTemplate matcher rejects any URI carrying a query string the
@@ -127,14 +118,7 @@ export function registerResources(server: McpServer): void {
         synthesis_md: bundle.synthesis_md,
         n_papers: Object.keys(bundle.papers).length,
         n_persons: Object.keys(bundle.persons).length,
-        sections: bundle.sections.map((s) => ({
-          id: s.id,
-          title: s.title,
-          mode: s.mode,
-          kind: s.kind ?? "papers",
-          n_total: s.n_total,
-          n_shown: s.n_shown,
-        })),
+        sections: sectionSummaries(bundle.sections),
       });
     },
   );

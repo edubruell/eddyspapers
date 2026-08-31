@@ -87,19 +87,20 @@ describe("find_papers hourly cap at the boundary", () => {
 });
 
 describe("per-key MCP tool allowlist (M9 G)", () => {
-  // lit_search is always registered (it is gated by its own scope at call time, not by the
-  // per-key tool allowlist), so it appears regardless — the allowlist governs only the cheap tools.
+  // lit_search and its fetch_search companion are always registered (both are gated by the
+  // 'lit_search' scope at call time, not by the per-key tool allowlist), so they appear
+  // regardless — the allowlist governs only the cheap tools.
   const ALL_CHEAP = ["corpus_context", "find_papers", "find_people", "keyword_search", "verify_references"];
   const toolNames = async (k: KeyIdentity | null): Promise<string[]> =>
     (await (await makeClient(k)).listTools()).tools.map((t) => t.name).sort();
 
-  it("a null tools list exposes every cheap tool (plus lit_search)", async () => {
-    expect(await toolNames(key())).toEqual([...ALL_CHEAP, "lit_search"].sort());
+  it("a null tools list exposes every cheap tool (plus lit_search + fetch_search)", async () => {
+    expect(await toolNames(key())).toEqual([...ALL_CHEAP, "lit_search", "fetch_search"].sort());
   });
 
-  it("an allowlist registers only the named cheap tools (lit_search still present)", async () => {
+  it("an allowlist registers only the named cheap tools (lit_search + fetch_search still present)", async () => {
     const restricted: KeyIdentity = { ...key(), tools: ["keyword_search", "corpus_context"] };
-    expect(await toolNames(restricted)).toEqual(["corpus_context", "keyword_search", "lit_search"]);
+    expect(await toolNames(restricted)).toEqual(["corpus_context", "fetch_search", "keyword_search", "lit_search"]);
   });
 
   it("a gated-out tool cannot be called (it never registered)", async () => {
@@ -113,12 +114,12 @@ describe("per-key MCP tool allowlist (M9 G)", () => {
     expect(semanticSearch).not.toHaveBeenCalled();
   });
 
-  it("an empty allowlist exposes no cheap tools (only lit_search)", async () => {
+  it("an empty allowlist exposes no cheap tools (only lit_search + fetch_search)", async () => {
     const none: KeyIdentity = { ...key(), tools: [] };
-    expect(await toolNames(none)).toEqual(["lit_search"]);
+    expect(await toolNames(none)).toEqual(["fetch_search", "lit_search"]);
   });
 
   it("a null key (gate disabled / stdio) exposes every tool", async () => {
-    expect(await toolNames(null)).toEqual([...ALL_CHEAP, "lit_search"].sort());
+    expect(await toolNames(null)).toEqual([...ALL_CHEAP, "lit_search", "fetch_search"].sort());
   });
 });

@@ -43,11 +43,11 @@ describe("MCP initialize", () => {
 });
 
 describe("tools/list", () => {
-  it("lists all six tools with input schemas", async () => {
+  it("lists all seven tools with input schemas", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
-      ["corpus_context", "find_papers", "find_people", "keyword_search", "lit_search", "verify_references"].sort(),
+      ["corpus_context", "fetch_search", "find_papers", "find_people", "keyword_search", "lit_search", "verify_references"].sort(),
     );
     const findPapers = tools.find((t) => t.name === "find_papers");
     expect(findPapers?.inputSchema?.properties).toHaveProperty("query");

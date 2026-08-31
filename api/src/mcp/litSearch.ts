@@ -3,7 +3,9 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { computeSearchId } from "../agent/cache.js";
 import { runAgent } from "../agent/runAgent.js";
-import { buildBundle, collectSynthesis, resultsDigest, type SearchBundle } from "../agent/bundle.js";
+import { buildBundle, collectSynthesis, resultsDigest, whereTheRestIs, type Delivery, type SearchBundle } from "../agent/bundle.js";
+import { loadRun } from "../agent/loadRun.js";
+import { PART_DOCS, SEARCH_PARTS, searchPart, sectionSummaries, type SearchPart } from "../agent/parts.js";
 import { resolveSnapshot } from "../sandbox/snapshot.js";
 import { getSearchDb } from "../db/singleton.js";
 import { getRateLimiter } from "../auth/rateLimit.js";
@@ -30,6 +32,10 @@ import type { AgentInput, Stage, StreamEvent } from "../agent/types.js";
 //     with a sharper brief. No pause/resume round-trip over MCP, ever.
 //   - Identical briefs against the same snapshot hit the persisted cache (§7.8): a completed
 //     run is rebuilt from its stored events without re-running R or the synthesiser.
+//   - Delivery is size-aware: a big run comes back as a handle (digest + search_id) rather
+//     than a ~130k-char inline payload, and fetch_search serves the parts. The cache key
+//     deliberately does NOT include `deliver` — how a run is delivered is a presentation
+//     choice, so the same cached run can be handed back either way.
 
 const STAGE_STEP: Record<Stage, number> = {
   clarify: 1,
@@ -105,26 +111,65 @@ function progressForwarder(extra: ProgressCapable, totalSteps: number): (e: Stre
   };
 }
 
-function litResult(bundle: SearchBundle): CallToolResult {
+// Handle delivery kicks in above this many characters of inlined artifacts. Sized so an
+// ordinary 10-20 paper run still arrives in one piece while a big sweep — measured at
+// 133,641 chars for 40 papers, which overflowed a real client's per-result cap — comes back
+// as a handle the caller pulls from.
+type DeliverMode = "auto" | "inline" | "handle";
+
+const INLINE_BUDGET = 60_000;
+
+function litResult(bundle: SearchBundle, deliver: DeliverMode): CallToolResult {
   const hasPersons = Object.keys(bundle.persons).length > 0;
   // A run stored without synthesis is a script-only run — including a cache hit replayed from
   // the store, so the mode is read off the bundle rather than the request.
   const synthesized = bundle.synthesis_md.trim().length > 0;
+
+  const artifacts = {
+    bibtex: bundle.bibtex,
+    papers_csv: bundle.papers_csv,
+    papers: bundle.papers,
+    ...(hasPersons ? { persons: bundle.persons } : {}),
+    sections: bundle.sections,
+    script: bundle.script,
+  };
+  // 'auto' measures rather than guesses: the same brief can return 3 papers or 300.
+  const delivery: Delivery =
+    deliver === "inline" ? "inline"
+    : deliver === "handle" ? "handle"
+    : JSON.stringify(artifacts).length <= INLINE_BUDGET ? "inline"
+    : "handle";
+
+  const common = {
+    mode: synthesized ? "synthesis" : "script_only",
+    delivery,
+    synthesis_md: bundle.synthesis_md,
+    strategy: bundle.strategy,
+    search_id: bundle.search_id,
+    resource_uri: bundle.resource_uri,
+    suggested_paths: bundle.suggested_paths,
+  };
+
+  const text = synthesized ? bundle.synthesis_md : resultsDigest(bundle, delivery);
+  if (delivery === "inline") {
+    return { content: [{ type: "text", text }], structuredContent: { ...common, ...artifacts } };
+  }
+
+  // Handle delivery: everything the caller needs to CITE is already in the text digest;
+  // what is withheld is the bulk (abstracts, CSV, .bib, the script), reachable by one
+  // fetch_search call each. The synthesis is never withheld — it is the deliverable.
   return {
-    content: [{ type: "text", text: synthesized ? bundle.synthesis_md : resultsDigest(bundle) }],
+    content: [{ type: "text", text: `${text}\n\n---\n${whereTheRestIs(bundle, "handle")}` }],
     structuredContent: {
-      mode: synthesized ? "synthesis" : "script_only",
-      synthesis_md: bundle.synthesis_md,
-      bibtex: bundle.bibtex,
-      papers_csv: bundle.papers_csv,
-      papers: bundle.papers,
-      ...(hasPersons ? { persons: bundle.persons } : {}),
-      sections: bundle.sections,
-      strategy: bundle.strategy,
-      search_id: bundle.search_id,
-      script: bundle.script,
-      resource_uri: bundle.resource_uri,
-      suggested_paths: bundle.suggested_paths,
+      ...common,
+      n_papers: Object.keys(bundle.papers).length,
+      n_persons: Object.keys(bundle.persons).length,
+      sections: sectionSummaries(bundle.sections),
+      fetch: {
+        tool: "fetch_search",
+        search_id: bundle.search_id,
+        parts: PART_DOCS,
+      },
     },
   };
 }
@@ -150,6 +195,7 @@ function fail(message: string): CallToolResult {
 }
 
 export function registerLitSearch(server: McpServer, key: KeyIdentity | null = null): void {
+  registerFetchSearch(server, key);
   server.registerTool(
     "lit_search",
     {
@@ -164,6 +210,10 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
         "review yourself. Set synthesize=true to have the server write the mini-review as well — that is " +
         "the expensive stage and it requires an API key granted the 'lit_search_synth' scope; without it " +
         "the call is refused rather than silently downgraded, so don't retry it, just work from the rows.\n\n" +
+        "DELIVERY. Large runs are NOT inlined: above a size budget the tool returns the citable " +
+        "digest plus a search_id, and you pull the BibTeX, CSV, full records or script with " +
+        "fetch_search (structuredContent.delivery tells you which happened). The digest always " +
+        "lists every retrieved paper, so you can write the review without fetching anything.\n\n" +
         "Use lit_search when you want a whole literature swept; use the cheap tools (find_papers, " +
         "keyword_search, find_people) for surgical lookups. skip_clarify defaults true (never blocks); set " +
         "it false to have an ambiguous brief come back as clarifying questions instead of results. " +
@@ -196,6 +246,16 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
               "Requires a key with the 'lit_search_synth' scope; leave it false and write the review " +
               "yourself from the returned papers.",
           ),
+        deliver: z
+          .enum(["auto", "inline", "handle"])
+          .optional()
+          .describe(
+            "How to return the artifacts. 'auto' (default) inlines everything for a small run and " +
+              "switches to a handle for a large one; 'inline' always returns the full BibTeX, CSV, " +
+              "paper records and script in structuredContent (can be >100k chars); 'handle' always " +
+              "returns the citable digest plus a search_id you pull the artifacts from with " +
+              "fetch_search. The digest lists every retrieved paper either way.",
+          ),
       },
     },
     async (a, extra): Promise<CallToolResult> => {
@@ -205,6 +265,8 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
           snapshot.exists && snapshot.ageMs != null
             ? new Date(Date.now() - snapshot.ageMs).toISOString().slice(0, 10)
             : "unknown";
+
+        const deliver: DeliverMode = a.deliver ?? "auto";
 
         const input: AgentInput = {
           brief: a.brief,
@@ -242,7 +304,7 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
         // and no rate-limit quota consumed (a repeat is free). Scope is already enforced above.
         const existing = await db.getSearch(searchId);
         if (existing?.status === "done") {
-          return litResult(buildBundle(searchId, a.brief, existing.events));
+          return litResult(buildBundle(searchId, a.brief, existing.events), deliver);
         }
 
         // A real run costs model tokens: apply the per-key rate limit + single-concurrent
@@ -285,10 +347,65 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
             const message = errored && "message" in errored ? errored.message : "Search ended without a result.";
             return fail(`Search failed: ${message}`);
           }
-          return litResult(buildBundle(searchId, a.brief, events));
+          return litResult(buildBundle(searchId, a.brief, events), deliver);
         } finally {
           if (key) limiter.release(key.id, "lit_search");
         }
+      } catch (err) {
+        return fail(err instanceof Error ? err.message : String(err));
+      }
+    },
+  );
+}
+
+// fetch_search — the other half of handle delivery. A completed run stays readable by id, so
+// a caller that got a handle (or one that wants the .bib from a run it made an hour ago)
+// pulls exactly the part it needs, paginated. The same cuts exist as agenticsearch://searches
+// resources; this tool exists because plenty of MCP clients expose tools but not resources.
+//
+// It reads back stored run content, so it rides the same 'lit_search' scope as the tool that
+// produced it. No rate limit: serving a stored artifact costs nothing.
+export function registerFetchSearch(server: McpServer, key: KeyIdentity | null = null): void {
+  const partList = SEARCH_PARTS.map((p) => `'${p}' — ${PART_DOCS[p]}`).join(" ");
+
+  server.registerTool(
+    "fetch_search",
+    {
+      title: "Fetch part of a completed lit_search run",
+      description:
+        "Read one artifact of a completed lit_search run by its search_id. Use this when lit_search " +
+        "returned delivery='handle' (the artifacts were too large to inline), or to re-read a run you " +
+        "made earlier — runs stay readable, no re-search and no tokens spent. Fetch only what you " +
+        "need: the BibTeX to write a .bib, the CSV or papers to inspect abstracts, the script to see " +
+        "how the search was built. 'papers' and 'csv' carry abstracts and are paginated — walk them " +
+        "with next_offset. Start with 'overview' if you don't know what the run contains.",
+      inputSchema: {
+        search_id: z.string().min(4).describe("The search_id returned by lit_search"),
+        part: z.enum(SEARCH_PARTS).describe(`Which artifact to read. ${partList}`),
+        section_id: z.string().optional().describe("With part='sections', return only this section"),
+        offset: z.number().int().min(0).optional().describe("Row offset for 'papers'/'csv' (default 0)"),
+        limit: z.number().int().min(1).max(500).optional().describe("Rows per page for 'papers'/'csv' (default 25)"),
+      },
+    },
+    async (a): Promise<CallToolResult> => {
+      try {
+        if (key && !key.scopes.includes("lit_search")) {
+          return fail("This API key lacks the 'lit_search' scope.");
+        }
+        const run = await loadRun(a.search_id);
+        if (!run) return fail(`No stored search with id '${a.search_id}'. Run lit_search first.`);
+
+        const { text, data } = searchPart(run.bundle, a.part as SearchPart, {
+          offset: a.offset,
+          limit: a.limit,
+          sectionId: a.section_id,
+        });
+        // An empty artifact is a legitimate answer (a script-only run has no synthesis), but an
+        // empty text block reads as a broken call — say so instead.
+        return {
+          content: [{ type: "text", text: text.length > 0 ? text : `(this run has no '${a.part}' content)` }],
+          structuredContent: data,
+        };
       } catch (err) {
         return fail(err instanceof Error ? err.message : String(err));
       }

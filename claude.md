@@ -119,6 +119,18 @@ opt-in (`synthesize`) **and** gated on the `lit_search_synth` key scope:
 | MCP `lit_search` | `false` | request refused (never silently downgraded) |
 | `POST /chat` (web app) | `true` | search still runs, no review; response echoes `synthesize:false` |
 
+### Handle-plus-fetch delivery
+
+A big run's artifacts do not fit in one tool result (a 40-paper run measured ~134k chars and
+overflowed a real client's cap). MCP `lit_search` therefore takes `deliver`:
+`auto` (default — inline under a 60k-char budget, handle above it), `inline`, or `handle`.
+Under handle delivery the result keeps the citable digest of **every** paper plus the
+`search_id`/`resource_uri`, and withholds the bulk; `fetch_search(search_id, part=…)` serves
+`overview|script|bibtex|csv|papers|sections|synthesis`, paginated for the two parts that carry
+abstracts. `api/src/agent/parts.ts` is the single slicer; the `agenticsearch://searches/{id}`
+resources expose the same cuts for clients that read resources. `deliver` is deliberately NOT
+in the cache key — delivery is presentation, so a cached run can be handed back either way.
+
 Scopes are `rest`, `mcp`, `lit_search`, `lit_search_synth`, `admin`; the admin console
 (`/admin`) renders what each grants from the backend's `scope_docs`. Field conventions that a
 caller cannot guess (notably `author_lastnames` is **semicolon-separated**) live once in

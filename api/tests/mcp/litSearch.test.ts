@@ -104,7 +104,7 @@ describe("lit_search — tool listing", () => {
     const lit = tools.find((t) => t.name === "lit_search");
     expect(lit).toBeDefined();
     expect(Object.keys(lit?.inputSchema?.properties ?? {}).sort()).toEqual(
-      ["brief", "categories", "min_year", "must_include", "refine", "skip_clarify", "synthesize"].sort(),
+      ["brief", "categories", "deliver", "min_year", "must_include", "refine", "skip_clarify", "synthesize"].sort(),
     );
     expect(lit?.inputSchema?.required).toContain("brief");
     expect(lit?.description).toMatch(/cached/i);
@@ -112,6 +112,9 @@ describe("lit_search — tool listing", () => {
     // from the tool listing alone — a client model never sees our docs.
     expect(lit?.description).toMatch(/RESULTS ONLY/);
     expect(lit?.description).toMatch(/lit_search_synth/);
+    // Handle delivery has to be discoverable too — a client that never learns fetch_search
+    // exists would read a handle result as a truncated one.
+    expect(lit?.description).toMatch(/fetch_search/);
   });
 });
 
