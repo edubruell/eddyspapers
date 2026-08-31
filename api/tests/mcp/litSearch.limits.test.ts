@@ -102,8 +102,8 @@ describe("lit_search — scoped-key enforcement", () => {
 
   it("runs for a key that carries the 'lit_search' scope", async () => {
     armPipeline(false);
-    const client = await makeClient(scopedKey(["mcp", "lit_search"]));
-    const res = await client.callTool({ name: "lit_search", arguments: { brief: "monopsony and the minimum wage in low-wage labour markets" } });
+    const client = await makeClient(scopedKey(["mcp", "lit_search", "lit_search_synth"]));
+    const res = await client.callTool({ name: "lit_search", arguments: { brief: "monopsony and the minimum wage in low-wage labour markets", synthesize: true } });
     expect(res.isError).toBeFalsy();
     expect((res.structuredContent as { synthesis_md: string }).synthesis_md).toMatch(/Done/);
   });
@@ -111,11 +111,11 @@ describe("lit_search — scoped-key enforcement", () => {
   it("a cache HIT does not consume lit_search quota (identical brief served free at concurrency=1)", async () => {
     writeScript.mockClear(); // isolate the call count from earlier tests in this file
     armPipeline(false);
-    const client = await makeClient(scopedKey(["mcp", "lit_search"]));
+    const client = await makeClient(scopedKey(["mcp", "lit_search", "lit_search_synth"]));
     const brief = "cache probe brief about wage compression in low pay sectors";
 
     // First run executes the pipeline and finalizes as `done` in the store.
-    const first = await client.callTool({ name: "lit_search", arguments: { brief } });
+    const first = await client.callTool({ name: "lit_search", arguments: { brief, synthesize: true } });
     expect(first.isError).toBeFalsy();
     expect(writeScript).toHaveBeenCalledTimes(1);
 
@@ -126,7 +126,7 @@ describe("lit_search — scoped-key enforcement", () => {
     expect(acquired.ok).toBe(true); // slot now held
 
     // Identical brief → cache hit, rebuilt from stored events, no pipeline, no limiter.
-    const second = await client.callTool({ name: "lit_search", arguments: { brief } });
+    const second = await client.callTool({ name: "lit_search", arguments: { brief, synthesize: true } });
     expect(second.isError).toBeFalsy();
     expect((second.structuredContent as { synthesis_md: string }).synthesis_md).toMatch(/Done/);
     expect(writeScript).toHaveBeenCalledTimes(1); // pipeline did NOT run again
@@ -134,12 +134,12 @@ describe("lit_search — scoped-key enforcement", () => {
 
   it("rejects a second concurrent run for the same key (1-concurrent cap)", async () => {
     armPipeline(true); // hold synth open so the first run keeps its slot
-    const client = await makeClient(scopedKey(["mcp", "lit_search"]));
+    const client = await makeClient(scopedKey(["mcp", "lit_search", "lit_search_synth"]));
 
-    const first = client.callTool({ name: "lit_search", arguments: { brief: "first distinct brief about wage inequality dynamics" } });
+    const first = client.callTool({ name: "lit_search", arguments: { brief: "first distinct brief about wage inequality dynamics", synthesize: true } });
     // Let the first run advance into its (gated) synth stage and claim the slot.
     await new Promise((r) => setTimeout(r, 50));
-    const second = await client.callTool({ name: "lit_search", arguments: { brief: "second distinct brief about labour market monopsony" } });
+    const second = await client.callTool({ name: "lit_search", arguments: { brief: "second distinct brief about labour market monopsony", synthesize: true } });
     expect(second.isError).toBe(true);
     expect(JSON.stringify(second.content)).toMatch(/concurrent/i);
 

@@ -256,31 +256,36 @@ export async function runAgent(
     }
 
     // ── Synthesize (once, over the accumulated set) ─────────────────────────────
-    const tStage = stageEnter("synthesize");
-    let synthesis = "";
-    if (Object.keys(papers).length === 0 && Object.keys(persons).length === 0) {
-      emit({ type: "synthesis", delta: "_No results were returned by the search script._" });
-      synthesis = "_No results were returned by the search script._";
-    } else {
-      synthesis = await synthesize(
-        input.brief,
-        script,
-        sections,
-        papers,
-        persons,
-        bibtex,
-        dbDate,
-        (delta) => emit({ type: "synthesis", delta }),
-      );
-      if (partial) {
-        const caveat =
-          "\n\n---\n*This search was cut short by a timeout before every planned query finished — " +
-          "the review above is based on a partial result set and coverage may be incomplete.*";
-        emit({ type: "synthesis", delta: caveat });
-        synthesis += caveat;
+    // Opt-in (types.ts AgentInput.synthesize): a script-only run stops here and hands back
+    // the script plus the papers/sections already streamed. No synthesize stage event is
+    // emitted in that mode, so the stepper finishes on execute rather than parking on a
+    // step that will never complete.
+    if (input.synthesize) {
+      const tStage = stageEnter("synthesize");
+      if (Object.keys(papers).length === 0 && Object.keys(persons).length === 0) {
+        emit({ type: "synthesis", delta: "_No results were returned by the search script._" });
+      } else {
+        await synthesize(
+          input.brief,
+          script,
+          sections,
+          papers,
+          persons,
+          bibtex,
+          dbDate,
+          (delta) => emit({ type: "synthesis", delta }),
+        );
+        if (partial) {
+          emit({
+            type: "synthesis",
+            delta:
+              "\n\n---\n*This search was cut short by a timeout before every planned query finished — " +
+              "the review above is based on a partial result set and coverage may be incomplete.*",
+          });
+        }
       }
+      stageExit("synthesize", tStage);
     }
-    stageExit("synthesize", tStage);
 
     emit({ type: "done", ms_total: Date.now() - t0 });
     return { paused: false };

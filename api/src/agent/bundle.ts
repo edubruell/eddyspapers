@@ -117,6 +117,63 @@ function buildCsv(papers: Record<string, Paper>, sections: Section[]): string {
   return [header, ...rows].join("\n");
 }
 
+// Script-only mode returns no LLM-written review, so the tool's text block carries this
+// instead: the strategy, the section structure the script produced, and every retrieved
+// paper as a citable line. It is a rendering of data the caller already has in
+// structuredContent — deliberately mechanical, so the calling agent does the writing.
+export function resultsDigest(bundle: SearchBundle): string {
+  const paperLine = (handle: string, i: number): string => {
+    const p = bundle.papers[handle];
+    if (!p) return `${i + 1}. ${handle}`;
+    const authors = p.authors.length ? p.authors.join("; ") : "unknown author";
+    const flags = [
+      p.openalex?.is_retracted ? "**RETRACTED**" : null,
+      p.stats?.cites_total != null ? `${p.stats.cites_total} cites` : null,
+      p.doi ? `doi:${p.doi}` : null,
+    ].filter(Boolean);
+    return (
+      `${i + 1}. ${authors} (${p.year}). *${p.title}*. ${p.journal}. \`${p.handle}\`` +
+      (flags.length ? ` — ${flags.join(", ")}` : "")
+    );
+  };
+
+  const personLine = (shortId: string, i: number): string => {
+    const person = bundle.persons[shortId];
+    if (!person) return `${i + 1}. ${shortId}`;
+    const bits = [person.affiliation, person.n_works != null ? `${person.n_works} works` : null].filter(Boolean);
+    return `${i + 1}. ${person.name} \`${person.short_id}\`` + (bits.length ? ` — ${bits.join(", ")}` : "");
+  };
+
+  const sectionBlocks = bundle.sections.map((section) => {
+    const lines = section.rows.map((row, i) =>
+      section.kind === "persons" ? personLine(row.handle, i) : paperLine(row.handle, i),
+    );
+    const counts = `${section.n_shown} of ${section.n_total}`;
+    return [`### ${section.title}`, `_${section.mode} · ${counts}_`, "", ...lines].join("\n");
+  });
+
+  const paperCount = Object.keys(bundle.papers).length;
+  const personCount = Object.keys(bundle.persons).length;
+  const totals = [
+    paperCount ? `${paperCount} papers` : null,
+    personCount ? `${personCount} people` : null,
+  ].filter(Boolean).join(", ") || "no results";
+
+  return [
+    `## Search results (script-only — no synthesis was written)`,
+    "",
+    bundle.strategy ? `**Strategy.** ${bundle.strategy}` : null,
+    "",
+    `**Retrieved.** ${totals} across ${bundle.sections.length} section(s). Full rows, BibTeX and CSV ` +
+      `are in structuredContent; the R script that produced them is in \`script\`.`,
+    "",
+    ...sectionBlocks,
+  ]
+    .filter((b) => b !== null)
+    .join("\n")
+    .trim();
+}
+
 export function buildBundle(searchId: string, brief: string, events: StreamEvent[]): SearchBundle {
   const papers: Record<string, Paper> = {};
   const persons: Record<string, Person> = {};

@@ -16,9 +16,20 @@ import { Card, SectionLabel, PrimaryButton, GhostButton } from "../primitives/in
 // Two hard rules mirror the backend: the minted plaintext is shown exactly once (never
 // recoverable), and the admin token is stored apart from the search-app key.
 
+// Deliberately excludes lit_search_synth: server-side synthesis is the one capability that
+// spends our model budget, so it is never granted by simply not thinking about it.
 const DEFAULT_SCOPES = ["rest", "mcp"];
 // Fallback if the list response predates the `scopes` field; the backend echoes ALL_SCOPES.
-const FALLBACK_SCOPES = ["rest", "mcp", "lit_search", "admin"];
+const FALLBACK_SCOPES = ["rest", "mcp", "lit_search", "lit_search_synth", "admin"];
+// Short labels for the scope chips; the authoritative long text comes from the backend's
+// scope_docs, so what a scope grants is never described twice.
+const SCOPE_LABEL = {
+  rest: "rest",
+  mcp: "mcp",
+  lit_search: "lit_search — script only",
+  lit_search_synth: "lit_search_synth — writes the review",
+  admin: "admin",
+};
 // Fallback MCP tool list if the response predates `available_tools`; the backend echoes it.
 const FALLBACK_TOOLS = ["find_papers", "keyword_search", "find_people", "verify_references", "corpus_context"];
 
@@ -34,6 +45,7 @@ export default function KeyAdmin() {
   const [lockError, setLockError] = useState(null);
 
   const [allScopes, setAllScopes] = useState(FALLBACK_SCOPES);
+  const [scopeDocs, setScopeDocs] = useState({});
   const [allTools, setAllTools] = useState(FALLBACK_TOOLS);
   const [keys, setKeys] = useState([]);
   const [includeRevoked, setIncludeRevoked] = useState(false);
@@ -53,6 +65,7 @@ export default function KeyAdmin() {
 
   function applyList(data) {
     if (Array.isArray(data.scopes) && data.scopes.length) setAllScopes(data.scopes);
+    if (data.scope_docs && typeof data.scope_docs === "object") setScopeDocs(data.scope_docs);
     if (Array.isArray(data.available_tools) && data.available_tools.length) setAllTools(data.available_tools);
     setKeys(data.keys ?? []);
   }
@@ -266,6 +279,7 @@ export default function KeyAdmin() {
                     key={s}
                     type="button"
                     onClick={() => toggleScope(s)}
+                    title={scopeDocs[s] ?? ""}
                     className={
                       "rounded-full border px-3 py-1 text-xs font-medium transition " +
                       (on
@@ -273,17 +287,80 @@ export default function KeyAdmin() {
                         : "border-stone-300 text-stone-600 hover:bg-stone-100")
                     }
                   >
-                    {s}
+                    {SCOPE_LABEL[s] ?? s}
                   </button>
                 );
               })}
             </div>
+            {scopes.some((s) => scopeDocs[s]) && (
+              <ul className="mt-2 flex flex-col gap-1 text-xs text-stone-500">
+                {scopes
+                  .filter((s) => scopeDocs[s])
+                  .map((s) => (
+                    <li key={s}>
+                      <span className="font-medium text-stone-600">{s}</span> — {scopeDocs[s]}
+                    </li>
+                  ))}
+              </ul>
+            )}
             {scopes.includes("admin") && (
               <p className="mt-2 text-xs text-amber-700">
                 admin scope can mint and revoke keys — hand out sparingly.
               </p>
             )}
           </div>
+          {scopes.includes("lit_search") && (
+            <div className="rounded-[10px] border border-[var(--border-soft)] bg-[var(--bg-card-2)] p-3">
+              <div className="text-[13px] font-medium text-stone-700">Literature search mode</div>
+              <p className="mt-1 text-xs text-stone-500">
+                Both modes run the whole search on our server. They differ in who writes the review —
+                and that is the only part that costs us model tokens.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {[
+                  { synth: false, label: "Script only", hint: "Returns papers, BibTeX, CSV and the search script. The caller writes the review." },
+                  { synth: true, label: "Script + synthesis", hint: "The server also writes the review — billed to us on every call." },
+                ].map((mode) => {
+                  const on = scopes.includes("lit_search_synth") === mode.synth;
+                  return (
+                    <button
+                      key={mode.label}
+                      type="button"
+                      title={mode.hint}
+                      onClick={() =>
+                        setScopes((cur) =>
+                          mode.synth
+                            ? cur.includes("lit_search_synth")
+                              ? cur
+                              : [...cur, "lit_search_synth"]
+                            : cur.filter((x) => x !== "lit_search_synth"),
+                        )
+                      }
+                      className={
+                        "rounded-full border px-3 py-1 text-xs font-medium transition " +
+                        (on
+                          ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                          : "border-stone-300 text-stone-600 hover:bg-stone-100")
+                      }
+                    >
+                      {mode.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs text-stone-500">
+                Server-side synthesis is <span className="font-medium text-stone-600">off by default</span>:
+                without the <code className="font-mono">lit_search_synth</code> scope an MCP caller asking for
+                <code className="ml-1 font-mono">synthesize=true</code> is refused, and the web app runs the
+                search but returns no written review.
+              </p>
+              {scopes.includes("lit_search_synth") && (
+                <p className="mt-2 text-xs text-amber-700">
+                  This key can spend synthesis tokens on every lit_search call.
+                </p>
+              )}
+            </div>
+          )}
           {scopes.includes("mcp") && (
             <div>
               <div className="text-[13px] font-medium text-stone-700">
@@ -318,6 +395,12 @@ export default function KeyAdmin() {
                 </p>
               )}
             </div>
+          )}
+          {scopes.includes("lit_search_synth") && !scopes.includes("lit_search") && (
+            <p className="text-xs text-amber-700">
+              lit_search_synth on its own does nothing over MCP — add lit_search too, or this key can
+              only use synthesis through the web app.
+            </p>
           )}
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div>

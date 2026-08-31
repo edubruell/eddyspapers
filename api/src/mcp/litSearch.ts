@@ -3,17 +3,25 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { computeSearchId } from "../agent/cache.js";
 import { runAgent } from "../agent/runAgent.js";
-import { buildBundle, collectSynthesis, type SearchBundle } from "../agent/bundle.js";
+import { buildBundle, collectSynthesis, resultsDigest, type SearchBundle } from "../agent/bundle.js";
 import { resolveSnapshot } from "../sandbox/snapshot.js";
 import { getSearchDb } from "../db/singleton.js";
 import { getRateLimiter } from "../auth/rateLimit.js";
 import type { KeyIdentity } from "../auth/keys.js";
 import type { AgentInput, Stage, StreamEvent } from "../agent/types.js";
 
-// lit_search — the full agentic pipeline over MCP (01_design.md §7.2-§7.5, PLAN.md §C1,
-// Phase 3). One brief in, a finished mini-lit-review out: synthesis markdown + BibTeX +
-// a flat CSV + the structured paper/section payload. The heavy lifting (script writing,
-// R execution, synthesis) runs in the cheap sub-model, not the calling agent's context.
+// lit_search — the agentic search pipeline over MCP (01_design.md §7.2-§7.5, PLAN.md §C1,
+// Phase 3). One brief in; the server writes a tailored R search script, runs it against the
+// corpus, and hands back the script, the deduped BibTeX, a flat CSV, and the structured
+// paper/section payload. None of that retrieval work lands in the calling agent's context.
+//
+// Two modes, and the DEFAULT is script-only:
+//   - script-only (synthesize=false, default) — retrieval and nothing else. The caller gets
+//     the rows and writes its own review, on its own budget. Costs one cheap script-writing
+//     call; no synthesis tokens are spent on this server's account.
+//   - synthesis (synthesize=true) — the server additionally writes the mini-review. This is
+//     the expensive stage, so it is gated on the separate 'lit_search_synth' key scope; a key
+//     without that scope asking for it gets a plain refusal, never a silent downgrade.
 //
 // Differences from the web chat face (by design, §7.3):
 //   - skip_clarify defaults TRUE — a coding agent already shaped the brief and must never
@@ -52,7 +60,7 @@ interface ProgressCapable {
   }) => Promise<void>;
 }
 
-function progressForwarder(extra: ProgressCapable): (e: StreamEvent) => void {
+function progressForwarder(extra: ProgressCapable, totalSteps: number): (e: StreamEvent) => void {
   const token = extra._meta?.progressToken;
   if (token === undefined) return () => undefined;
   let step = 0;
@@ -61,7 +69,7 @@ function progressForwarder(extra: ProgressCapable): (e: StreamEvent) => void {
     void extra
       .sendNotification({
         method: "notifications/progress",
-        params: { progressToken: token, progress, total: 5, message },
+        params: { progressToken: token, progress, total: totalSteps, message },
       })
       .catch(() => undefined);
   };
@@ -99,9 +107,13 @@ function progressForwarder(extra: ProgressCapable): (e: StreamEvent) => void {
 
 function litResult(bundle: SearchBundle): CallToolResult {
   const hasPersons = Object.keys(bundle.persons).length > 0;
+  // A run stored without synthesis is a script-only run — including a cache hit replayed from
+  // the store, so the mode is read off the bundle rather than the request.
+  const synthesized = bundle.synthesis_md.trim().length > 0;
   return {
-    content: [{ type: "text", text: bundle.synthesis_md || "_No synthesis was produced._" }],
+    content: [{ type: "text", text: synthesized ? bundle.synthesis_md : resultsDigest(bundle) }],
     structuredContent: {
+      mode: synthesized ? "synthesis" : "script_only",
       synthesis_md: bundle.synthesis_md,
       bibtex: bundle.bibtex,
       papers_csv: bundle.papers_csv,
@@ -143,15 +155,20 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
     {
       title: "Agentic literature search",
       description:
-        "The full literature-search pipeline: give a natural-language brief and get back a finished " +
-        "mini-review — a synthesis, a deduped BibTeX bundle, a flat CSV, and the structured paper/section " +
-        "data — from ONE call. It writes and runs a tailored search script (semantic + keyword + journal/" +
-        "author scans) against the corpus, so you don't chain find_papers/keyword_search yourself. Use it " +
-        "when you want a synthesised answer, not raw rows; use the cheap tools (find_papers, keyword_search, " +
-        "find_people) for surgical lookups. Costs ~30s and model tokens. skip_clarify defaults true (no " +
-        "blocking questions); set it false to have an ambiguous brief return clarifying questions instead of " +
-        "a review. Identical briefs are cached. Write the brief as prose describing the mechanism, method, " +
-        "and scope you care about.",
+        "Run a whole literature search server-side from ONE natural-language brief. The server writes a " +
+        "tailored R search script (semantic + keyword + journal/author scans), runs it against the corpus, " +
+        "and returns the retrieved papers, a deduped BibTeX bundle, a flat CSV, the section structure, and " +
+        "the script itself — so you don't chain find_papers/keyword_search yourself and the retrieval never " +
+        "enters your context. Takes ~30s.\n\n" +
+        "MODES. By default (synthesize=false) this returns RESULTS ONLY: you get the rows and write the " +
+        "review yourself. Set synthesize=true to have the server write the mini-review as well — that is " +
+        "the expensive stage and it requires an API key granted the 'lit_search_synth' scope; without it " +
+        "the call is refused rather than silently downgraded, so don't retry it, just work from the rows.\n\n" +
+        "Use lit_search when you want a whole literature swept; use the cheap tools (find_papers, " +
+        "keyword_search, find_people) for surgical lookups. skip_clarify defaults true (never blocks); set " +
+        "it false to have an ambiguous brief come back as clarifying questions instead of results. " +
+        "Identical briefs are cached. Write the brief as prose describing the mechanism, method, and scope " +
+        "you care about — not keyword labels.",
       inputSchema: {
         brief: z.string().min(1).max(2000).describe("Natural-language description of what to find"),
         categories: z
@@ -171,6 +188,14 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
           .boolean()
           .optional()
           .describe("Skip blocking clarification (default true for MCP)"),
+        synthesize: z
+          .boolean()
+          .optional()
+          .describe(
+            "Have the server WRITE the literature review over the results (default false). " +
+              "Requires a key with the 'lit_search_synth' scope; leave it false and write the review " +
+              "yourself from the returned papers.",
+          ),
       },
     },
     async (a, extra): Promise<CallToolResult> => {
@@ -188,6 +213,7 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
           mustInclude: a.must_include,
           refine: a.refine,
           skipClarify: a.skip_clarify ?? true,
+          synthesize: a.synthesize ?? false,
         };
 
         const searchId = computeSearchId({ ...input, dbSnapshotDate });
@@ -198,6 +224,16 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
         // (dev / local stdio) — no scope check, no limiting.
         if (key && !key.scopes.includes("lit_search")) {
           return fail("This API key lacks the 'lit_search' scope.");
+        }
+        // Server-side synthesis is the one stage billed to this server, so it carries its own
+        // grant. Refuse rather than downgrade: a caller that silently got no review would
+        // report the tool as broken instead of writing the review itself.
+        if (input.synthesize && key && !key.scopes.includes("lit_search_synth")) {
+          return fail(
+            "Server-side synthesis is off by default and this API key lacks the 'lit_search_synth' " +
+              "scope. Re-invoke with synthesize=false to get the papers, BibTeX, CSV and script, and " +
+              "write the review yourself.",
+          );
         }
 
         const db = await getSearchDb();
@@ -219,7 +255,7 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
           await db.upsertSearch(searchId, { ...input, dbSnapshotDate });
 
           const events: StreamEvent[] = [];
-          const forward = progressForwarder(extra);
+          const forward = progressForwarder(extra, input.synthesize ? 5 : 4);
           const result = await runAgent(searchId, input, snapshot.path, (e) => {
             events.push(e);
             forward(e);

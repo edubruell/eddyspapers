@@ -120,7 +120,7 @@ describe("runAgent — person-only synthesis guard", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    const r = await runAgent("p-only", { brief }, "/fake/db.duckdb", (e) => events.push(e));
+    const r = await runAgent("p-only", { brief, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(r.paused).toBe(false);
     expect(synthesize).toHaveBeenCalledTimes(1);
@@ -144,7 +144,7 @@ describe("runAgent — person-only synthesis guard", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("empty", { brief }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("empty", { brief, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(synthesize).not.toHaveBeenCalled();
     expect(
@@ -162,7 +162,7 @@ describe("runAgent — person-only synthesis guard", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("legacy", { brief }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("legacy", { brief, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(synthesize).toHaveBeenCalledTimes(1);
     expect(synthesize.mock.calls[0][4]).toEqual({});
@@ -194,7 +194,7 @@ describe("runAgent — persons through the refine pass", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("p-aug", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("p-aug", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(executeScript).toHaveBeenCalledTimes(2);
     const personsArg = synthesize.mock.calls[0][4] as Record<string, Person>;
@@ -225,7 +225,7 @@ describe("runAgent — persons through the refine pass", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("p-rep", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("p-rep", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     const personsArg = synthesize.mock.calls[0][4] as Record<string, Person>;
     expect(Object.keys(personsArg)).toEqual(["p9"]);
@@ -249,7 +249,7 @@ describe("runAgent — persons through the refine pass", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("p-fail2", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("p-fail2", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     // Person results count as something to fall back to — degrade, don't fail.
     expect(events.some((e) => e.type === "error")).toBe(false);
@@ -269,7 +269,7 @@ describe("runAgent — persons through the refine pass", () => {
     });
     assess.mockResolvedValue(null);
     const { runAgent } = await import("../../src/agent/runAgent.js");
-    await runAgent("p-assess", { brief, refine: true }, "/fake/db.duckdb", () => undefined);
+    await runAgent("p-assess", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", () => undefined);
 
     expect(assess).toHaveBeenCalledTimes(1);
     const arg = assess.mock.calls[0][0] as { persons?: Record<string, Person> };

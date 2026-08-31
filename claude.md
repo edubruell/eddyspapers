@@ -10,7 +10,7 @@ Three related products sharing one DuckDB corpus (~479k economics papers from Re
 | EconPeople person finder | `econpeople.eduard-bruell.de` | Live |
 | Agentic literature review | `agenticsearch.eduard-bruell.de` | Live (ZEW preview) |
 
-All three are served by **one Node/Hono service** at `:8001` (`api/`). R/Plumber is retired on prod (stopped 2026-07-11); dead code stripped and the tree restructured in M7 (2026-07-20). See `localwip/notes/PLAN.md` for the full architecture record.
+All three are served by **one Node/Hono service** at `:8001` (`api/`). R/Plumber is retired on prod (stopped 2026-07-11); dead code stripped and the tree restructured in M7 (2026-07-20). See `localwip/notes/architecture/01_backend_split.md` for the full architecture record.
 
 ## Folder map
 
@@ -49,9 +49,13 @@ All three are served by **one Node/Hono service** at `:8001` (`api/`). R/Plumber
 ├── maintenance/            ← static maintenance page
 ├── ops_notes/              ← gitignored server-ops notes
 └── localwip/               ← gitignored scratch
-    ├── notes/              ← PLAN.md, FINDINGS.md, roadmap.md, M7_restructure.md
+    ├── notes/              ← 3-tier notes system (see "Notes system" below)
+    │   ├── perpetual/          long memory: INDEX, IDEAS, FINDINGS, CURRENT_FOCUS
+    │   ├── <topic>/            per-topic plans (agentic, econpeople, data_enrichment, architecture)
+    │   ├── sessions/           per-session logs (yyyymmdd_<title>.md)
+    │   └── archive/            frozen historical docs
     ├── adhoc/              ← retired one-off scripts
-    ├── lit-search/         ← skill WIP
+    ├── lit-search/         ← pre-MCP skill originals (superseded by ~/.claude/skills/)
     └── lit-check/
 ```
 
@@ -96,10 +100,29 @@ owned by the Hono service — never touched by the pipeline.
 | `POST /person/search` | Two-stage author search (semantic → rollup) |
 | `GET /person/{short_id}` | Person profile |
 | `GET /person/{short_id}/papers` | Papers by person |
-| `POST /chat` | Start agentic literature review (SSE stream) |
+| `POST /chat` | Start agentic literature search (SSE stream); `synthesize` writes the review — see below |
 | `POST /chat/{id}/reply` | Reply to clarifying question |
 | `POST /export/xlsx` | Export results as Excel |
+| `PATCH /admin/keys/{prefix}` | Replace a live key's scopes in place (no reissue) |
 | `POST /admin/reload` | Hot-swap corpus snapshot (requires admin key) |
+| `GET /docs` | Public JSON API reference — endpoints + field conventions (`src/docs/reference.ts`) |
+
+### Search modes and the synthesis grant
+
+The agentic pipeline runs **script-only by default**: the server writes and runs the search
+script and returns papers + BibTeX + CSV + the script, and the caller writes its own review.
+Having the *server* write the review is the only stage that costs real model tokens, so it is
+opt-in (`synthesize`) **and** gated on the `lit_search_synth` key scope:
+
+| Surface | `synthesize` default | Without `lit_search_synth` |
+|---|---|---|
+| MCP `lit_search` | `false` | request refused (never silently downgraded) |
+| `POST /chat` (web app) | `true` | search still runs, no review; response echoes `synthesize:false` |
+
+Scopes are `rest`, `mcp`, `lit_search`, `lit_search_synth`, `admin`; the admin console
+(`/admin`) renders what each grants from the backend's `scope_docs`. Field conventions that a
+caller cannot guess (notably `author_lastnames` is **semicolon-separated**) live once in
+`api/src/docs/reference.ts` and are spent on both faces — MCP `.describe()` text and `GET /docs`.
 
 ## Pipeline (update_repec.R)
 
@@ -140,15 +163,30 @@ Design: `localwip/notes/data_enrichment/01_backfill_mechanism.md`.
 **Appdata (appdata.duckdb — Hono read-write):**
 - `saved_searches`, `search_logs`, `person_search_logs`, `api_keys`
 
-## Design docs
+## Notes system
 
-All design docs are in `localwip/notes/` (gitignored):
-- `localwip/notes/agentic/00_overview.md` … `08_sharelinks.md` — agentic search; lower-numbered doc wins on system decisions
-- `localwip/notes/econpeople/00_overview.md` … `03_profile_tiers.md` — EconPeople person finder
+`localwip/notes/` (gitignored) is organised in three tiers by memory horizon — see
+`localwip/notes/perpetual/INDEX.md` for the full model:
+
+- **`perpetual/`** — long, distilled, flushable memory. `IDEAS.md` (speculative),
+  `CURRENT_FOCUS.md` (active/next-up), `FINDINGS.md` (durable gotchas & measurements),
+  `INDEX.md` (the map). Entries are `## Headline` + `_YYYY-MM-DD_`, newest first. **Read
+  `FINDINGS.md` before debugging** — the cross-cutting landmines live there.
+- **Topic folders** — long-form per-topic design plans, numbered `00_index`, `01_…`:
+  - `agentic/00_overview.md` … `08_sharelinks.md` — agentic search; lower-numbered doc wins on system decisions
+  - `econpeople/00_overview.md` … `03_profile_tiers.md` — EconPeople person finder
+  - `data_enrichment/` — M8/M9 DOI + OpenAlex enrichment (backfill design in `01_backfill_mechanism.md`)
+  - `architecture/01_backend_split.md` — the canonical backend-split / MCP architecture record
+- **`sessions/`** — one short log per session, `yyyymmdd_<title>.md`.
+- **`archive/`** — frozen historical docs (retired roadmap, M7/M9 write-ups, old FINDINGS).
+
+**Session end:** run the **`lognow`** skill — it writes the `sessions/` log and harmonizes
+`perpetual/` (promotes durable findings, updates `CURRENT_FOCUS`, marks todos, refreshes the
+INDEX). Invoke it when wrapping up a working session.
 
 ## Pending work (next up)
 
-- **Phase 6**: rewrite `lit-search` + `lit-check` skills against the MCP server (currently in `localwip/`).
+- **Ship the public lit-search / lit-check skills**: MCP rewrite done (live at `~/.claude/skills/`); remaining work is distribution — pick a channel (public skills repo vs. plugin) gated behind Rung 1 self-serve MCP keys.
 - **Quality-weight parity cases**: re-add to parity battery after confirming blended mode matches (vectorised-ifelse bug was fixed locally; not yet golden-recorded).
 
 ## Technical stack
@@ -174,8 +212,10 @@ All design docs are in `localwip/notes/` (gitignored):
 
 After every implementation step:
 1. Spawn a fresh sub-agent (`Agent` with `subagent_type: general-purpose`) to review code quality and extend tests.
-2. Update `localwip/notes/agentic/05_roadmap.md` (or relevant phase checklist).
+2. Update the relevant topic doc / `perpetual/CURRENT_FOCUS.md` checklist.
 3. If implementation diverges from a design doc, update the doc — code and docs must stay in sync.
+
+At session end, run the **`lognow`** skill to write the session log and harmonize `perpetual/`.
 
 **Frontend dev:** `cd frontends/classic && npm install && npm run dev` (or `frontends/econpeople`)  
 **API dev:** `pnpm install` at the repo root, then `cd api && pnpm dev`  

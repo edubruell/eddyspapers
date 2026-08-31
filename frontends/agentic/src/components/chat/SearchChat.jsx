@@ -20,6 +20,7 @@ export default function SearchChat() {
   const [refine, setRefine] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [startError, setStartError] = useState(null);
+  const [synthesisOff, setSynthesisOff] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   const state = useAgentStream(id);
@@ -51,8 +52,11 @@ export default function SearchChat() {
     setSubmitting(true);
     setStartError(null);
     try {
-      const { id: newId } = await startChat({ brief: brief.trim(), skipClarify, refine });
+      // The server decides whether it will write the review: synthesis hangs off the
+      // 'lit_search_synth' key scope, and a key without it still gets the full search.
+      const { id: newId, synthesize } = await startChat({ brief: brief.trim(), skipClarify, refine });
       setId(newId);
+      setSynthesisOff(synthesize === false);
     } catch (e) {
       setStartError(e.message);
     } finally {
@@ -63,6 +67,7 @@ export default function SearchChat() {
   function onNewSearch() {
     setId(null);
     setStartError(null);
+    setSynthesisOff(false);
     setBrief("");
   }
 
@@ -172,6 +177,13 @@ export default function SearchChat() {
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {state.error.message ||
               "Couldn't finish — here's what I have so far."}
+          </div>
+        )}
+
+        {synthesisOff && (
+          <div className="rounded-lg border border-[var(--border-soft)] bg-[var(--bg-card-2)] px-3 py-2 text-sm text-stone-600">
+            The search ran in full, but writing the review is a separate permission your key doesn’t
+            carry — the evidence below is complete, and you can export it as BibTeX, Markdown or Excel.
           </div>
         )}
 

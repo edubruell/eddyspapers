@@ -1,11 +1,11 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { resolveSnapshot } from "../sandbox/snapshot.js";
 import { computeSearchId, legacySearchId } from "../agent/cache.js";
 import { runAgent, type RunOpts } from "../agent/runAgent.js";
 import { bus } from "../stream/bus.js";
 import { getSearchDb } from "../db/singleton.js";
-import { requireKey } from "../middleware/requireKey.js";
+import { requireKey, getApiKey } from "../middleware/requireKey.js";
 import type { SearchDb } from "../db/searches.js";
 import type { AgentInput, StreamEvent } from "../agent/types.js";
 
@@ -16,7 +16,19 @@ const chatBodySchema = z.object({
   categories: z.array(z.string()).optional(),
   minYear: z.number().int().optional(),
   mustInclude: z.array(z.string()).optional(),
+  // The web app is the synthesis face of the product, so this defaults TRUE here — unlike
+  // MCP lit_search, which defaults to script-only. Either way the grant is the key's.
+  synthesize: z.boolean().optional(),
 });
+
+// Server-side synthesis is billed to this server, so it hangs off a dedicated key scope
+// rather than the blanket 'rest' grant. Resolved per request (not persisted on the run) so
+// the clarifier-resume path below needs no stored flag and no schema migration. A null key
+// means the gate is disabled entirely — dev, where every scope is implied.
+function synthesisGranted(c: Context): boolean {
+  const key = getApiKey(c);
+  return key == null || key.scopes.includes("lit_search_synth");
+}
 
 const replyBodySchema = z.object({
   answer: z.string().min(1).max(2000),
@@ -95,18 +107,21 @@ chatRoute.post("/", requireKey("rest"), async (c) => {
   }
 
   const { brief, skipClarify, refine, categories, minYear, mustInclude } = parsed.data;
+  // Ask-and-be-refused would strand the user mid-search, so an ungranted key degrades to a
+  // script-only run; the response flags it so the UI can say why no review appeared.
+  const synthesize = (parsed.data.synthesize ?? true) && synthesisGranted(c);
   const snapshot = await resolveSnapshot();
 
   const dbSnapshotDate = snapshot.exists && snapshot.ageMs != null
     ? new Date(Date.now() - snapshot.ageMs).toISOString().slice(0, 10)
     : "unknown";
 
-  const id = computeSearchId({ brief, categories, minYear, mustInclude, refine, dbSnapshotDate });
+  const id = computeSearchId({ brief, categories, minYear, mustInclude, refine, synthesize, dbSnapshotDate });
   const db = await getSearchDb();
 
   const existing = await db.getSearch(id);
   if (existing?.status === "done") {
-    return c.json({ id }, 200);
+    return c.json({ id, synthesize }, 200);
   }
 
   // Backward compat (test-phase shares): runs created before the HMAC-ID cutover are stored
@@ -114,9 +129,9 @@ chatRoute.post("/", requireKey("rest"), async (c) => {
   // so a pre-cutover brief still cache-hits its result and keeps its shareable id instead of
   // minting a duplicate under the new scheme. Only completed runs (avoids resuming stale
   // legacy in-flight rows); new runs always use the HMAC id below.
-  const legacyExisting = await db.getSearch(legacySearchId({ brief, categories, minYear, mustInclude, refine, dbSnapshotDate }));
+  const legacyExisting = await db.getSearch(legacySearchId({ brief, categories, minYear, mustInclude, refine, synthesize, dbSnapshotDate }));
   if (legacyExisting?.status === "done") {
-    return c.json({ id: legacyExisting.id }, 200);
+    return c.json({ id: legacyExisting.id, synthesize }, 200);
   }
 
   // Atomic claim: only the caller that inserts the row (or reclaims a previously errored
@@ -125,16 +140,16 @@ chatRoute.post("/", requireKey("rest"), async (c) => {
   // stream, so two runners never publish to one bus with colliding seqs.
   const claimed = await db.claimSearch(id, { brief, categories, minYear, mustInclude, refine, dbSnapshotDate });
   if (!claimed) {
-    return c.json({ id }, 202);
+    return c.json({ id, synthesize }, 202);
   }
 
   // Fresh start: drop any stale bus entry left by a prior errored attempt of this id.
   bus.cleanup(id);
 
-  const input: AgentInput = { brief, categories, minYear, mustInclude, skipClarify, refine };
+  const input: AgentInput = { brief, categories, minYear, mustInclude, skipClarify, refine, synthesize };
   runPhase(db, id, input, snapshot.path, { startSeq: 0, runClarify: true });
 
-  return c.json({ id }, 201);
+  return c.json({ id, synthesize }, 201);
 });
 
 // Phase B — the human-in-the-loop reply to a blocking clarifier question. Validates the
@@ -181,6 +196,7 @@ chatRoute.post("/:id/reply", requireKey("rest"), async (c) => {
     categories: search.categories ?? undefined,
     minYear: search.minYear ?? undefined,
     refine: search.refine,
+    synthesize: synthesisGranted(c),
     clarifyQuestion: search.clarifyQuestion ?? undefined,
     clarifyAnswer: answer,
   };

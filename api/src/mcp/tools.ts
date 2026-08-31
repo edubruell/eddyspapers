@@ -8,6 +8,7 @@ import { personSearch } from "../search/persons.js";
 import { withRateLimit } from "./guard.js";
 import type { KeyIdentity } from "../auth/keys.js";
 import type { BibEntry, KeywordField } from "../search/types.js";
+import { FIELD_DOCS } from "../docs/reference.js";
 
 // The five cheap MCP tools (PLAN.md §C1). Each is a thin adapter over the same
 // internal service function the REST routes call — no HTTP self-calls, no
@@ -80,21 +81,17 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
         "`openalex` block (matched by DOI, ~half the corpus) with a retraction flag, open-access " +
         "link, and field-weighted citation impact — absence means unmatched, not low impact.",
       inputSchema: {
-        query: z.string().min(1).describe("Abstract-style prose describing what to find"),
+        query: z.string().min(1).describe(FIELD_DOCS.semanticQuery),
         max_k: z.number().int().min(1).max(100).optional().describe("Max results (default 30)"),
-        min_year: z.number().int().optional(),
-        categories: z.array(z.string()).optional().describe("Journal categories (see corpus_context)"),
-        journal_name: z.string().optional().describe("Journal-name substring(s), comma-separable"),
-        title_keyword: z.string().optional(),
-        author_keyword: z.string().optional(),
-        jel: z
-          .array(z.string().regex(/^[A-Za-z]\d{0,2}$/))
+        min_year: z.number().int().optional().describe("Earliest publication year, inclusive"),
+        categories: z.array(z.string()).optional().describe(FIELD_DOCS.categories),
+        journal_name: z.string().optional().describe(FIELD_DOCS.journalName),
+        title_keyword: z.string().optional().describe("Substring the title must contain (case-insensitive)"),
+        author_keyword: z
+          .string()
           .optional()
-          .describe(
-            "JEL codes or prefixes to require (e.g. ['J31'] or ['J3','C21']). " +
-              "Coverage caveat: only ~55% of papers carry JEL codes (43% of journal articles), " +
-              "so this filter also drops papers whose codes are simply unknown.",
-          ),
+          .describe("Substring the author list must contain (case-insensitive); a single name, not a list"),
+        jel: z.array(z.string().regex(/^[A-Za-z]\d{0,2}$/)).optional().describe(FIELD_DOCS.jel),
       },
     },
     async (a) =>
@@ -127,20 +124,21 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
         "category/year filters to keep result sets reviewable; order_by='citations' surfaces " +
         "established work. Returns a total count for pagination.",
       inputSchema: {
-        keywords: z.array(z.string().trim().min(1).max(200)).min(1).max(20),
-        fields: z.array(z.enum(["title", "abstract", "authors"])).min(1).optional(),
-        match: z.enum(["any", "all"]).optional(),
-        min_year: z.number().int().optional(),
-        max_year: z.number().int().optional(),
-        categories: z.array(z.string()).optional(),
-        journal_name: z.string().optional().describe("Journal-name substring(s), comma-separable"),
-        jel: z
-          .array(z.string().regex(/^[A-Za-z]\d{0,2}$/))
+        keywords: z.array(z.string().trim().min(1).max(200)).min(1).max(20).describe(FIELD_DOCS.keywords),
+        fields: z
+          .array(z.enum(["title", "abstract", "authors"]))
+          .min(1)
           .optional()
-          .describe("JEL codes or prefixes to require; ~55% coverage, absence means unknown"),
-        order_by: z.enum(["year", "citations"]).optional(),
-        limit: z.number().int().min(1).max(500).optional(),
-        offset: z.number().int().min(0).optional(),
+          .describe('Which columns to search. Default ["title"]'),
+        match: z.enum(["any", "all"]).optional().describe('Whether one keyword suffices (default "any") or all must hit'),
+        min_year: z.number().int().optional().describe("Earliest publication year, inclusive"),
+        max_year: z.number().int().optional().describe("Latest publication year, inclusive"),
+        categories: z.array(z.string()).optional().describe(FIELD_DOCS.categories),
+        journal_name: z.string().optional().describe(FIELD_DOCS.journalName),
+        jel: z.array(z.string().regex(/^[A-Za-z]\d{0,2}$/)).optional().describe(FIELD_DOCS.jel),
+        order_by: z.enum(["year", "citations"]).optional().describe('Sort order; "citations" surfaces established work'),
+        limit: z.number().int().min(1).max(500).optional().describe("Page size, default 50"),
+        offset: z.number().int().min(0).optional().describe("Page offset; pair with the returned `total`"),
       },
     },
     async (a) =>
@@ -177,14 +175,17 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
         "quality_weight (0-1) tilts toward citation-heavy authors. Filter with active_since (last " +
         "publication year) and min_citations.",
       inputSchema: {
-        query: z.string().min(1).describe("Abstract-style prose describing the research area"),
+        query: z.string().min(1).describe(FIELD_DOCS.semanticQuery),
         max_k: z.number().int().min(1).max(100).optional().describe("Max people (default 25)"),
-        scoring_mode: z.enum(["breadth", "best_match", "blended"]).optional(),
-        quality_weight: z.number().min(0).max(1).optional(),
+        scoring_mode: z
+          .enum(["breadth", "best_match", "blended"])
+          .optional()
+          .describe('"breadth" (default) rewards many overlapping papers; "best_match" rewards one strong paper'),
+        quality_weight: z.number().min(0).max(1).optional().describe("0-1; tilts the ranking toward citation-heavy authors"),
         min_year: z.number().int().optional().describe("Only count papers from this year onward"),
-        categories: z.array(z.string()).optional(),
+        categories: z.array(z.string()).optional().describe(FIELD_DOCS.categories),
         active_since: z.number().int().optional().describe("Author's last publication year >= this"),
-        min_citations: z.number().int().optional(),
+        min_citations: z.number().int().optional().describe("Minimum total citations across the author's work"),
       },
     },
     async (a) =>
@@ -217,22 +218,25 @@ export function registerTools(server: McpServer, key: KeyIdentity | null = null)
         "not_found), the matched paper, citation stats, and any year/journal mismatches. The matched " +
         "paper carries an `openalex` block when available (matched by DOI, ~half the corpus): check " +
         "`openalex.is_retracted` to flag retracted citations, `openalex.oa_url` for a free full text, " +
-        "and `openalex.fwci` for field-normalised impact. Give as much of handle, author_lastnames " +
-        "(semicolon-separated), year, title, journal as you have.",
+        "and `openalex.fwci` for field-normalised impact. Give as much of each entry as you have — " +
+        "more fields only ever help. NOTE the one convention that is easy to get wrong: " +
+        "author_lastnames is SEMICOLON-separated last names only (\"Acemoglu; Robinson\"), never " +
+        "comma-separated and never with first names.",
       inputSchema: {
         entries: z
           .array(
             z.object({
-              cite_key: z.string().nullish(),
-              handle: z.string().nullish(),
-              author_lastnames: z.string().nullish(),
-              year: z.number().int().nullish(),
-              title: z.string().nullish(),
-              journal: z.string().nullish(),
+              cite_key: z.string().nullish().describe(FIELD_DOCS.citeKey),
+              handle: z.string().nullish().describe(FIELD_DOCS.handle),
+              author_lastnames: z.string().nullish().describe(FIELD_DOCS.authorLastnames),
+              year: z.number().int().nullish().describe(FIELD_DOCS.entryYear),
+              title: z.string().nullish().describe(FIELD_DOCS.entryTitle),
+              journal: z.string().nullish().describe(FIELD_DOCS.entryJournal),
             }),
           )
           .min(1)
-          .max(200),
+          .max(200)
+          .describe("Bibliography entries to check, 1-200 per call"),
       },
     },
     async (a) =>

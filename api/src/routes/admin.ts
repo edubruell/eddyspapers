@@ -5,6 +5,7 @@ import { getKeyRegistry, generateKey } from "../auth/keys.js";
 import { requireKey } from "../middleware/requireKey.js";
 import { ALL_SCOPES, type Scope } from "../db/appdata.js";
 import { MCP_TOOL_NAMES } from "../mcp/tools.js";
+import { SCOPE_DOCS } from "../docs/reference.js";
 
 // Admin surface for the API-key registry (PLAN.md §D1). The `scripts/keys.ts` CLI drives
 // these over HTTP so only the server process ever opens appdata.duckdb (its cross-process
@@ -16,9 +17,15 @@ import { MCP_TOOL_NAMES } from "../mcp/tools.js";
 
 const DEFAULT_SCOPES: Scope[] = ["rest", "mcp"];
 
+const scopeEnum = z.enum(["rest", "mcp", "lit_search", "lit_search_synth", "admin"]);
+
+const scopesSchema = z.object({
+  scopes: z.array(scopeEnum).min(1),
+});
+
 const createSchema = z.object({
   label: z.string().min(1).max(200),
-  scopes: z.array(z.enum(["rest", "mcp", "lit_search", "admin"])).min(1).optional(),
+  scopes: z.array(scopeEnum).min(1).optional(),
   rate_limit_overrides: z.record(z.number().int().positive()).nullish(),
   // MCP tool allowlist (M9 G). Omitted / null = all tools; a validated subset otherwise.
   // An empty array is allowed (an mcp key exposing no cheap tools — lit_search still rides
@@ -57,6 +64,33 @@ adminRoute.post("/keys", async (c) => {
   return c.json({ key, key_hash: keyHash, id: keyHash.slice(0, 12), label: parsed.data.label, scopes, tools }, 201);
 });
 
+// Re-scope an existing key in place. The plaintext is never recoverable, so re-minting to
+// change a grant would mean chasing every holder for a swap — this grants (or withdraws) a
+// scope on the key someone already has. Scopes are REPLACED wholesale, not merged, so the
+// caller sends the full intended set.
+adminRoute.patch("/keys/:prefix", async (c) => {
+  const prefix = c.req.param("prefix").trim();
+  if (prefix.length < 4) return c.json({ error: "Provide at least 4 hex chars of the key id/hash" }, 400);
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const parsed = scopesSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
+
+  const db = await getAppDataDb();
+  const updated = await db.setKeyScopes(prefix, parsed.data.scopes as Scope[]);
+  await getKeyRegistry().ensureFresh(true);
+  if (updated.length === 0) return c.json({ error: "No active key matched that prefix" }, 404);
+
+  return c.json({
+    updated: updated.map((k) => ({ id: k.keyHash.slice(0, 12), label: k.label, scopes: k.scopes })),
+  });
+});
+
 adminRoute.delete("/keys/:prefix", async (c) => {
   const prefix = c.req.param("prefix").trim();
   if (prefix.length < 4) return c.json({ error: "Provide at least 4 hex chars of the key id/hash" }, 400);
@@ -84,6 +118,8 @@ adminRoute.get("/keys", async (c) => {
   const keys = await db.listKeys(includeRevoked);
   return c.json({
     scopes: ALL_SCOPES,
+    // The console renders these verbatim, so what a scope grants is stated once, server-side.
+    scope_docs: SCOPE_DOCS,
     available_tools: MCP_TOOL_NAMES,
     keys: keys.map((k) => ({
       id: k.keyHash.slice(0, 12),

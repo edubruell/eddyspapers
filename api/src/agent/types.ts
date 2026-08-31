@@ -124,6 +124,11 @@ export interface AgentInput {
   // round 1 executes, an assessor decides adequate vs revise; on revise a single corrected
   // write→validate→execute round runs before synthesis. Off by default — zero added cost.
   refine?: boolean;
+  // When true the run ends with an LLM-written review; when false (the server-wide
+  // default) it stops after execute and the caller keeps the script + result rows.
+  // Synthesis is the only stage that costs meaningful model tokens, so it is opt-in and
+  // gated on the 'lit_search_synth' key scope at every entry point.
+  synthesize?: boolean;
   // Set on the resume (Phase B) pass: the question that was asked and the user's
   // answer, folded into the writer's user message as a <clarification> block.
   clarifyQuestion?: string;

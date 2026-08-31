@@ -71,7 +71,7 @@ export async function startChat({ brief, categories, minYear, mustInclude, skipC
     const text = await res.text().catch(() => "");
     throw new Error(`Chat start failed (${res.status}): ${text}`);
   }
-  return res.json(); // { id }
+  return res.json(); // { id, synthesize } — synthesize is false when the key lacks lit_search_synth
 }
 
 // Server-rendered XLSX of the collected sources (one row per paper). Returns a Blob the

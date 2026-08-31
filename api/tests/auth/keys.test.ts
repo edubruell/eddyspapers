@@ -62,7 +62,7 @@ describe("KeyRegistry", () => {
     expect(reg.isEnabled()).toBe(true);
     const id = reg.verify("s3cret");
     expect(id?.id).toBe("legacy");
-    expect(id?.scopes).toEqual(["rest", "mcp", "lit_search", "admin"]);
+    expect(id?.scopes).toEqual(["rest", "mcp", "lit_search", "lit_search_synth", "admin"]);
     expect(reg.verify("wrong")).toBeNull();
     expect(reg.verify(null)).toBeNull();
   });

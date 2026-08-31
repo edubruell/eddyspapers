@@ -104,10 +104,14 @@ describe("lit_search — tool listing", () => {
     const lit = tools.find((t) => t.name === "lit_search");
     expect(lit).toBeDefined();
     expect(Object.keys(lit?.inputSchema?.properties ?? {}).sort()).toEqual(
-      ["brief", "categories", "min_year", "must_include", "refine", "skip_clarify"].sort(),
+      ["brief", "categories", "min_year", "must_include", "refine", "skip_clarify", "synthesize"].sort(),
     );
     expect(lit?.inputSchema?.required).toContain("brief");
     expect(lit?.description).toMatch(/cached/i);
+    // The default mode and the scope that unlocks the other one must both be discoverable
+    // from the tool listing alone — a client model never sees our docs.
+    expect(lit?.description).toMatch(/RESULTS ONLY/);
+    expect(lit?.description).toMatch(/lit_search_synth/);
   });
 });
 
@@ -115,7 +119,7 @@ describe("lit_search — happy path", () => {
   it("returns the §7.5 three-artifact bundle from one call", async () => {
     const res = await client.callTool({
       name: "lit_search",
-      arguments: { brief: "Causal effects of minimum wage on low-wage employment across US states." },
+      arguments: { brief: "Causal effects of minimum wage on low-wage employment across US states.", synthesize: true },
     });
     expect(res.isError).toBeFalsy();
     const sc = res.structuredContent as Record<string, unknown>;
@@ -144,12 +148,12 @@ describe("lit_search — caching (§7.8)", () => {
     executeScript.mockClear();
     synthesize.mockClear();
 
-    const first = await client.callTool({ name: "lit_search", arguments: { brief } });
+    const first = await client.callTool({ name: "lit_search", arguments: { brief, synthesize: true } });
     expect(first.isError).toBeFalsy();
     expect(writeScript).toHaveBeenCalledTimes(1);
     const firstId = (first.structuredContent as { search_id: string }).search_id;
 
-    const second = await client.callTool({ name: "lit_search", arguments: { brief } });
+    const second = await client.callTool({ name: "lit_search", arguments: { brief, synthesize: true } });
     expect(second.isError).toBeFalsy();
     // No new pipeline work on the repeat call — the run came back from cache.
     expect(writeScript).toHaveBeenCalledTimes(1);
@@ -183,7 +187,7 @@ describe("lit_search — needs_clarification (§7.3)", () => {
     clarify.mockResolvedValueOnce({ action: "question", question: "narrow it?", options: [] });
     const res = await client.callTool({
       name: "lit_search",
-      arguments: { brief: "Search frictions in online labour markets and matching efficiency." },
+      arguments: { brief: "Search frictions in online labour markets and matching efficiency.", synthesize: true },
     });
     expect(res.isError).toBeFalsy();
     expect(res.structuredContent).not.toHaveProperty("needs_clarification");
@@ -207,7 +211,7 @@ describe("lit_search — progress notifications (§7.4)", () => {
   it("streams stage progress when the caller attaches a progressToken", async () => {
     const seen: { progress: number; total?: number; message?: string }[] = [];
     const res = await client.callTool(
-      { name: "lit_search", arguments: { brief: "Returns to schooling identified from compulsory-schooling reforms." } },
+      { name: "lit_search", arguments: { brief: "Returns to schooling identified from compulsory-schooling reforms.", synthesize: true } },
       undefined,
       { onprogress: (p) => seen.push(p) },
     );
@@ -222,7 +226,7 @@ describe("lit_search — progress notifications (§7.4)", () => {
     setHappyPath();
     const seen: { progress: number; total?: number }[] = [];
     const res = await client.callTool(
-      { name: "lit_search", arguments: { brief: "Monetary policy transmission through bank lending in the euro area." } },
+      { name: "lit_search", arguments: { brief: "Monetary policy transmission through bank lending in the euro area.", synthesize: true } },
       undefined,
       { onprogress: (p) => seen.push(p) },
     );
@@ -244,8 +248,8 @@ describe("lit_search — cache-key sensitivity (§7.8, PLAN §12.4)", () => {
     setHappyPath();
     writeScript.mockClear();
     const brief = "Trade liberalisation and local labour-market adjustment.";
-    const a = await client.callTool({ name: "lit_search", arguments: { brief, categories: ["Top 5 Journals"] } });
-    const b = await client.callTool({ name: "lit_search", arguments: { brief, categories: ["Labour"] } });
+    const a = await client.callTool({ name: "lit_search", arguments: { brief, categories: ["Top 5 Journals"], synthesize: true } });
+    const b = await client.callTool({ name: "lit_search", arguments: { brief, categories: ["Labour"], synthesize: true } });
     const idA = (a.structuredContent as { search_id: string }).search_id;
     const idB = (b.structuredContent as { search_id: string }).search_id;
     expect(idA).not.toBe(idB);
@@ -257,8 +261,8 @@ describe("lit_search — cache-key sensitivity (§7.8, PLAN §12.4)", () => {
     setHappyPath();
     writeScript.mockClear();
     const brief = "Firm-level productivity dispersion within narrow industries.";
-    const a = await client.callTool({ name: "lit_search", arguments: { brief, min_year: 2000 } });
-    const b = await client.callTool({ name: "lit_search", arguments: { brief, min_year: 2015 } });
+    const a = await client.callTool({ name: "lit_search", arguments: { brief, min_year: 2000, synthesize: true } });
+    const b = await client.callTool({ name: "lit_search", arguments: { brief, min_year: 2015, synthesize: true } });
     const idA = (a.structuredContent as { search_id: string }).search_id;
     const idB = (b.structuredContent as { search_id: string }).search_id;
     expect(idA).not.toBe(idB);
@@ -269,14 +273,14 @@ describe("lit_search — cache-key sensitivity (§7.8, PLAN §12.4)", () => {
     const brief = "Not-actually-a-topic brief that will fail the first time only.";
     // first call: the clarifier hard-rejects → error result, persisted as status=error
     clarify.mockResolvedValueOnce({ action: "reject", reason: "This is not a research topic." });
-    const first = await client.callTool({ name: "lit_search", arguments: { brief, skip_clarify: false } });
+    const first = await client.callTool({ name: "lit_search", arguments: { brief, skip_clarify: false, synthesize: true } });
     expect(first.isError).toBe(true);
 
     // second call, identical inputs: the error run must NOT be replayed from cache — the
     // pipeline re-runs. Restore the happy path and confirm a real synthesis comes back.
     setHappyPath();
     writeScript.mockClear();
-    const second = await client.callTool({ name: "lit_search", arguments: { brief, skip_clarify: false } });
+    const second = await client.callTool({ name: "lit_search", arguments: { brief, skip_clarify: false, synthesize: true } });
     expect(second.isError).toBeFalsy();
     expect(writeScript).toHaveBeenCalledTimes(1); // re-ran, not cache-served
     expect((second.structuredContent as { synthesis_md: string }).synthesis_md).toMatch(/Minimum wages/);
@@ -350,7 +354,7 @@ describe("lit_search — empty results", () => {
 
     const res = await client.callTool({
       name: "lit_search",
-      arguments: { brief: "An extremely narrow topic with no corpus coverage whatsoever xyzzy." },
+      arguments: { brief: "An extremely narrow topic with no corpus coverage whatsoever xyzzy.", synthesize: true },
     });
     expect(res.isError).toBeFalsy();
     const sc = res.structuredContent as { papers_csv: string; papers: Record<string, unknown>; synthesis_md: string };

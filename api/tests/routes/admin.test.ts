@@ -227,3 +227,58 @@ describe("/admin/keys", () => {
     expect(res.status).toBe(201);
   });
 });
+
+// Mints a key and hands back both its plaintext and its id — the re-scoping tests need to
+// prove the SAME plaintext gains a grant, which is the whole point of patching in place.
+async function mintKey(app: Hono, scopes: string[]): Promise<{ key: string; id: string }> {
+  const res = await app.request("/admin/keys", {
+    method: "POST",
+    headers: admin("adminpw"),
+    body: JSON.stringify({ label: "Patch target", scopes }),
+  });
+  expect(res.status).toBe(201);
+  return (await res.json()) as { key: string; id: string };
+}
+
+describe("PATCH /admin/keys/:prefix — re-scoping a live key", () => {
+  it("replaces the scope set and takes effect without reissuing the key", async () => {
+    const app = await buildAppWith("adminpw");
+    const key = await mintKey(app, ["rest"]);
+
+    // The key cannot reach a lit_search-scoped surface yet.
+    const before = await app.request("/admin/keys", { headers: { authorization: `Bearer ${key.key}` } });
+    expect(before.status).toBe(403);
+
+    const res = await app.request(`/admin/keys/${key.id}`, {
+      method: "PATCH",
+      headers: { authorization: "Bearer adminpw", "content-type": "application/json" },
+      body: JSON.stringify({ scopes: ["rest", "lit_search", "lit_search_synth", "admin"] }),
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as unknown).toMatchObject({
+      updated: [{ id: key.id, scopes: ["rest", "lit_search", "lit_search_synth", "admin"] }],
+    });
+
+    // Same plaintext key, new grant — the registry was refreshed in place.
+    const after = await app.request("/admin/keys", { headers: { authorization: `Bearer ${key.key}` } });
+    expect(after.status).toBe(200);
+  });
+
+  it("404s an unknown prefix and rejects an unknown scope", async () => {
+    const app = await buildAppWith("adminpw");
+    const miss = await app.request("/admin/keys/deadbeef", {
+      method: "PATCH",
+      headers: { authorization: "Bearer adminpw", "content-type": "application/json" },
+      body: JSON.stringify({ scopes: ["rest"] }),
+    });
+    expect(miss.status).toBe(404);
+
+    const key = await mintKey(app, ["rest"]);
+    const bad = await app.request(`/admin/keys/${key.id}`, {
+      method: "PATCH",
+      headers: { authorization: "Bearer adminpw", "content-type": "application/json" },
+      body: JSON.stringify({ scopes: ["not_a_scope"] }),
+    });
+    expect(bad.status).toBe(400);
+  });
+});

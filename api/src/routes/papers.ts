@@ -3,10 +3,15 @@ import { z } from "zod";
 import { getCorpusDb } from "../db/singleton.js";
 import { requireKey } from "../middleware/requireKey.js";
 import { keywordSearch, verifyReferences } from "../search/papers.js";
+import { FIELD_DOCS } from "../docs/reference.js";
 
 // Keyword + reference-verification endpoints (PLAN.md §B1/§B2) — the first
 // Hono-native search surface. Wire fields are snake_case to match the existing
 // Plumber conventions the frontends and skills already speak.
+//
+// The field conventions these bodies expect (notably: author_lastnames is SEMICOLON-
+// separated) are documented once in src/docs/reference.ts and served at GET /docs. A
+// rejected body points there rather than leaving the caller with a bare Zod issue list.
 
 const keywordBodySchema = z.object({
   keywords: z.array(z.string().trim().min(1).max(200)).min(1).max(20),
@@ -27,7 +32,7 @@ const verifyBodySchema = z.object({
       z.object({
         cite_key: z.string().nullish(),
         handle: z.string().nullish(),
-        author_lastnames: z.string().nullish(),
+        author_lastnames: z.string().nullish().describe(FIELD_DOCS.authorLastnames),
         year: z.number().int().nullish(),
         title: z.string().nullish(),
         journal: z.string().nullish(),
@@ -83,7 +88,16 @@ papersRoute.post("/verify", requireKey("rest"), async (c) => {
   if (body === null) return c.json({ error: "Invalid JSON body" }, 400);
 
   const parsed = verifyBodySchema.safeParse(body);
-  if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: parsed.error.issues,
+        docs: "GET /docs — POST /papers/verify",
+        hint: `author_lastnames: ${FIELD_DOCS.authorLastnames}`,
+      },
+      400,
+    );
+  }
 
   const db = await getCorpusDb();
   const results = await verifyReferences(db, parsed.data.entries);

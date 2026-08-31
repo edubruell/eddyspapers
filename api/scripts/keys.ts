@@ -8,6 +8,8 @@
  *   npm run keys -- new  "Alice (ZEW)" --scopes rest,mcp,lit_search [--tools find_papers,keyword_search]
  *   npm run keys -- list [--all]
  *   npm run keys -- revoke <id-or-hash-prefix>
+ *   npm run keys -- scopes <id-or-hash-prefix> --scopes rest,mcp,lit_search,lit_search_synth
+ *   npm run keys -- grant  <scope> [--all | <id-or-hash-prefix> ...]
  *
  * Config via env:
  *   AGENTIC_API_BASE     server base URL          (default http://127.0.0.1:8001)
@@ -82,24 +84,58 @@ async function cmdRevoke(args: string[]): Promise<void> {
   process.stdout.write(`Revoked ${data.revoked} key(s) matching "${prefix}".\n`);
 }
 
-async function cmdList(args: string[]): Promise<void> {
+interface KeyRow {
+  id: string;
+  label: string;
+  scopes: string[];
+  rate_limit_overrides: Record<string, number> | null;
+  tools: string[] | null;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+const fetchKeys = async (all = false): Promise<KeyRow[]> =>
+  ((await req("GET", `/admin/keys${all ? "?all=1" : ""}`)) as { keys: KeyRow[] }).keys;
+
+const putScopes = async (id: string, scopes: string[]): Promise<void> => {
+  await req("PATCH", `/admin/keys/${encodeURIComponent(id)}`, { scopes });
+  process.stdout.write(`${id}  [${scopes.join(",")}]\n`);
+};
+
+// Replaces the scope set outright — the caller states the full intended set.
+async function cmdScopes(args: string[]): Promise<void> {
+  const prefix = args.find((a) => !a.startsWith("--"));
+  const scopes = csvFlag(args, "scopes");
+  if (!prefix || !scopes?.length) die("Usage: keys scopes <id-or-hash-prefix> --scopes rest,mcp,…");
+  await putScopes(prefix, scopes);
+}
+
+// ADDS one scope to keys that lack it, leaving their other grants alone — the safe shape for
+// rolling out a newly-introduced scope to people who already hold a key.
+async function cmdGrant(args: string[]): Promise<void> {
+  const positional = args.filter((a) => !a.startsWith("--"));
+  const scope = positional[0];
+  const targets = positional.slice(1);
   const all = args.includes("--all");
-  const data = (await req("GET", `/admin/keys${all ? "?all=1" : ""}`)) as {
-    keys: {
-      id: string;
-      label: string;
-      scopes: string[];
-      rate_limit_overrides: Record<string, number> | null;
-      tools: string[] | null;
-      created_at: string;
-      revoked_at: string | null;
-    }[];
-  };
-  if (data.keys.length === 0) {
+  if (!scope || (!all && targets.length === 0)) die("Usage: keys grant <scope> [--all | <id-or-hash-prefix> ...]");
+
+  const keys = (await fetchKeys()).filter((k) => (all ? true : targets.some((t) => k.id.startsWith(t))));
+  const needing = keys.filter((k) => !k.scopes.includes(scope));
+  if (needing.length === 0) {
+    process.stdout.write(`No active keys need '${scope}' (${keys.length} checked).\n`);
+    return;
+  }
+  for (const k of needing) await putScopes(k.id, [...k.scopes, scope]);
+  process.stdout.write(`Granted '${scope}' to ${needing.length} of ${keys.length} active key(s).\n`);
+}
+
+async function cmdList(args: string[]): Promise<void> {
+  const keys = await fetchKeys(args.includes("--all"));
+  if (keys.length === 0) {
     process.stdout.write("No keys.\n");
     return;
   }
-  for (const k of data.keys) {
+  for (const k of keys) {
     const state = k.revoked_at ? `revoked ${k.revoked_at}` : "active";
     const over = k.rate_limit_overrides ? `  overrides=${JSON.stringify(k.rate_limit_overrides)}` : "";
     // null tools = all MCP tools (no marker); a list (incl. []) = the allowlist.
@@ -117,8 +153,12 @@ async function main(): Promise<void> {
       return cmdRevoke(args);
     case "list":
       return cmdList(args);
+    case "scopes":
+      return cmdScopes(args);
+    case "grant":
+      return cmdGrant(args);
     default:
-      die("Usage: keys <new|list|revoke> …");
+      die("Usage: keys <new|list|revoke|scopes|grant> …");
   }
 }
 

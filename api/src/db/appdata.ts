@@ -12,9 +12,13 @@ import { dirname, join } from "path";
 const dbPath = (): string =>
   process.env.AGENTIC_APPDATA_PATH ?? join(process.cwd(), "data", "agentic", "appdata.duckdb");
 
-export type Scope = "rest" | "mcp" | "lit_search" | "admin";
+// lit_search grants the tool in its default, script-only mode (search runs server-side, the
+// caller gets the script + result rows). lit_search_synth additionally allows asking the
+// server to WRITE the review — the one stage that costs real model tokens, so it is a
+// separate grant rather than a flag on the first.
+export type Scope = "rest" | "mcp" | "lit_search" | "lit_search_synth" | "admin";
 
-export const ALL_SCOPES: readonly Scope[] = ["rest", "mcp", "lit_search", "admin"];
+export const ALL_SCOPES: readonly Scope[] = ["rest", "mcp", "lit_search", "lit_search_synth", "admin"];
 
 export interface ApiKeyRow {
   keyHash: string;
@@ -40,6 +44,10 @@ export interface AppDataDb {
     tools?: string[] | null;
   }): Promise<void>;
   revokeKey(hashPrefix: string): Promise<number>;
+  // Re-scope live keys without reissuing them. Keys are only ever identified by their hash,
+  // so a scope added later (lit_search_synth was) can be granted to the people already
+  // holding a key instead of forcing everyone through a re-mint.
+  setKeyScopes(hashPrefix: string, scopes: Scope[]): Promise<ApiKeyRow[]>;
   listKeys(includeRevoked: boolean): Promise<ApiKeyRow[]>;
   // Only the non-revoked rows, for the auth registry's in-memory cache.
   activeKeys(): Promise<ApiKeyRow[]>;
@@ -194,6 +202,15 @@ export async function openAppDataDb(): Promise<AppDataDb> {
         [`${hashPrefix}%`],
       );
       return claimed.length;
+    },
+
+    async setKeyScopes(hashPrefix, scopes) {
+      const updated = await rowsToObjects(
+        conn,
+        "UPDATE api_keys SET scopes = ? WHERE key_hash LIKE ? AND revoked_at IS NULL RETURNING *",
+        [JSON.stringify(scopes), `${hashPrefix}%`],
+      );
+      return updated.map(toRow);
     },
 
     async listKeys(includeRevoked) {

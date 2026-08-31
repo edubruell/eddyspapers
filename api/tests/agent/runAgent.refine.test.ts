@@ -77,7 +77,7 @@ describe("runAgent refine — off by default", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    const r = await runAgent("r1", { brief }, "/fake/db.duckdb", (e) => events.push(e));
+    const r = await runAgent("r1", { brief, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(r.paused).toBe(false);
     expect(assess).not.toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe("runAgent refine — advisor failure (null) skips the pass", () => {
     assess.mockResolvedValue(null);
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    const r = await runAgent("r2", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    const r = await runAgent("r2", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(r.paused).toBe(false);
     expect(assess).toHaveBeenCalledTimes(1);
@@ -130,7 +130,7 @@ describe("runAgent refine — advisor failure (null) skips the pass", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("r2b", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("r2b", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(writeScript).toHaveBeenCalledTimes(2);
     expect(executeScript).toHaveBeenCalledTimes(2);
@@ -160,7 +160,7 @@ describe("runAgent refine — revise (replace)", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    const r = await runAgent("r3", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    const r = await runAgent("r3", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(r.paused).toBe(false);
     expect(writeScript).toHaveBeenCalledTimes(2);
@@ -207,7 +207,7 @@ describe("runAgent refine — augment with overlapping handles", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("r-dup", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("r-dup", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     const bibtexEvents = events.filter((e) => e.type === "bibtex");
     const last = bibtexEvents[bibtexEvents.length - 1];
@@ -240,7 +240,7 @@ describe("runAgent refine — round 2 execution failure", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    const r = await runAgent("r-fail2", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    const r = await runAgent("r-fail2", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(r.paused).toBe(false);
     expect(executeScript).toHaveBeenCalledTimes(2);
@@ -267,7 +267,7 @@ describe("runAgent refine — round 2 execution failure", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("r-fail2b", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("r-fail2b", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     const err = events.filter((e) => e.type === "error");
     expect(err).toHaveLength(1);
@@ -294,7 +294,7 @@ describe("runAgent refine — empty round 1 then revise", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("r-empty1", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("r-empty1", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     expect(assess).toHaveBeenCalledTimes(1);
     expect(executeScript).toHaveBeenCalledTimes(2);
@@ -330,7 +330,7 @@ describe("runAgent refine — assessor revise without mode defaults to augment",
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("r-aug2", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("r-aug2", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     const bibtexEvents = events.filter((e) => e.type === "bibtex");
     const last = bibtexEvents[bibtexEvents.length - 1];
@@ -364,7 +364,7 @@ describe("runAgent refine — revise (augment)", () => {
     });
     const { runAgent } = await import("../../src/agent/runAgent.js");
     const events: StreamEvent[] = [];
-    await runAgent("r4", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    await runAgent("r4", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
 
     // executeScript round 2 was called with an idOffset equal to round-1 section count (1).
     expect(executeScript.mock.calls[1][3]).toBe(1);
