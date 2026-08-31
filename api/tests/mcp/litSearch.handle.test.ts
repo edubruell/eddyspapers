@@ -139,6 +139,9 @@ describe("lit_search — auto delivery", () => {
     expect(text).toMatch(/Monopsony 0\b/);
     expect(text).toMatch(/Monopsony 59\b/);
     expect(text).toMatch(/fetch_search/);
+    // Exactly once: the digest carries the where-to-fetch sentence in its header, so bolting
+    // a footer on as well told the caller the same thing twice.
+    expect(text.match(/NOT inlined/g)).toHaveLength(1);
     // Abstracts are exactly what the digest must NOT carry.
     expect(text).not.toContain(ABSTRACT);
     expect(text.length).toBeLessThan(60_000);

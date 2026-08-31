@@ -157,9 +157,13 @@ function litResult(bundle: SearchBundle, deliver: DeliverMode): CallToolResult {
 
   // Handle delivery: everything the caller needs to CITE is already in the text digest;
   // what is withheld is the bulk (abstracts, CSV, .bib, the script), reachable by one
-  // fetch_search call each. The synthesis is never withheld — it is the deliverable.
+  // fetch_search call each. The synthesis is never withheld — it is the deliverable, and it
+  // is the only text block that needs the where-to-fetch footer bolted on (the digest
+  // already carries that sentence in its own header).
   return {
-    content: [{ type: "text", text: `${text}\n\n---\n${whereTheRestIs(bundle, "handle")}` }],
+    content: [
+      { type: "text", text: synthesized ? `${text}\n\n---\n${whereTheRestIs(bundle, "handle")}` : text },
+    ],
     structuredContent: {
       ...common,
       n_papers: Object.keys(bundle.papers).length,
