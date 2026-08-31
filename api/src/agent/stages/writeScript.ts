@@ -15,6 +15,7 @@ export type WriteScriptOpts = {
   mustInclude?: string[];
   dbDate: string;
   modelOverride?: string;
+  providerExtra?: Record<string, unknown>;
   // Folded into the user message as an authoritative <clarification> block when the
   // blocking clarifier asked a question and the user answered (06_clarifier.md §5).
   clarifyQuestion?: string;
@@ -119,7 +120,7 @@ async function checkAndGetRejection(script: string): Promise<
 }
 
 export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptResult> {
-  const { brief, categories, minYear, mustInclude, dbDate, modelOverride, revision } = opts;
+  const { brief, categories, minYear, mustInclude, dbDate, modelOverride, providerExtra, revision } = opts;
   const clarification =
     opts.clarifyQuestion && opts.clarifyAnswer
       ? { question: opts.clarifyQuestion, answer: opts.clarifyAnswer }
@@ -141,7 +142,7 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
     const useRetryModel = escalate || attempt === 3;
     const baseModel = useRetryModel ? models.writerRetry : models.writer;
     const baseModelId = useRetryModel ? modelIds.writerRetry : modelIds.writer;
-    const model = modelOverride ? or(modelOverride) : baseModel;
+    const model = modelOverride ? or(modelOverride, providerExtra) : baseModel;
     const modelId = modelOverride ?? baseModelId;
 
     const userPrompt = buildUserMessage(

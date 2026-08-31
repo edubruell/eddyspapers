@@ -13,20 +13,30 @@ import { synthesizerSystemMessage } from "../src/prompts/assemble.js";
 import { buildSynthesisUserMessage } from "../src/agent/stages/synthesize.js";
 import type { StreamEvent, Paper, Person, Section } from "../src/agent/types.js";
 
-const MODELS = [
+const MODELS = (process.env.AB_MODELS ?? [
   "anthropic/claude-haiku-4-5",
-  "z-ai/glm-5.2",
-  "qwen/qwen3.7-plus",
-];
+  "qwen/qwen3.8-flash",
+  "qwen/qwen3.7-flash",
+].join(",")).split(",").map((s) => s.trim());
 
-// $/token, in/out — from the OpenRouter model list. Used only for the cost report.
+// $/token, in/out — from the OpenRouter model list, requeried 2026-08-31.
 const PRICING: Record<string, { in: number; out: number }> = {
   "anthropic/claude-haiku-4-5": { in: 1.0e-6, out: 5.0e-6 },
-  "z-ai/glm-5.2": { in: 0.23e-6, out: 0.71e-6 },
+  "qwen/qwen3.8-flash": { in: 0.15e-6, out: 0.47e-6 },
+  "qwen/qwen3.8-27b": { in: 0.425e-6, out: 2.55e-6 },
+  "qwen/qwen3.7-flash": { in: 0.03e-6, out: 0.13e-6 },
   "qwen/qwen3.7-plus": { in: 0.32e-6, out: 1.28e-6 },
+  "z-ai/glm-5.2": { in: 0.23e-6, out: 0.71e-6 },
+  "deepseek/deepseek-v4-flash-0731": { in: 0.065e-6, out: 0.18e-6 },
+  "deepseek/deepseek-v4-pro-0813": { in: 0.66e-6, out: 1.98e-6 },
 };
 
 const OUT_DIR = process.env.AB_OUT ?? join(process.cwd(), "data", "synth_ab");
+
+// Reasoning models (Qwen 3.8) spend completion budget on thinking before the first visible
+// token, so the production 8000 cap starves the review itself. Keep the reasoning, raise
+// the ceiling — the arms are only comparable if none of them is truncated.
+const MAX_TOKENS = Number(process.env.AB_MAX_TOKENS ?? 32000);
 
 interface ShareDto {
   id: string;
@@ -63,7 +73,7 @@ async function runOne(modelId: string, userMessage: string) {
     modelId,
     messages: [synthesizerSystemMessage, { role: "user", content: userMessage }],
     stage: "synthesize:ab",
-    maxTokens: 8000,
+    maxTokens: MAX_TOKENS,
     onDelta: (d) => {
       text += d;
     },

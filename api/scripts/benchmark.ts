@@ -20,11 +20,14 @@ import { resolveSnapshot } from "../src/sandbox/snapshot.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
-// Pricing map — $/million tokens (from OpenRouter API, queried 2026-05-21)
+// Pricing map — $/million tokens (from OpenRouter API, requeried 2026-08-31)
 // ---------------------------------------------------------------------------
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   "deepseek/deepseek-v4-flash":  { input: 0.11, output: 0.22 },
-  "qwen/qwen3.6-35b-a3b":       { input: 0.15, output: 1.00 },
+  "qwen/qwen3.6-35b-a3b":       { input: 0.10, output: 0.90 },
+  "qwen/qwen3.8-flash":         { input: 0.15, output: 0.47 },
+  "qwen/qwen3.8-27b":           { input: 0.425, output: 2.55 },
+  "qwen/qwen3.7-flash":         { input: 0.03, output: 0.13 },
   "anthropic/claude-haiku-4-5": { input: 1.00, output: 5.00 },
   "google/gemini-3.5-flash":    { input: 1.50, output: 9.00 },
   "z-ai/glm-4.5-air":           { input: 0.13, output: 0.85 },
@@ -42,18 +45,23 @@ function parseArgs() {
   let models = DEFAULT_MODELS;
   let briefs: string[] | undefined;
   let skipSandbox = false;
+  // Models that reason by default (Qwen 3.8) are 15-25x slower on this stage for no gain —
+  // name them here to send reasoning:{enabled:false} through to OpenRouter.
+  let noReasoning: string[] = [];
 
   for (const arg of args) {
     if (arg.startsWith("--models=")) {
       models = arg.slice("--models=".length).split(",").map((s) => s.trim());
     } else if (arg.startsWith("--briefs=")) {
       briefs = arg.slice("--briefs=".length).split(",").map((s) => s.trim());
+    } else if (arg.startsWith("--no-reasoning=")) {
+      noReasoning = arg.slice("--no-reasoning=".length).split(",").map((s) => s.trim());
     } else if (arg === "--skip-sandbox") {
       skipSandbox = true;
     }
   }
 
-  return { models, briefs, skipSandbox };
+  return { models, briefs, skipSandbox, noReasoning };
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +138,7 @@ async function runOne(
   dbPath: string,
   dbDate: string,
   skipSandbox: boolean,
+  noReasoning: boolean,
 ): Promise<RunResult> {
   const base: Omit<RunResult, "valid" | "attempts" | "write_ms"> = {
     model,
@@ -152,6 +161,7 @@ async function runOne(
     minYear: brief.min_year ?? undefined,
     dbDate,
     modelOverride: model,
+    providerExtra: noReasoning ? { reasoning: { enabled: false } } : undefined,
   });
   const write_ms = Date.now() - t0;
 
@@ -196,6 +206,26 @@ async function runOne(
       if (event.type === "section") sectionCount++;
     });
     const sandbox_ms = Date.now() - t1;
+
+    // Exit 127 means the sandbox never ran at all (a missing timeout(1) did exactly this on
+    // macOS for five weeks). Recording that as a valid 0-paper run hides the breakage in every
+    // aggregate, so treat a non-zero exit that yielded nothing as a failure, loudly.
+    const exitCode = sandboxResult.exitCode ?? 0;
+    if (exitCode !== 0 && paperCount === 0 && !sandboxResult.timedOut) {
+      return {
+        ...base,
+        valid: false,
+        attempts,
+        write_ms,
+        sandbox_ms,
+        rejection_reason: `Sandbox did not execute (exit ${exitCode})`,
+        prompt_tokens: usage.promptTokens,
+        cached_tokens: usage.cachedTokens,
+        completion_tokens: usage.completionTokens,
+        cost_usd,
+        sandbox_exit_code: exitCode,
+      };
+    }
 
     return {
       ...base,
@@ -263,7 +293,7 @@ async function main() {
     process.exit(1);
   }
 
-  const { models, briefs: briefFilter, skipSandbox } = parseArgs();
+  const { models, briefs: briefFilter, skipSandbox, noReasoning } = parseArgs();
   const briefs = await loadBriefs(briefFilter);
 
   if (briefs.length === 0) {
@@ -311,7 +341,9 @@ async function main() {
       process.stdout.write(`  ${cyan(shortModel.padEnd(40))} `);
 
       try {
-        const result = await runOne(model, brief, dbPath, dbDate, effectiveSkipSandbox);
+        const result = await runOne(
+          model, brief, dbPath, dbDate, effectiveSkipSandbox, noReasoning.includes(model),
+        );
         results.push(result);
         await appendFile(outPath, JSON.stringify(result) + "\n");
         done++;

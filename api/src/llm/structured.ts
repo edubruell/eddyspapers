@@ -32,6 +32,14 @@ async function logUsage(stage: string, model: string, usage: UsageSummary) {
   );
 }
 
+// Qwen 3.8 returns an empty/unparseable tool call under the SDK's default tool-mode
+// structured output, but produces valid objects in json mode. Route those models
+// explicitly rather than letting `auto` pick tool-calling and fail all three attempts.
+const JSON_MODE_MODELS = /^qwen\/qwen3\.8-/;
+
+export const structuredMode = (modelId: string): "auto" | "json" =>
+  JSON_MODE_MODELS.test(modelId) ? "json" : "auto";
+
 export async function generateStructured<T>(opts: {
   model: LanguageModelV1;
   modelId: string;
@@ -43,6 +51,7 @@ export async function generateStructured<T>(opts: {
     model: opts.model,
     messages: opts.messages,
     schema: opts.schema,
+    mode: structuredMode(opts.modelId),
   });
 
   const raw = result.usage as {

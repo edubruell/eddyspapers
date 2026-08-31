@@ -24,4 +24,24 @@ TIMEOUT_SECS="${4:-150}"
 # follow-up: it needs the result channel moved off the inherited fd (to a file)
 # so a real `systemd-run --service` slice or bwrap/nsjail can be used, and the
 # query embedding moved into Node (Ollama is unreachable from an isolated netns).
-exec timeout "$TIMEOUT_SECS" Rscript --vanilla "$RUN_R" "$SCRIPT" "$DB"
+# timeout(1) is GNU coreutils: present on the Linux server, absent on a stock macOS dev
+# box (where its absence exits 127 and the run silently yields zero papers). Prefer it,
+# accept Homebrew's gtimeout, and otherwise emulate the cap with a watchdog so the
+# wall-clock bound holds everywhere rather than being quietly skipped.
+if command -v timeout >/dev/null 2>&1; then
+  exec timeout "$TIMEOUT_SECS" Rscript --vanilla "$RUN_R" "$SCRIPT" "$DB"
+elif command -v gtimeout >/dev/null 2>&1; then
+  exec gtimeout "$TIMEOUT_SECS" Rscript --vanilla "$RUN_R" "$SCRIPT" "$DB"
+fi
+
+Rscript --vanilla "$RUN_R" "$SCRIPT" "$DB" &
+child=$!
+# The watchdog MUST NOT inherit stdout or fd 3 (the result pipe): a sleeping subshell
+# holding the write end keeps the parent blocked on a pipe that never closes, so every
+# run appears to last exactly $TIMEOUT_SECS even after R has already exited.
+( sleep "$TIMEOUT_SECS"; kill -9 "$child" 2>/dev/null ) >/dev/null 2>&1 3>&- &
+watchdog=$!
+status=0
+wait "$child" || status=$?
+kill "$watchdog" 2>/dev/null || true
+exit "$status"
