@@ -223,25 +223,33 @@ lit-search / lit-check skills, and an `llms.txt` so an agent can drive the signu
 Full spec: `localwip/notes/public_access/01_signup_site.md`; working entry in
 `perpetual/CURRENT_FOCUS.md`.
 
-Three things that shape the work:
+**The backend half is DONE and live on prod (2026-09-09, `a42a3e8`).** S6 run ownership, the
+appdata identity migration, mail delivery through the Strato mailbox `mcpkeys@eddyspapers.org`,
+`POST /signup/key`, and `POST /admin/signups/purge`. Verified against prod with real keys: a
+signup mail lands, a public key gets exactly `["mcp","lit_search"]`, `synthesize:true` is
+refused without `lit_search_synth`, and a second key cannot read another key's stored run.
+Note `POST /api/signup/key` is **already publicly reachable**, ahead of any page advertising
+it, so the D6 abuse guards (10-minute per-mailbox cooldown, 3/day per mailbox, 60/hour
+globally) are load-bearing now.
 
-1. **It is Rung 1 + Rung 2, not Rung 1.** lit-check rides the cheap tools (no LLM, no
-   artifacts); lit-search rides `lit_search`, which **stores runs**. So the deferred **S6
-   ownership** fix is on the critical path — the SSE stream, `agenticsearch://searches/{id}`
-   and `fetch_search` are all gated on *having a key*, not on *having created the run*.
-   Prod `SEARCH_ID_SECRET` must also stop falling back to `AGENTIC_PASSWORD`.
-2. **Keys are delivered by email** (decided) — not a captcha (an agent can't solve one) and
-   not an unverified instant issue. Mailbox to be created on Strato (`eddyspapers.org` /
-   `eduard-bruell.de`); deliverability to institutional inboxes is the risk, not sending.
-3. **Open lever:** split the tier? Cheap tools instantly self-serve (S6 doesn't apply) with
-   `lit_search` granted separately would ship the site + lit-check *before* S6.
-   `PATCH /admin/keys/:prefix` upgrades a live key in place, so nobody is chased for a swap.
+What is left is the human-facing half:
 
-Missing pieces: a public mint route outside `requireKey('admin')`; `name`/`email`/
-`institution` columns on `api_keys` (appdata `ALTER TABLE` → checkpoint before restart);
-and **any per-IP throttling at all** (`auth/rateLimit.ts` is per-key by design).
+1. **The page** — a `/mcp` subpage of classic: form, tool list, skill downloads, the
+   copy-paste `claude mcp add` line, the "delivery can take up to 24 hours" note, privacy line.
+2. **A copy pass over the key mail.** Its content is right and it delivers; the prose is not yet
+   good enough to be a stranger's first contact with the project. Do it with the page copy so
+   the two share a voice. All user-facing strings live in `api/src/mail/keyMail.ts` and the
+   signup route's response messages. House rules: no em dashes, no jargon.
+3. **DNS on `eddyspapers.org`** (Strato panel, not code): SPF, DKIM, a `_dmarc` TXT at `p=none`.
+   Until then every message is an unauthenticated first-time sender — which is exactly what
+   greylisted the first zew.de mail. Do it before advertising the page; early sends build the
+   sending reputation.
+4. **Public skills artifact** — pick the distribution channel (public repo vs. plugin
+   marketplace), then `llms.txt` last, describing a route that already works.
 
-- **Ship the public lit-search / lit-check skills**: MCP rewrite done (live at `~/.claude/skills/`); remaining work is distribution — pick a channel (public skills repo vs. plugin) gated behind the signup site above.
+(The lit-search / lit-check skills themselves are written and live at `~/.claude/skills/`; only
+their distribution is open, which is item 4 above.)
+
 - **Quality-weight parity cases**: re-add to parity battery after confirming blended mode matches (vectorised-ifelse bug was fixed locally; not yet golden-recorded).
 
 ## Technical stack
