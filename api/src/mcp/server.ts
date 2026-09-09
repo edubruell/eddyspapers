@@ -23,7 +23,7 @@ export function buildMcpServer(key: KeyIdentity | null = null): McpServer {
   );
   registerTools(server, key);
   registerLitSearch(server, key);
-  registerResources(server);
+  registerResources(server, key);
   registerPrompts(server);
   return server;
 }

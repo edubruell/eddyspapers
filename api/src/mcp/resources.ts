@@ -3,7 +3,9 @@ import { getCorpusDb } from "../db/singleton.js";
 import { corpusGuide } from "../search/guide.js";
 import { citedByOf, citesOf, paperOverview } from "../search/citations.js";
 import { loadRun } from "../agent/loadRun.js";
+import { ownsRun } from "../agent/ownership.js";
 import { sectionSummaries } from "../agent/parts.js";
+import type { KeyIdentity } from "../auth/keys.js";
 
 // MCP resources (01_design.md §7.6). Phase 2 shipped the read-only reference surface:
 // the corpus guide and the paper-level lookups that subsume the old get_versions /
@@ -38,7 +40,12 @@ const text = (uri: URL, mimeType: string, body: string) => ({
 // would break the common no-limit read. Resources return the default cap; callers
 // wanting a different N use the search tools. §7.6 must drop ?limit=N to match (§10).
 
-export function registerResources(server: McpServer): void {
+export function registerResources(server: McpServer, key: KeyIdentity | null = null): void {
+  // The searches/* resources read back stored runs, so they enforce the same ownership rule
+  // as fetch_search (agent/ownership.ts) — a missing run and someone else's run are one
+  // answer. The corpus/paper resources below are public reference data and take no key.
+  const loadOwnRun = async (id: string) => ((await ownsRun(id, key)) ? loadRun(id) : null);
+
   server.registerResource(
     "corpus-guide",
     "corpus://guide",
@@ -108,7 +115,7 @@ export function registerResources(server: McpServer): void {
       mimeType: "application/json",
     },
     async (uri, variables) => {
-      const run = await loadRun(first(variables.id));
+      const run = await loadOwnRun(first(variables.id));
       if (!run) return json(uri, { error: "search not found" });
       const { search, bundle } = run;
       return json(uri, {
@@ -128,7 +135,7 @@ export function registerResources(server: McpServer): void {
     new ResourceTemplate("agenticsearch://searches/{id}/script", { list: undefined }),
     { title: "Search R script", description: "The R script that produced this run.", mimeType: "text/plain" },
     async (uri, variables) => {
-      const run = await loadRun(first(variables.id));
+      const run = await loadOwnRun(first(variables.id));
       return text(uri, "text/plain", run?.bundle.script ?? "");
     },
   );
@@ -138,7 +145,7 @@ export function registerResources(server: McpServer): void {
     new ResourceTemplate("agenticsearch://searches/{id}/bibtex", { list: undefined }),
     { title: "Search BibTeX", description: "The deduped .bib bundle for this run.", mimeType: "application/x-bibtex" },
     async (uri, variables) => {
-      const run = await loadRun(first(variables.id));
+      const run = await loadOwnRun(first(variables.id));
       return text(uri, "application/x-bibtex", run?.bundle.bibtex ?? "");
     },
   );
@@ -152,7 +159,7 @@ export function registerResources(server: McpServer): void {
       mimeType: "application/json",
     },
     async (uri, variables) => {
-      const run = await loadRun(first(variables.id));
+      const run = await loadOwnRun(first(variables.id));
       if (!run) return json(uri, { error: "search not found" });
       return json(uri, { papers: run.bundle.papers, papers_csv: run.bundle.papers_csv });
     },
@@ -167,7 +174,7 @@ export function registerResources(server: McpServer): void {
       mimeType: "application/json",
     },
     async (uri, variables) => {
-      const run = await loadRun(first(variables.id));
+      const run = await loadOwnRun(first(variables.id));
       // The SDK does not decode path segments, so a percent-encoded section id (a client
       // may encode reserved chars) must be decoded before the exact-id match. decodeHandle
       // is a no-op on the raw ids we generate (sem-1, kw-1, …), which contain no '%'.

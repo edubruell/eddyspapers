@@ -36,6 +36,24 @@ describe("computeSearchId", () => {
     expect(computeSearchId(base)).not.toBe(plain);
   });
 
+  it("no longer falls back to AGENTIC_PASSWORD as the HMAC key (S6 — the secret is server-only)", async () => {
+    // Every preview user holds AGENTIC_PASSWORD, so keying run ids with it let any of them
+    // forge ids for the ungated share/stream endpoints. The id must not move when the
+    // password does.
+    const idUnder = async (password: string): Promise<string> => {
+      vi.resetModules();
+      vi.stubEnv("AGENTIC_PASSWORD", password);
+      vi.stubEnv("SEARCH_ID_SECRET", "");
+      const mod = await import("../../src/agent/cache.js");
+      return mod.computeSearchId(base);
+    };
+    const a = await idUnder("preview-password");
+    const b = await idUnder("a-completely-different-password");
+    vi.unstubAllEnvs();
+    vi.resetModules();
+    expect(a).toBe(b);
+  });
+
   it("legacySearchId reproduces the pre-HMAC plain-hash id (backward-compat lookup)", async () => {
     const { legacySearchId } = await import("../../src/agent/cache.js");
     const { createHash } = await import("crypto");

@@ -25,9 +25,11 @@ function searchPayload(input: AgentInput & { dbSnapshotDate: string }): string {
 // SSE-stream path, both served ungated (agentic/08_sharelinks.md). A plain SHA-256 of the
 // brief let anyone who knows a brief reconstruct the ID and read the run; keying it with a
 // server-only secret keeps IDs unguessable while staying deterministic, so dedup and
-// share-by-link both still work. See env.SEARCH_ID_SECRET for the key/trust model.
+// share-by-link both still work. The secret is server-only — no user-facing credential is
+// ever used as the key — and index.ts refuses to boot a gated deployment without it.
+// See env.SEARCH_ID_SECRET for the key/trust model.
 export function computeSearchId(input: AgentInput & { dbSnapshotDate: string }): string {
-  const secret = env.SEARCH_ID_SECRET || env.AGENTIC_PASSWORD || "";
+  const secret = env.SEARCH_ID_SECRET;
   return createHmac("sha256", secret).update(searchPayload(input)).digest("hex").slice(0, 16);
 }
 

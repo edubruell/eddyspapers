@@ -68,6 +68,11 @@ export interface SearchDb {
   // Flip runs still awaiting a clarifier reply older than maxAgeHours to 'error' so they
   // don't linger forever (the user never came back). Returns how many rows were expired.
   expireStaleClarifications(maxAgeHours: number): Promise<number>;
+  // Run ownership (S6). Records that `keyId` created — or re-derived, via an identical
+  // brief that cache-hit — this run; `isOwner` is what the authenticated MCP faces check
+  // before handing a stored run back. See agent/ownership.ts for the trust model.
+  recordOwner(id: string, keyId: string): Promise<void>;
+  isOwner(id: string, keyId: string): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -112,6 +117,18 @@ export async function openSearchDb(): Promise<SearchDb> {
   await conn.run("ALTER TABLE searches ADD COLUMN IF NOT EXISTS clarify_question TEXT");
   await conn.run("ALTER TABLE searches ADD COLUMN IF NOT EXISTS clarify_answer TEXT");
   await conn.run("ALTER TABLE searches ADD COLUMN IF NOT EXISTS refine BOOLEAN");
+
+  // Run ownership (S6). A separate table rather than a column on `searches`: a run is
+  // owned by every key that produced its exact inputs (identical briefs dedup onto one
+  // row), and a new table also sidesteps the ADD COLUMN WAL replay crash entirely.
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS search_owners (
+      search_id VARCHAR NOT NULL,
+      key_id VARCHAR NOT NULL,
+      created_at TIMESTAMP DEFAULT now(),
+      PRIMARY KEY (search_id, key_id)
+    )
+  `);
 
   // Fold the ALTERs into the main file now — see the appdata.ts CHECKPOINT for the full why.
   await conn.run("CHECKPOINT");
@@ -279,6 +296,22 @@ export async function openSearchDb(): Promise<SearchDb> {
     },
 
     expireStaleClarifications,
+
+    async recordOwner(id, keyId) {
+      await conn.run(
+        "INSERT INTO search_owners (search_id, key_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+        [id, keyId] as never,
+      );
+    },
+
+    async isOwner(id, keyId) {
+      const rows = await rowsToObjects(
+        conn,
+        "SELECT 1 FROM search_owners WHERE search_id = ? AND key_id = ? LIMIT 1",
+        [id, keyId],
+      );
+      return rows.length > 0;
+    },
 
     async close() {
       clearInterval(sweepTimer);

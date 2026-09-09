@@ -6,6 +6,7 @@ import { runAgent, type RunOpts } from "../agent/runAgent.js";
 import { bus } from "../stream/bus.js";
 import { getSearchDb } from "../db/singleton.js";
 import { requireKey, getApiKey } from "../middleware/requireKey.js";
+import { recordRunOwner } from "../agent/ownership.js";
 import type { SearchDb } from "../db/searches.js";
 import type { AgentInput, StreamEvent } from "../agent/types.js";
 
@@ -121,6 +122,7 @@ chatRoute.post("/", requireKey("rest"), async (c) => {
 
   const existing = await db.getSearch(id);
   if (existing?.status === "done") {
+    await recordRunOwner(id, getApiKey(c));
     return c.json({ id, synthesize }, 200);
   }
 
@@ -131,6 +133,7 @@ chatRoute.post("/", requireKey("rest"), async (c) => {
   // legacy in-flight rows); new runs always use the HMAC id below.
   const legacyExisting = await db.getSearch(legacySearchId({ brief, categories, minYear, mustInclude, refine, synthesize, dbSnapshotDate }));
   if (legacyExisting?.status === "done") {
+    await recordRunOwner(legacyExisting.id, getApiKey(c));
     return c.json({ id: legacyExisting.id, synthesize }, 200);
   }
 
@@ -139,6 +142,9 @@ chatRoute.post("/", requireKey("rest"), async (c) => {
   // or awaiting-clarification run — gets `claimed === false` and just attaches to the live
   // stream, so two runners never publish to one bus with colliding seqs.
   const claimed = await db.claimSearch(id, { brief, categories, minYear, mustInclude, refine, dbSnapshotDate });
+  // Ownership is recorded for the attaching caller too: an identical brief against the same
+  // snapshot IS this caller's own search — dedup hands them one row, not someone else's run.
+  await recordRunOwner(id, getApiKey(c));
   if (!claimed) {
     return c.json({ id, synthesize }, 202);
   }
@@ -178,6 +184,7 @@ chatRoute.post("/:id/reply", requireKey("rest"), async (c) => {
   if (!search) {
     return c.json({ error: "Search not found" }, 404);
   }
+  await recordRunOwner(id, getApiKey(c));
   if (search.status !== "awaiting_clarification") {
     return c.json({ error: "Search is not awaiting clarification" }, 409);
   }

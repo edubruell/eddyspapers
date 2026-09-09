@@ -5,6 +5,7 @@ import { computeSearchId } from "../agent/cache.js";
 import { runAgent } from "../agent/runAgent.js";
 import { buildBundle, collectSynthesis, resultsDigest, whereTheRestIs, type Delivery, type SearchBundle } from "../agent/bundle.js";
 import { loadRun } from "../agent/loadRun.js";
+import { ownsRun, recordRunOwner } from "../agent/ownership.js";
 import { PART_DOCS, SEARCH_PARTS, searchPart, sectionSummaries, type SearchPart } from "../agent/parts.js";
 import { resolveSnapshot } from "../sandbox/snapshot.js";
 import { getSearchDb } from "../db/singleton.js";
@@ -308,6 +309,9 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
         // and no rate-limit quota consumed (a repeat is free). Scope is already enforced above.
         const existing = await db.getSearch(searchId);
         if (existing?.status === "done") {
+          // A cache hit is this caller's own search — they supplied the exact inputs the run
+          // was keyed on — so they join it as an owner and can fetch_search it afterwards.
+          await recordRunOwner(searchId, key);
           return litResult(buildBundle(searchId, a.brief, existing.events), deliver);
         }
 
@@ -319,6 +323,7 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
 
         try {
           await db.upsertSearch(searchId, { ...input, dbSnapshotDate });
+          await recordRunOwner(searchId, key);
 
           const events: StreamEvent[] = [];
           const forward = progressForwarder(extra, input.synthesize ? 5 : 4);
@@ -379,7 +384,7 @@ export function registerFetchSearch(server: McpServer, key: KeyIdentity | null =
       description:
         "Read one artifact of a completed lit_search run by its search_id. Use this when lit_search " +
         "returned delivery='handle' (the artifacts were too large to inline), or to re-read a run you " +
-        "made earlier — runs stay readable, no re-search and no tokens spent. Fetch only what you " +
+        "made earlier — your own runs stay readable, no re-search and no tokens spent. Fetch only what you " +
         "need: the BibTeX to write a .bib, the CSV or papers to inspect abstracts, the script to see " +
         "how the search was built. 'papers' and 'csv' carry abstracts and are paginated — walk them " +
         "with next_offset. Start with 'overview' if you don't know what the run contains.",
@@ -396,8 +401,11 @@ export function registerFetchSearch(server: McpServer, key: KeyIdentity | null =
         if (key && !key.scopes.includes("lit_search")) {
           return fail("This API key lacks the 'lit_search' scope.");
         }
-        const run = await loadRun(a.search_id);
-        if (!run) return fail(`No stored search with id '${a.search_id}'. Run lit_search first.`);
+        // Ownership (S6): a stored run is readable only by the key that made it. The
+        // not-found and not-yours answers are deliberately the SAME message — distinguishing
+        // them would turn this tool into an oracle for which run ids exist.
+        const run = (await ownsRun(a.search_id, key)) ? await loadRun(a.search_id) : null;
+        if (!run) return fail(`No stored search with id '${a.search_id}' readable by this key. Run lit_search first.`);
 
         const { text, data } = searchPart(run.bundle, a.part as SearchPart, {
           offset: a.offset,
