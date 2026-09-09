@@ -1,0 +1,344 @@
+---
+import AppLayout from "../layouts/AppLayout.astro";
+
+const MCP_URL = "https://agenticsearch.eduard-bruell.de/mcp";
+
+const tools = [
+  {
+    name: "lit_search",
+    blurb: "A full sweep of a literature in one call. Returns the papers, a BibTeX file, a CSV and the search script.",
+    wide: true,
+  },
+  {
+    name: "find_papers",
+    blurb: "Semantic search over the corpus. Paste an abstract or a few sentences and get the closest work.",
+  },
+  {
+    name: "keyword_search",
+    blurb: "Literal search for an exact phrase or a known title, when you need every hit rather than the nearest ones.",
+  },
+  {
+    name: "find_people",
+    blurb: "Find economists by what they work on, rolled up from their papers.",
+  },
+  {
+    name: "verify_references",
+    blurb: "Check a whole bibliography against the corpus and flag the entries that do not match.",
+  },
+  {
+    name: "corpus_context",
+    blurb: "What is in the corpus: journal categories, series, sizes, and how to write a good query.",
+  },
+];
+
+const skills = [
+  {
+    name: "lit-search",
+    blurb: "Turns a research question into a structured search across the corpus, then writes the review, the BibTeX file and a results table into your project.",
+    file: "/skills/lit-search.zip",
+  },
+  {
+    name: "lit-check",
+    blurb: "Reads a bibliography, checks every entry against the corpus, and reports what could not be verified and what has the wrong year or journal.",
+    file: "/skills/lit-check.zip",
+  },
+];
+---
+
+<AppLayout title="MCP access | Eddy's Papers">
+  <div class="max-w-[980px] mx-auto pb-16">
+
+    <a href="/" class="inline-block">
+      <img src="/logo.webp" alt="Eddy's Papers" class="w-[240px] max-w-full mb-6" />
+    </a>
+
+    <!-- HERO -->
+    <section class="grid md:grid-cols-[1fr_150px] gap-6 items-center mb-8">
+      <div>
+        <h1 class="text-3xl md:text-4xl font-bold text-stone-800 tracking-tight">
+          Use Eddy’s Papers inside your AI assistant
+        </h1>
+        <p class="mt-3 text-stone-700 leading-relaxed">
+          Eddy's Papers can plug straight into Claude, or any other assistant that speaks MCP.
+          It allows your AI agent to search and download papers, write literature syntheses, or
+          verify references in text against the literature database for you.
+        </p>
+        <p class="mt-3 text-stone-700 leading-relaxed">
+          Access is free for researchers. Fill in the form, and a key arrives in your email inbox.
+        </p>
+      </div>
+      <img
+        src="/mcp_meerkat.webp"
+        alt="Illustration of a meerkat holding out a key and a stack of papers"
+        class="h-[150px] w-auto mx-auto"
+      />
+    </section>
+
+    <!-- FORM -->
+    <section id="signup" class="bg-white/70 border border-stone-300 rounded-xl p-6 mb-10">
+      <h2 class="text-lg font-semibold text-stone-800">Ask for a key</h2>
+      <p class="text-sm text-stone-600 mt-1">
+        The key is sent by email and is never shown on this page, so please use an address you can read.
+      </p>
+
+      <form id="signup-form" class="mt-5 grid gap-4 md:grid-cols-2">
+        <div>
+          <label class="text-xs font-semibold text-stone-600 mb-1 block" for="f-name">NAME</label>
+          <input id="f-name" name="name" required autocomplete="name"
+                 class="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300" />
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-stone-600 mb-1 block" for="f-email">EMAIL</label>
+          <input id="f-email" name="email" type="email" required autocomplete="email"
+                 class="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300" />
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-semibold text-stone-600 mb-1 block" for="f-inst">
+            INSTITUTION <span class="font-normal text-stone-500">(optional)</span>
+          </label>
+          <input id="f-inst" name="institution" autocomplete="organization"
+                 class="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-300" />
+        </div>
+
+        <div class="md:col-span-2 flex flex-wrap items-center gap-3 pt-1">
+          <button id="f-submit" type="submit"
+                  class="px-4 py-2 bg-sky-800 text-white text-sm rounded-md hover:bg-sky-500 disabled:opacity-60 disabled:hover:bg-sky-800">
+            Send me a key
+          </button>
+          <span class="text-xs text-stone-500">
+            Delivery can take up to 24 hours. Please check your spam folder too.
+          </span>
+        </div>
+      </form>
+
+      <div id="f-result" class="hidden mt-4 rounded-md border px-3 py-2 text-sm"></div>
+    </section>
+
+    <!-- TOOLS -->
+    <section class="mb-10">
+      <h2 class="text-lg font-semibold text-stone-800 mb-1">What the key opens</h2>
+      <p class="text-sm text-stone-600 mb-4">
+        Six tools your assistant can call. You do not call them yourself, you just ask for what you need.
+      </p>
+      <div class="grid gap-3 sm:grid-cols-2">
+        {tools.map((t) => (
+          <div class={`rounded-lg border border-stone-200 border-l-4 border-l-orange-400 bg-white shadow-sm px-4 py-3 ${t.wide ? "sm:col-span-2" : ""}`}>
+            <div class="font-mono text-sm font-semibold text-stone-800">{t.name}</div>
+            <div class="text-sm text-stone-600 mt-1 leading-snug">{t.blurb}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- SETUP -->
+    <section class="mb-10">
+      <h2 class="text-lg font-semibold text-stone-800 mb-1">Setting it up</h2>
+      <p class="text-sm text-stone-600 mb-4">
+        The server lives at one address and takes the key as a header. How you enter that depends on
+        which assistant you use.
+      </p>
+
+      <div class="flex flex-wrap gap-2 mb-3" role="tablist">
+        <button type="button" data-tab="cli" class="setup-tab cursor-pointer select-none rounded-full border px-3 py-1 text-xs md:text-[13px] shadow-sm transition">Terminal</button>
+        <button type="button" data-tab="app" class="setup-tab cursor-pointer select-none rounded-full border px-3 py-1 text-xs md:text-[13px] shadow-sm transition">Desktop app</button>
+        <button type="button" data-tab="raw" class="setup-tab cursor-pointer select-none rounded-full border px-3 py-1 text-xs md:text-[13px] shadow-sm transition">Anything else</button>
+      </div>
+
+      <div class="setup-panel" data-panel="cli">
+        <p class="text-sm text-stone-600 mb-2">
+          If you work in a terminal with Claude Code, paste this one line with the key from the mail.
+        </p>
+        <div class="relative">
+          <pre class="overflow-x-auto rounded-lg border border-stone-300 bg-stone-800 text-stone-100 text-xs md:text-sm p-4"><code>claude mcp add --transport http eddysearch {MCP_URL} \
+  --header "Authorization: Bearer YOUR_KEY"</code></pre>
+          <button type="button" class="copy-btn absolute top-2 right-2 rounded border border-stone-500 bg-stone-700 text-stone-100 text-[11px] px-2 py-1 hover:bg-stone-600">Copy</button>
+        </div>
+        <p class="text-xs text-stone-500 mt-2">
+          Check it worked by asking your assistant to run <code class="font-mono">corpus_context</code>. It should
+          answer with the size of the database.
+        </p>
+      </div>
+
+      <div class="setup-panel hidden" data-panel="app">
+        <p class="text-sm text-stone-600 mb-2">
+          Desktop apps that read a config file, such as the Claude desktop app, connect through a small
+          bridge. Open the app settings, go to the developer or connectors section, edit the configuration
+          file, and add the block below. Replace <span class="font-mono">YOUR_KEY</span> with the key from
+          the mail, save, and restart the app. The tools appear in the tool menu of a new chat.
+        </p>
+        <div class="relative">
+          <pre class="overflow-x-auto rounded-lg border border-stone-300 bg-stone-800 text-stone-100 text-xs md:text-sm p-4"><code>{JSON.stringify({ mcpServers: { eddysearch: { command: "npx", args: ["-y", "mcp-remote", MCP_URL, "--header", "Authorization: Bearer YOUR_KEY"] } } }, null, 2)}</code></pre>
+          <button type="button" class="copy-btn absolute top-2 right-2 rounded border border-stone-500 bg-stone-700 text-stone-100 text-[11px] px-2 py-1 hover:bg-stone-600">Copy</button>
+        </div>
+        <p class="text-xs text-stone-500 mt-2">
+          The bridge needs Node installed. It is only there to pass the key along, because most app
+          settings screens have no field for a header.
+        </p>
+      </div>
+
+      <div class="setup-panel hidden" data-panel="raw">
+        <p class="text-sm text-stone-600 mb-2">
+          Any other client that speaks MCP needs three things.
+        </p>
+        <dl class="rounded-lg border border-stone-200 bg-white shadow-sm divide-y divide-stone-100 text-sm">
+          <div class="flex flex-col sm:flex-row gap-1 sm:gap-4 px-4 py-3">
+            <dt class="w-40 shrink-0 text-stone-500">Address</dt>
+            <dd class="font-mono text-stone-800 break-all">{MCP_URL}</dd>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-1 sm:gap-4 px-4 py-3">
+            <dt class="w-40 shrink-0 text-stone-500">Transport</dt>
+            <dd class="font-mono text-stone-800">streamable HTTP</dd>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-1 sm:gap-4 px-4 py-3">
+            <dt class="w-40 shrink-0 text-stone-500">Header</dt>
+            <dd class="font-mono text-stone-800 break-all">Authorization: Bearer YOUR_KEY</dd>
+          </div>
+        </dl>
+        <p class="text-xs text-stone-500 mt-2">
+          An <span class="font-mono">X-API-Key</span> header with the bare key works just as well, if that
+          is easier for your client.
+        </p>
+      </div>
+
+      <p class="text-xs text-stone-500 mt-3">
+        The full API reference lives at <a class="text-sky-800 hover:underline" href="/api/docs">/api/docs</a>.
+      </p>
+    </section>
+
+    <!-- SKILLS -->
+    <section class="mb-10">
+      <h2 class="text-lg font-semibold text-stone-800 mb-1">Two Claude Code skills that use the search tools</h2>
+      <p class="text-sm text-stone-600 mb-4">
+        Optional, and not needed to use the tools. Unzip a folder into
+        <span class="font-mono">~/.claude/skills/</span>, then type its name with a slash in front.
+      </p>
+      <div class="grid gap-3 sm:grid-cols-2">
+        {skills.map((sk) => (
+          <div class="rounded-lg border border-stone-200 bg-white shadow-sm px-4 py-3 flex flex-col gap-2">
+            <div class="font-mono text-sm font-semibold text-stone-800">/{sk.name}</div>
+            <div class="text-sm text-stone-600 leading-snug flex-1">{sk.blurb}</div>
+            <a
+              href={sk.file}
+              download
+              class="self-start mt-1 inline-flex items-center gap-1.5 rounded border border-stone-300 px-2 py-1 text-xs text-stone-700 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-orange-200"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+                   stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5" aria-hidden="true">
+                <path d="M8 2v8" />
+                <path d="M4.5 7.5L8 11l3.5-3.5" />
+                <path d="M2.5 13h11" />
+              </svg>
+              Download {sk.name}.zip
+            </a>
+          </div>
+        ))}
+      </div>
+      <p class="text-xs text-stone-500 mt-3">
+        Each zip holds the skill and a short readme. On its first run a skill asks where literature
+        output should go and remembers the answer, so nothing is written to a folder you did not choose.
+      </p>
+    </section>
+
+    <!-- SMALL PRINT -->
+    <section class="bg-white/70 border border-stone-300 rounded-xl p-6 text-sm text-stone-700 leading-relaxed">
+      <h2 class="text-lg font-semibold text-stone-800 mb-2">What happens with your data</h2>
+      <p>
+        Your name, address and institution are stored with the key so that it can be traced back to a
+        person and switched off if it is misused. Nothing is passed on to anyone, and there is no
+        tracking on this page. Every key mail carries a link that deletes the key and your details in
+        one click.
+      </p>
+      <p class="mt-3">
+        Searches are not kept word for word. As on the rest of the site, the backend keeps only
+        lightweight statistics for monitoring: a hash of the query text rather than the text, how many
+        results came back, the top handles, which filters were used and how long it took. The
+        <a class="text-sky-800 hover:underline" href="/faq">FAQ</a> lists them in full.
+      </p>
+      <p class="mt-3">
+        The one exception is a full literature search. Those runs are saved with the question you asked,
+        so that you can pull the papers, the BibTeX and the script back out later by their number. Only
+        your own key can read your runs.
+      </p>
+      <p class="mt-3">
+        One key per address. Asking again replaces the old key rather than adding a second one.
+      </p>
+      <p class="mt-3">
+        I am always thankful for feedback. If something does not work, if you run into a bug or see
+        behaviour that looks odd, or if the key never turned up in your inbox, please write to me at
+        <a class="text-sky-800 hover:underline" href="mailto:eduard.bruell@zew.de">eduard.bruell@zew.de</a>.
+        I read every message myself and I am happy to send you a key by hand.
+      </p>
+      <p class="mt-3 text-stone-600">Eduard Brüll</p>
+    </section>
+
+    <p class="text-xs text-stone-500 mt-6">
+      <a class="hover:underline" href="/">Back to search</a>
+      <span class="mx-2">|</span>
+      <a class="hover:underline" href="/faq">FAQ, imprint and data protection</a>
+    </p>
+  </div>
+</AppLayout>
+
+<script>
+  const form = document.getElementById("signup-form");
+  const out = document.getElementById("f-result");
+  const btn = document.getElementById("f-submit");
+
+  const show = (ok, msg) => {
+    out.className =
+      "mt-4 rounded-md border px-3 py-2 text-sm " +
+      (ok ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-800");
+    out.textContent = msg;
+  };
+
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+    const data = Object.fromEntries(new FormData(form));
+    if (!data.institution) delete data.institution;
+    try {
+      const res = await fetch("/api/signup/key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        show(true, body.message ?? "The key is on its way.");
+        form.reset();
+      } else {
+        show(false, typeof body.error === "string" ? body.error : "Something went wrong. Please try again in a moment.");
+      }
+    } catch {
+      show(false, "Could not reach the server. Please try again in a moment.");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Send me a key";
+    }
+  });
+
+  // Setup tabs
+  const ON = "border-sky-800 bg-sky-800 text-white";
+  const OFF = "border-stone-300 bg-white text-stone-700 hover:border-stone-400";
+  const tabs = document.querySelectorAll(".setup-tab");
+  const panels = document.querySelectorAll(".setup-panel");
+  const select = (name) => {
+    tabs.forEach((t) => {
+      t.className = t.className.replace(ON, "").replace(OFF, "").trim() + " " + (t.dataset.tab === name ? ON : OFF);
+    });
+    panels.forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== name));
+  };
+  tabs.forEach((t) => t.addEventListener("click", () => select(t.dataset.tab)));
+  select("cli");
+
+  // Copy buttons sit next to the block they copy.
+  document.querySelectorAll(".copy-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const code = btn.parentElement.querySelector("code");
+      await navigator.clipboard.writeText(code.textContent);
+      btn.textContent = "Copied";
+      setTimeout(() => (btn.textContent = "Copy"), 1500);
+    });
+  });
+</script>
