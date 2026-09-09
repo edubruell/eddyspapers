@@ -232,23 +232,24 @@ Note `POST /api/signup/key` is **already publicly reachable**, ahead of any page
 it, so the D6 abuse guards (10-minute per-mailbox cooldown, 3/day per mailbox, 60/hour
 globally) are load-bearing now.
 
-What is left is the human-facing half:
+The human-facing half shipped 2026-09-09 (`568ca5e` + `c40a31d`, live on prod): the `/mcp`
+page on classic (signup form, tool list, three setup tabs, skill downloads, data section),
+the two packaged skills in `skills/` (built by `skills/build.sh` into
+`frontends/classic/public/skills/`), and an html key mail.
 
-1. **The page** — a `/mcp` subpage of classic: form, tool list, skill downloads, the
-   copy-paste `claude mcp add` line, the "delivery can take up to 24 hours" note, privacy line.
-2. **A copy pass over the key mail.** Its content is right and it delivers; the prose is not yet
-   good enough to be a stranger's first contact with the project. Do it with the page copy so
-   the two share a voice. All user-facing strings live in `api/src/mail/keyMail.ts` and the
-   signup route's response messages. House rules: no em dashes, no jargon.
-3. **DNS on `eddyspapers.org`** (Strato panel, not code): SPF, DKIM, a `_dmarc` TXT at `p=none`.
-   Until then every message is an unauthenticated first-time sender — which is exactly what
-   greylisted the first zew.de mail. Do it before advertising the page; early sends build the
-   sending reputation.
-4. **Public skills artifact** — pick the distribution channel (public repo vs. plugin
-   marketplace), then `llms.txt` last, describing a route that already works.
+What is left:
 
-(The lit-search / lit-check skills themselves are written and live at `~/.claude/skills/`; only
-their distribution is open, which is item 4 above.)
+1. **DNS on `eddyspapers.org`** (Strato panel, not code): SPF, DKIM, a `_dmarc` TXT at
+   `p=none`. Until then every message is an unauthenticated first-time sender, which is what
+   greylisted the first zew.de mail. Do it before advertising the page widely.
+2. **`llms.txt`**, describing a route that already works.
+3. **The GUI connector gap.** The visual "add a custom connector" flow has no field for a
+   header, and `/mcp` only reads the key from `Authorization`/`X-API-Key`, so the page routes
+   desktop users through the `npx mcp-remote` bridge. Supporting point-and-click means
+   accepting a token in the URL (history, referrers, logs) — an open decision, not a bug.
+4. **A narrow `rest_read` scope**, if a scripting audience ever matters. Public keys cannot use
+   the REST API today because `rest` also opens `/chat`, `/export/*` and the two `/dailylogs`
+   routes (raw search logs with IPs).
 
 - **Quality-weight parity cases**: re-add to parity battery after confirming blended mode matches (vectorised-ifelse bug was fixed locally; not yet golden-recorded).
 
