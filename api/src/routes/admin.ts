@@ -127,6 +127,12 @@ adminRoute.get("/keys", async (c) => {
       scopes: k.scopes,
       rate_limit_overrides: k.rateLimitOverrides,
       tools: k.tools,
+      // Self-serve signup identity — NULL for every operator-minted key, so the console can
+      // tell "someone signed up" from "I minted this" at a glance.
+      name: k.name,
+      email: k.email,
+      institution: k.institution,
+      verified_at: k.verifiedAt,
       created_at: k.createdAt,
       revoked_at: k.revokedAt,
     })),
