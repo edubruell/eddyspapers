@@ -13,6 +13,7 @@ import { papersRoute } from "./routes/papers.js";
 import { corpusRoute } from "./routes/corpus.js";
 import { mcpRoute } from "./routes/mcp.js";
 import { adminRoute } from "./routes/admin.js";
+import { signupRoute } from "./routes/signup.js";
 import { docsRoute } from "./routes/docs.js";
 import { requireKey } from "./middleware/requireKey.js";
 
@@ -52,6 +53,8 @@ export function buildApp(): Hono {
   app.route("/corpus", corpusRoute);
   app.route("/mcp", mcpRoute);
   app.route("/admin", adminRoute);
+  // Public, deliberately outside requireKey — the mint route IS the way in (D1/D6).
+  app.route("/signup", signupRoute);
   app.route("/docs", docsRoute);
 
   return app;

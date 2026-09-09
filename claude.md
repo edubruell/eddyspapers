@@ -103,6 +103,8 @@ owned by the Hono service — never touched by the pipeline.
 | `POST /chat` | Start agentic literature search (SSE stream); `synthesize` writes the review — see below |
 | `POST /chat/{id}/reply` | Reply to clarifying question |
 | `POST /export/xlsx` | Export results as Excel |
+| `POST /signup/key` | Public self-serve MCP key: mints `["mcp","lit_search"]` and **mails** it (never returns it) |
+| `GET/POST /signup/revoke` | Revoke a self-serve key + erase its stored identity (token from the key mail) |
 | `PATCH /admin/keys/{prefix}` | Replace a live key's scopes in place (no reissue) |
 | `POST /admin/reload` | Hot-swap corpus snapshot (requires admin key) |
 | `GET /docs` | Public JSON API reference — endpoints + field conventions (`src/docs/reference.ts`) |
@@ -130,6 +132,15 @@ Under handle delivery the result keeps the citable digest of **every** paper plu
 abstracts. `api/src/agent/parts.ts` is the single slicer; the `agenticsearch://searches/{id}`
 resources expose the same cuts for clients that read resources. `deliver` is deliberately NOT
 in the cache key — delivery is presentation, so a cached run can be handed back either way.
+
+**Run ownership.** A stored run is readable through the authenticated faces — `fetch_search` and
+the `agenticsearch://searches/{id}` resources — only by a key that produced it
+(`search_owners` in searches.duckdb; rule in `api/src/agent/ownership.ts`; owner recorded on
+create *and* on cache hit; admin keys and the keyless stdio build pass through). The web share
+surfaces `GET /searches/:id` and the SSE stream stay ungated by design — they *are* the share
+link — and are protected instead by the run id being an HMAC under a server-only
+`SEARCH_ID_SECRET`. **That secret is now mandatory: the service refuses to boot when the key gate
+is on and it is unset.**
 
 Scopes are `rest`, `mcp`, `lit_search`, `lit_search_synth`, `admin`; the admin console
 (`/admin`) renders what each grants from the backend's `scope_docs`. Field conventions that a
@@ -173,7 +184,14 @@ Design: `localwip/notes/data_enrichment/01_backfill_mechanism.md`.
 - `journal_quality` — RePEc series impact factors (experimental; one signal among several) — M8
 
 **Appdata (appdata.duckdb — Hono read-write):**
-- `saved_searches`, `search_logs`, `person_search_logs`, `api_keys`
+- `saved_searches`, `search_logs`, `person_search_logs`, `api_keys`, `key_mail_log`
+
+`api_keys` carries the self-serve signup identity (`name`, `email`, `email_canonical`,
+`institution`, `verified_at`) — all NULL on operator-minted keys. `email_canonical` is the
+plus-tag-stripped address and is the key for the one-key-per-mailbox rule and the mail
+cooldown; `key_mail_log` is the send ledger those count. Every appdata schema change is
+applied by `openAppDataDb()` at startup and folded in by the CHECKPOINT at the end of its DDL
+block — that checkpoint is what keeps an `ADD COLUMN` out of a cold-restart WAL replay.
 
 ## Notes system
 
@@ -198,7 +216,31 @@ INDEX). Invoke it when wrapping up a working session.
 
 ## Pending work (next up)
 
-- **Ship the public lit-search / lit-check skills**: MCP rewrite done (live at `~/.claude/skills/`); remaining work is distribution — pick a channel (public skills repo vs. plugin) gated behind Rung 1 self-serve MCP keys.
+**TOP GOAL — self-serve MCP key signup site** (`mcpsignup.eduard-bruell.de`). A public page:
+name + email + institution (optional) → an eddysearch MCP key, plus downloads for the
+lit-search / lit-check skills, and an `llms.txt` so an agent can drive the signup itself.
+Full spec: `localwip/notes/public_access/01_signup_site.md`; working entry in
+`perpetual/CURRENT_FOCUS.md`.
+
+Three things that shape the work:
+
+1. **It is Rung 1 + Rung 2, not Rung 1.** lit-check rides the cheap tools (no LLM, no
+   artifacts); lit-search rides `lit_search`, which **stores runs**. So the deferred **S6
+   ownership** fix is on the critical path — the SSE stream, `agenticsearch://searches/{id}`
+   and `fetch_search` are all gated on *having a key*, not on *having created the run*.
+   Prod `SEARCH_ID_SECRET` must also stop falling back to `AGENTIC_PASSWORD`.
+2. **Keys are delivered by email** (decided) — not a captcha (an agent can't solve one) and
+   not an unverified instant issue. Mailbox to be created on Strato (`eddyspapers.org` /
+   `eduard-bruell.de`); deliverability to institutional inboxes is the risk, not sending.
+3. **Open lever:** split the tier? Cheap tools instantly self-serve (S6 doesn't apply) with
+   `lit_search` granted separately would ship the site + lit-check *before* S6.
+   `PATCH /admin/keys/:prefix` upgrades a live key in place, so nobody is chased for a swap.
+
+Missing pieces: a public mint route outside `requireKey('admin')`; `name`/`email`/
+`institution` columns on `api_keys` (appdata `ALTER TABLE` → checkpoint before restart);
+and **any per-IP throttling at all** (`auth/rateLimit.ts` is per-key by design).
+
+- **Ship the public lit-search / lit-check skills**: MCP rewrite done (live at `~/.claude/skills/`); remaining work is distribution — pick a channel (public skills repo vs. plugin) gated behind the signup site above.
 - **Quality-weight parity cases**: re-add to parity battery after confirming blended mode matches (vectorised-ifelse bug was fixed locally; not yet golden-recorded).
 
 ## Technical stack
