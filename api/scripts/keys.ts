@@ -10,6 +10,7 @@
  *   npm run keys -- revoke <id-or-hash-prefix>
  *   npm run keys -- scopes <id-or-hash-prefix> --scopes rest,mcp,lit_search,lit_search_synth
  *   npm run keys -- grant  <scope> [--all | <id-or-hash-prefix> ...]
+ *   npm run keys -- purge  <email>          erase a signup mailbox: keys AND send ledger
  *
  * Config via env:
  *   AGENTIC_API_BASE     server base URL          (default http://127.0.0.1:8001)
@@ -129,6 +130,17 @@ async function cmdGrant(args: string[]): Promise<void> {
   process.stdout.write(`Granted '${scope}' to ${needing.length} of ${keys.length} active key(s).\n`);
 }
 
+// Erases a mailbox from the signup system so the address is reusable — the throttle counts
+// sends, so revoking the key alone still leaves the cooldown and the daily cap in the way.
+async function cmdPurge(args: string[]): Promise<void> {
+  const email = args.find((a) => !a.startsWith("--"));
+  if (!email) die("Usage: keys purge <email>");
+  const data = (await req("POST", "/admin/signups/purge", { email })) as {
+    purged: { keys: number; mails: number };
+  };
+  process.stdout.write(`Purged ${email}: ${data.purged.keys} key(s), ${data.purged.mails} mail-log row(s).\n`);
+}
+
 async function cmdList(args: string[]): Promise<void> {
   const keys = await fetchKeys(args.includes("--all"));
   if (keys.length === 0) {
@@ -157,8 +169,10 @@ async function main(): Promise<void> {
       return cmdScopes(args);
     case "grant":
       return cmdGrant(args);
+    case "purge":
+      return cmdPurge(args);
     default:
-      die("Usage: keys <new|list|revoke|scopes|grant> …");
+      die("Usage: keys <new|list|revoke|scopes|grant|purge> …");
   }
 }
 

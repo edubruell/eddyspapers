@@ -112,6 +112,29 @@ adminRoute.post("/reload", async (c) => {
   });
 });
 
+// Erase one mailbox from the signup system: its keys and its send ledger both go, so the
+// address is as it was before anyone signed up. Two uses, one implementation — replaying a
+// signup while testing (a revoke alone leaves the cooldown and the daily cap in the way), and
+// honouring a deletion request. The address travels in the BODY, not the path or query, so it
+// stays out of access logs.
+const purgeSchema = z.object({ email: z.string().email() });
+
+adminRoute.post("/signups/purge", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const parsed = purgeSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
+
+  const db = await getAppDataDb();
+  const purged = await db.purgeSignup(parsed.data.email);
+  await getKeyRegistry().ensureFresh(true);
+  return c.json({ purged });
+});
+
 adminRoute.get("/keys", async (c) => {
   const includeRevoked = c.req.query("all") === "1" || c.req.query("all") === "true";
   const db = await getAppDataDb();

@@ -94,6 +94,12 @@ export interface AppDataDb {
   // Sends in the last `withinMinutes`; scoped to one mailbox when `email` is given, else the
   // whole route (the circuit breaker).
   countMailSends(withinMinutes: number, email?: string): Promise<number>;
+  // Erase a mailbox from the signup system entirely: its keys AND its send ledger, so the
+  // next request from that address starts from nothing. Operator-only. This is what makes a
+  // test address reusable (a revoke alone leaves the cooldown and the daily cap standing),
+  // and it is also the honest answer to "delete my data". Only ever matches self-serve rows
+  // — an operator-minted key has no email.
+  purgeSignup(email: string): Promise<{ keys: number; mails: number }>;
   // Only the non-revoked rows, for the auth registry's in-memory cache.
   activeKeys(): Promise<ApiKeyRow[]>;
   // Generic primitives for the ported classic/person user-table logic (src/db/classic.ts).
@@ -325,6 +331,18 @@ export async function openAppDataDb(): Promise<AppDataDb> {
         params,
       );
       return Number(rows[0]?.n ?? 0);
+    },
+
+    async purgeSignup(email) {
+      const canonical = canonicalEmail(email);
+      const before = await rowsToObjects(
+        conn,
+        "SELECT COUNT(*) AS k, (SELECT COUNT(*) FROM key_mail_log WHERE email_canonical = ?) AS m FROM api_keys WHERE email_canonical = ?",
+        [canonical, canonical],
+      );
+      await conn.run("DELETE FROM api_keys WHERE email_canonical = ?", [canonical] as never);
+      await conn.run("DELETE FROM key_mail_log WHERE email_canonical = ?", [canonical] as never);
+      return { keys: Number(before[0]?.k ?? 0), mails: Number(before[0]?.m ?? 0) };
     },
 
     async activeKeys() {

@@ -273,3 +273,50 @@ describe("/signup/revoke", () => {
     expect(await bogus.json()).toEqual({ error: expect.stringMatching(/not valid/) });
   });
 });
+
+// Replaying a signup from a test address is only possible if the ledger goes too — a revoked
+// key still leaves the cooldown and the daily cap standing against that mailbox.
+describe("POST /admin/signups/purge", () => {
+  const purge = (email: string) =>
+    app.request("/admin/signups/purge", {
+      method: "POST",
+      headers: { authorization: "Bearer boot", "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+  it("erases the keys and the send ledger, so the same address can sign up again at once", async () => {
+    expect((await signup({ name: "T", email: "t@posteo.de" })).status).toBe(201);
+    // Without a purge the cooldown refuses a second attempt.
+    expect((await signup({ name: "T", email: "t@posteo.de" })).status).toBe(429);
+
+    const res = await purge("t@posteo.de");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as unknown).toEqual({ purged: { keys: 1, mails: 1 } });
+    expect(await keyRows()).toHaveLength(0);
+
+    expect((await signup({ name: "T", email: "t@posteo.de" })).status).toBe(201);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("matches the canonical mailbox, and leaves other addresses alone", async () => {
+    await signup({ name: "T", email: "t+one@posteo.de" });
+    await clearMailLog();
+    await signup({ name: "O", email: "other@posteo.de" });
+
+    // A plus-tag variant is the same mailbox, so the purge finds it.
+    expect(((await (await purge("T@posteo.de")).json()) as { purged: { keys: number } }).purged.keys).toBe(1);
+    const left = await keyRows();
+    expect(left).toHaveLength(1);
+    expect(left[0].email).toBe("other@posteo.de");
+  });
+
+  it("is admin-only and rejects a non-address", async () => {
+    const anon = await app.request("/admin/signups/purge", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "t@posteo.de" }),
+    });
+    expect(anon.status).toBe(401);
+    expect((await purge("not-an-email")).status).toBe(400);
+  });
+});
