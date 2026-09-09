@@ -106,6 +106,7 @@ owned by the Hono service — never touched by the pipeline.
 | `POST /signup/key` | Public self-serve MCP key: mints `["mcp","lit_search"]` and **mails** it (never returns it) |
 | `GET/POST /signup/revoke` | Revoke a self-serve key + erase its stored identity (token from the key mail) |
 | `PATCH /admin/keys/{prefix}` | Replace a live key's scopes in place (no reissue) |
+| `POST /admin/signups/purge` | Erase one mailbox: its keys **and** its send ledger (reusable test address / erasure request) |
 | `POST /admin/reload` | Hot-swap corpus snapshot (requires admin key) |
 | `GET /docs` | Public JSON API reference — endpoints + field conventions (`src/docs/reference.ts`) |
 
