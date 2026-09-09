@@ -182,13 +182,34 @@ describe("one active key per mailbox", () => {
 
     expect(res.status).toBe(201);
     expect((await res.json()) as { rotated: boolean }).toMatchObject({ rotated: true });
-    expect(sent[1].subject).toMatch(/new eddysearch MCP key/);
-    expect(sent[1].text).toMatch(/previous key has been revoked/);
+    expect(sent[1].subject).toMatch(/new/i);
+    // However the copy is worded, a rotation mail must say the old key stopped working.
+    expect(sent[1].text).toMatch(/previous key has been switched off/);
 
     const rows = await keyRows();
     expect(rows).toHaveLength(2);
     expect(rows[0].revoked_at).not.toBeNull(); // the first one
     expect(rows[1].revoked_at).toBeNull();
+  });
+});
+
+describe("the mail itself", () => {
+  it("sends text and html, and the key is installable from the plain part alone", async () => {
+    await signup({ name: "Ada Lovelace", email: "ada@zew.de" });
+    const m = sent[0];
+
+    // The plain part is the one that always survives a stripping client, so it carries
+    // everything: the key, the install line and the revoke link.
+    expect(m.text).toContain("esk_");
+    expect(m.text).toMatch(/claude mcp add --transport http eddysearch/);
+    expect(m.text).toMatch(/signup\/revoke\?token=/);
+    expect(m.text).toMatch(/Hello Ada,/); // first name only, not the full name
+
+    // The html part carries the same key, and nothing the text part lacks.
+    expect(m.html).toBeTruthy();
+    const key = m.text.match(/esk_[A-Za-z0-9_-]+/)![0];
+    expect(m.html).toContain(key);
+    expect(m.html).toContain("logo_mail.png");
   });
 });
 

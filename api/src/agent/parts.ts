@@ -84,7 +84,7 @@ export function searchPart(bundle: SearchBundle, part: SearchPart, opts: PartOpt
         has_synthesis: bundle.synthesis_md.trim().length > 0,
         sections: sectionSummaries(bundle.sections),
         resource_uri: bundle.resource_uri,
-        suggested_paths: bundle.suggested_paths,
+        slug: bundle.slug,
       };
       return { text: JSON.stringify(data, null, 2), data };
     }

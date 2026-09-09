@@ -37,8 +37,10 @@ repec_wip.R
 .env.*
 !.env*.example
 
-# Contains a plaintext API key — never commit
+# Contains a plaintext API key — never commit. The public copies under skills/ are the
+# shipped versions: no key, placeholder only, and they are what the /mcp page hands out.
 SKILL.md
+!skills/*/SKILL.md
 
 # local server-ops notes — setup + functionality (never publish)
 ops_notes/

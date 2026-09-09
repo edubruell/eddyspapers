@@ -84,9 +84,8 @@ describe("buildBundle", () => {
     expect(b.sections).toHaveLength(2);
     expect(b.bibtex).toContain("@article{repec:a,}");
     expect(b.resource_uri).toBe("agenticsearch://searches/abc123");
-    expect(b.suggested_paths.report).toBe("local_context/notes/literature/lit_minimum-wage-employment-effects.md");
-    expect(b.suggested_paths.bibtex).toMatch(/\.bib$/);
-    expect(b.suggested_paths.csv).toMatch(/\.csv$/);
+    // A name, not a path — the bundle no longer dictates where a caller files its output.
+    expect(b.slug).toBe("minimum-wage-employment-effects");
   });
 
   it("builds a CSV with the §7.5 columns, best similarity, pipe-joined sections, and stats", () => {

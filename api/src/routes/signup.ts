@@ -20,7 +20,7 @@ import type { Scope } from "../db/appdata.js";
 
 const PUBLIC_SCOPES: Scope[] = ["mcp", "lit_search"];
 // Hourly ceilings, well under the operator key. Only classes named here are narrowed.
-const PUBLIC_RATE_LIMITS = { lit_search: 10, find_papers: 120, find_people: 120 };
+const PUBLIC_RATE_LIMITS = { lit_search: 20, find_papers: 120, find_people: 120 };
 
 // D6 throttle. The scarce resource is a deliverable mailbox, not an address block — ZEW,
 // DIW and LISER all NAT, so an IP bucket would block the success case (a seminar signing up

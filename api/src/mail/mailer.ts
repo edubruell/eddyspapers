@@ -7,7 +7,10 @@ import nodemailer from "nodemailer";
 export interface MailMessage {
   to: string;
   subject: string;
+  // Always present, and always complete on its own: HTML is blocked or stripped often enough
+  // that the plain part has to carry the key, not a "view this in your browser" apology.
   text: string;
+  html?: string;
 }
 
 export interface Mailer {
@@ -39,7 +42,7 @@ function buildSmtpMailer(): Mailer {
   return {
     configured: true,
     async send(m) {
-      await transport.sendMail({ from, to: m.to, subject: m.subject, text: m.text });
+      await transport.sendMail({ from, to: m.to, subject: m.subject, text: m.text, html: m.html });
     },
   };
 }

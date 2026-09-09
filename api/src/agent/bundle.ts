@@ -6,12 +6,6 @@ import type { Paper, Person, Section, StreamEvent } from "./types.js";
 // run's collected events and on a run replayed from the persistent store — the same
 // property the web share-link reducer relies on.
 
-export interface SuggestedPaths {
-  report: string;
-  bibtex: string;
-  csv: string;
-}
-
 export interface SearchBundle {
   search_id: string;
   synthesis_md: string;
@@ -23,10 +17,12 @@ export interface SearchBundle {
   strategy: string;
   script: string;
   resource_uri: string;
-  suggested_paths: SuggestedPaths;
+  // A filename-safe name for the run, so a caller can name its files consistently.
+  // Deliberately NOT a path: where those files belong is the caller's decision, not ours.
+  slug: string;
 }
 
-// First ~6 significant words of the brief → a filesystem-safe slug for suggested_paths.
+// First ~6 significant words of the brief → a filesystem-safe name for the run.
 export function slugify(brief: string): string {
   const slug = brief
     .toLowerCase()
@@ -243,10 +239,6 @@ export function buildBundle(searchId: string, brief: string, events: StreamEvent
     strategy,
     script,
     resource_uri: `agenticsearch://searches/${searchId}`,
-    suggested_paths: {
-      report: `local_context/notes/literature/lit_${slug}.md`,
-      bibtex: `local_context/search_related/results_${slug}.bib`,
-      csv: `local_context/search_related/results_${slug}.csv`,
-    },
+    slug,
   };
 }

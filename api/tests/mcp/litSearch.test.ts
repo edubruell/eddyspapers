@@ -132,7 +132,7 @@ describe("lit_search — happy path", () => {
     expect(sc.script).toContain("handles");
     expect(sc.papers).toHaveProperty(paper.handle);
     expect(sc.resource_uri).toBe(`agenticsearch://searches/${sc.search_id as string}`);
-    expect((sc.suggested_paths as { report: string }).report).toMatch(/^local_context\/notes\/literature\/lit_/);
+    expect(sc.slug).toEqual(expect.any(String));
     // CSV: header + one paper row carrying the best similarity and stats.
     const csv = sc.papers_csv as string;
     expect(csv.split("\n")[0]).toMatch(/^handle,title,authors/);

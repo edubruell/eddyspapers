@@ -39,7 +39,7 @@ const bundle: SearchBundle = {
   strategy: "Sweep.",
   script: "handles <- c()",
   resource_uri: "agenticsearch://searches/abc123",
-  suggested_paths: { report: "r.md", bibtex: "r.bib", csv: "r.csv" },
+  slug: "r",
 };
 
 describe("searchPart", () => {

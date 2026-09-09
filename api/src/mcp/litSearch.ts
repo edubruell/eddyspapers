@@ -148,7 +148,7 @@ function litResult(bundle: SearchBundle, deliver: DeliverMode): CallToolResult {
     strategy: bundle.strategy,
     search_id: bundle.search_id,
     resource_uri: bundle.resource_uri,
-    suggested_paths: bundle.suggested_paths,
+    slug: bundle.slug,
   };
 
   const text = synthesized ? bundle.synthesis_md : resultsDigest(bundle, delivery);
