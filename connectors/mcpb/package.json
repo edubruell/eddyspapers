@@ -1,0 +1,10 @@
+{
+  "name": "eddysearch-mcpb",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "server/index.js",
+  "dependencies": {
+    "mcp-remote": "0.15.2"
+  }
+}

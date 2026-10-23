@@ -140,7 +140,7 @@ const skills = [
 
       <div class="flex flex-wrap gap-2 mb-3" role="tablist">
         <button type="button" data-tab="cli" class="setup-tab cursor-pointer select-none rounded-full border px-3 py-1 text-xs md:text-[13px] shadow-sm transition">Terminal</button>
-        <button type="button" data-tab="app" class="setup-tab cursor-pointer select-none rounded-full border px-3 py-1 text-xs md:text-[13px] shadow-sm transition">Desktop app</button>
+        <button type="button" data-tab="app" class="setup-tab cursor-pointer select-none rounded-full border px-3 py-1 text-xs md:text-[13px] shadow-sm transition">Claude app</button>
         <button type="button" data-tab="raw" class="setup-tab cursor-pointer select-none rounded-full border px-3 py-1 text-xs md:text-[13px] shadow-sm transition">Anything else</button>
       </div>
 
@@ -160,10 +160,61 @@ const skills = [
       </div>
 
       <div class="setup-panel hidden" data-panel="app">
+        <p class="text-sm text-stone-600 mb-3">
+          In the Claude app, on the web or on your desktop, you can connect with a few clicks. There are
+          two ways. Try the first one. If your app does not show the option it needs, use the second.
+        </p>
+
+        <div class="grid gap-3 mb-6">
+          <div class="rounded-lg border border-stone-200 border-l-4 border-l-orange-400 bg-white shadow-sm px-4 py-3">
+            <div class="text-sm font-semibold text-stone-800">1. Add as a custom connector with your key</div>
+            <ol class="list-decimal pl-5 mt-2 space-y-1 text-sm text-stone-600 leading-snug">
+              <li>In Claude, open <span class="font-semibold">Customize &gt; Connectors</span> and click <span class="font-semibold">Add custom connector</span>.</li>
+              <li>Enter this address: <span class="font-mono text-stone-800 break-all">{MCP_URL}</span></li>
+              <li>Under Authentication, choose <span class="font-semibold">No sign-in</span>.</li>
+              <li>Open <span class="font-semibold">Request headers</span> and pick <span class="font-mono text-stone-800">x-api-key</span> from the list.</li>
+              <li>Paste the key from the mail as the value and mark it <span class="font-semibold">Required</span>.</li>
+              <li>Click <span class="font-semibold">Add</span>.</li>
+            </ol>
+            <p class="text-xs text-stone-500 mt-2">
+              Anthropic is still rolling out the Request headers section, so some accounts do not see it
+              yet. If yours does not, use the second way. The key cannot be edited later. To change it,
+              remove the connector and add it again.
+            </p>
+          </div>
+
+          <div class="rounded-lg border border-stone-200 border-l-4 border-l-orange-400 bg-white shadow-sm px-4 py-3">
+            <div class="text-sm font-semibold text-stone-800">2. Claude Desktop: install the extension file</div>
+            <ol class="list-decimal pl-5 mt-2 space-y-1 text-sm text-stone-600 leading-snug">
+              <li>Download the extension file below.</li>
+              <li>In Claude Desktop, open <span class="font-semibold">Settings &gt; Extensions</span>.</li>
+              <li>Drag the file onto that page and click <span class="font-semibold">Install</span>.</li>
+              <li>When it asks for an <span class="font-semibold">API key</span>, paste the key from the mail.</li>
+            </ol>
+            <a
+              href="/eddysearch.mcpb"
+              download
+              class="inline-flex items-center gap-1.5 mt-3 rounded border border-stone-300 px-2 py-1 text-xs text-stone-700 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-orange-200"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+                   stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5" aria-hidden="true">
+                <path d="M8 2v8" />
+                <path d="M4.5 7.5L8 11l3.5-3.5" />
+                <path d="M2.5 13h11" />
+              </svg>
+              Download eddysearch.mcpb
+            </a>
+            <p class="text-xs text-stone-500 mt-2">
+              This works in the desktop app only, not in Claude on the web.
+            </p>
+          </div>
+        </div>
+
+        <h3 class="text-sm font-semibold text-stone-800 mb-1">Other desktop apps</h3>
         <p class="text-sm text-stone-600 mb-2">
-          Desktop apps that read a config file, such as the Claude desktop app, connect through a small
-          bridge. Open the app settings, go to the developer or connectors section, edit the configuration
-          file, and add the block below. Replace <span class="font-mono">YOUR_KEY</span> with the key from
+          Desktop apps that read a config file connect through a small bridge. This also works in the
+          Claude desktop app if neither of the ways above does. Open the app settings, go to the developer
+          or connectors section, edit the configuration file, and add the block below. Replace <span class="font-mono">YOUR_KEY</span> with the key from
           the mail, save, and restart the app. The tools appear in the tool menu of a new chat.
         </p>
         <div class="relative">

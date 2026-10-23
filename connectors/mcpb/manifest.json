@@ -1,0 +1,49 @@
+{
+  "manifest_version": "0.3",
+  "name": "eddysearch",
+  "display_name": "Eddy's Papers search",
+  "version": "1.0.0",
+  "description": "Search over 450,000 economics papers from RePEc, find economists by topic and check reference lists.",
+  "author": {
+    "name": "Eduard Brüll"
+  },
+  "homepage": "https://econpapers.eduard-bruell.de/mcp",
+  "documentation": "https://econpapers.eduard-bruell.de/mcp",
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "EDDYSEARCH_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "corpus_context", "description": "Corpus sizes, valid filter values and tips for writing queries." },
+    { "name": "find_papers", "description": "Semantic search over the paper corpus." },
+    { "name": "keyword_search", "description": "Literal keyword and title search." },
+    { "name": "find_people", "description": "Find economists by research area." },
+    { "name": "verify_references", "description": "Check a reference list against the corpus." },
+    { "name": "lit_search", "description": "Run a full literature search in one call." },
+    { "name": "fetch_search", "description": "Fetch the BibTeX, CSV or records of an earlier literature search." }
+  ],
+  "keywords": ["economics", "literature", "RePEc", "papers", "research"],
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "API key",
+      "description": "The key from your signup email",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20.0.0"
+    }
+  }
+}
