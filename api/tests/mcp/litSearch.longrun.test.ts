@@ -230,3 +230,34 @@ describe("lit_search — runs longer than the wait", () => {
     bus.cleanup(id);
   });
 });
+
+// Production serves MCP as stateless HTTP: one server+transport per request, closed after the
+// reply (mcp/server.ts). The in-memory client above never closes, so this drives the real path.
+describe("lit_search over the per-request HTTP transport", () => {
+  const post = async (id: number, args: Record<string, unknown>) => {
+    const { handleMcpRequest } = await import("../../src/mcp/server.js");
+    const res = await handleMcpRequest(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "lit_search", arguments: args, _meta: { progressToken: id } } }),
+      }),
+      key,
+    );
+    return (await res.json()) as { result: { structuredContent?: Record<string, unknown>; isError?: boolean; content: unknown } };
+  };
+
+  it("a run that outlives its request still finishes, and the repeat call is served from it", async () => {
+    vi.stubEnv("AGENTIC_APPDATA_PATH", join(tmp, "appdata.duckdb"));
+    armPipeline();
+    const first = await post(1, { brief });
+    expect(first.result.structuredContent).toMatchObject({ status: "running" });
+
+    openGate();
+    await new Promise((r) => setTimeout(r, 300));
+    const second = await post(2, { brief });
+    expect(second.result.isError).toBeFalsy();
+    expect(Object.keys((second.result.structuredContent?.papers ?? {}) as object)).toHaveLength(1);
+    expect(writeScript).toHaveBeenCalledTimes(1);
+  });
+});

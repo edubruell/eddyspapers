@@ -67,6 +67,7 @@ export async function runAgent(
   };
 
   const fail = (message: string, recoverable = false): void => {
+    console.error(`[agent] ${searchId} failed at ${currentStage}: ${message.replace(/\s+/g, " ").slice(0, 500)}`);
     emit({ type: "error", where: currentStage, message, recoverable });
     emit({ type: "done", ms_total: Date.now() - t0 });
   };
