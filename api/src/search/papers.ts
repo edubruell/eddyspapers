@@ -130,37 +130,71 @@ export async function semanticSearch(db: CorpusDb, p: SemanticParams): Promise<S
   return semanticSearchWithVector(db, await embedQuery(p.query), p);
 }
 
+// A WHERE in the HNSW top-k is applied AFTER the index scan: the index hands back the
+// k nearest papers corpus-wide and the filter drops the non-matching ones, so a narrow
+// filter returned 0-5 of 100 (measured 2026-10-26, scripts/explain_filters.ts). Filtered
+// search therefore filters an unfiltered index pool, and falls back to an exact scan
+// when fewer than k papers survive. Above a LIMIT of about 5000 (8000 measured) the VSS
+// rewrite gives up and the pool itself full-scans, hence the cap.
+const candidatePool = (k: number): number => Math.min(Math.max(k * 20, 2000), 5000);
+
 // Split from semanticSearch so tests (and later batch callers) can supply a
 // precomputed vector — no Ollama in the test path.
 export async function semanticSearchWithVector(
   db: CorpusDb,
   vec: number[],
   p: Omit<SemanticParams, "query">,
+  pool?: number,
 ): Promise<SemanticResult[]> {
+  const k = p.maxK ?? 100;
   const where = whereClause(paperFilters(p));
+  const distance = `array_cosine_distance(a.embeddings, ${vectorLiteral(vec)})`;
 
   // The top-k stands alone so the VSS optimizer can rewrite it into an HNSW_INDEX_SCAN.
   // Any join in the same SELECT as `ORDER BY array_cosine_distance(...) LIMIT k` defeats
   // that rule and the plan degrades to a sequential scan over every embedding in the
-  // corpus (~2s vs ~10ms on prod) — the same failure mode filtered search hit in M7.
-  // The OpenAlex metrics therefore attach ABOVE the top-k, over k rows, not 480k.
-  const topK = `SELECT ${PAPER_COLS},
-            array_cosine_distance(a.embeddings, ${vectorLiteral(vec)}) AS similarity
+  // corpus (~2s vs ~10ms on prod). The OpenAlex metrics therefore attach ABOVE the
+  // top-k, over k rows, not 480k.
+  const indexed = `SELECT ${PAPER_COLS}, ${distance} AS similarity
+     FROM articles a
+     ORDER BY similarity ASC
+     LIMIT ?`;
+
+  // The pool's LIMIT stops the filter being pushed back under the index scan.
+  const pooled = `WITH a AS (${indexed})
+     SELECT * FROM a
+     ${where.sql}
+     ORDER BY similarity ASC
+     LIMIT ?`;
+
+  // `+ 0` hides the distance from the VSS rewrite, so the filter runs first and the
+  // ranking is exact over every matching paper.
+  const exact = `SELECT ${PAPER_COLS}, ${distance} + 0 AS similarity
      FROM articles a
      ${where.sql}
      ORDER BY similarity ASC
      LIMIT ?`;
 
   // The hash join does not preserve the CTE's order, so the outer query re-sorts.
-  const sql = (await hasOpenAlexTable(db))
-    ? `WITH top AS (${topK})
-       SELECT t.*, ${OPENALEX_COLS}
-       FROM top t
-       ${openAlexJoinOn("t")}
-       ORDER BY t.similarity ASC`
-    : topK;
+  const withOpenAlex = await hasOpenAlexTable(db);
+  const run = (topK: string, params: unknown[]) =>
+    db.query(
+      withOpenAlex
+        ? `WITH top AS (${topK})
+           SELECT t.*, ${OPENALEX_COLS}
+           FROM top t
+           ${openAlexJoinOn("t")}
+           ORDER BY t.similarity ASC`
+        : topK,
+      params,
+    );
 
-  const rows = await db.query(sql, [...where.params, p.maxK ?? 100]);
+  const rows =
+    where.sql === ""
+      ? await run(indexed, [k])
+      : await run(pooled, [pool ?? candidatePool(k), ...where.params, k]).then((r) =>
+          r.length >= k ? r : run(exact, [...where.params, k]),
+        );
 
   // similarity_score is unrounded here; the Plumber endpoint rounds to 5 digits
   // before serialising — the Phase 5 /search route port must add that rounding
@@ -226,7 +260,7 @@ export async function keywordSearch(db: CorpusDb, p: KeywordParams): Promise<Key
   return { total: Number(countRows[0]?.n ?? 0), results: rows.map(rowToPaper) };
 }
 
-// --- verifyReferences: the lit-check three-tier matcher (localwip/lit-check/SKILL.md) ---
+// --- verifyReferences: the lit-check three-tier matcher (local_context/lit-check/SKILL.md) ---
 
 const TITLE_STOPWORDS = new Set(["their", "which", "these", "those", "about", "between", "through"]);
 
