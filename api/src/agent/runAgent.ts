@@ -232,6 +232,7 @@ export async function runAgent(
             fail(round2.message, round2.recoverable);
             return { paused: false };
           }
+          console.error(`[agent] ${searchId} refine round failed, keeping round 1: ${round2.message}`);
           emit({ type: "progress", label: "The refine pass didn't return more — showing the first set." });
         } else if (advice.mode === "replace") {
           // Discard round 1: the prior approach was wrong and was re-derived this round.

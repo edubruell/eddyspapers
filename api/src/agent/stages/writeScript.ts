@@ -191,6 +191,7 @@ export async function writeScript(opts: WriteScriptOpts): Promise<WriteScriptRes
       return { ok: true, script, strategy, attempts: attempt, usage: totalUsage };
     }
 
+    console.error(`[write] attempt${attempt} script rejected | ${modelId} | ${check.reason} | node: ${check.offendingNode.replace(/\s+/g, " ").slice(0, 200)}`);
     lastScript = script;
     lastRejection = { reason: check.reason, offendingNode: check.offendingNode, hint: check.hint };
   }

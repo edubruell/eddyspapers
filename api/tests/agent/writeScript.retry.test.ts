@@ -55,6 +55,19 @@ describe("writeScript retry loop on LLM error", () => {
     expect(modelIdOfCall(1)).toBe("sturdy-retry");
   });
 
+  it("escalates to the retry model when the writer call times out", async () => {
+    const writeScript = await load();
+    generateStructured
+      .mockRejectedValueOnce(new DOMException("The operation was aborted due to timeout", "TimeoutError"))
+      .mockResolvedValueOnce({ object: { strategy: "plan", script: "x <- 1" }, usage: USAGE });
+
+    const result = await writeScript({ brief: BRIEF, dbDate: "2026-06-05" });
+
+    expect(result.ok).toBe(true);
+    expect(modelIdOfCall(0)).toBe("cheap-writer");
+    expect(modelIdOfCall(1)).toBe("sturdy-retry");
+  });
+
   it("surfaces the LLM error only after all three attempts are exhausted", async () => {
     const writeScript = await load();
     generateStructured.mockRejectedValue(new Error("No object generated: response did not match schema"));

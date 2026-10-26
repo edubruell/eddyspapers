@@ -40,18 +40,31 @@ const JSON_MODE_MODELS = /^qwen\/qwen3\.8-/;
 export const structuredMode = (modelId: string): "auto" | "json" =>
   JSON_MODE_MODELS.test(modelId) ? "json" : "auto";
 
+// The writer returns ~3k tokens in 25-35s. A provider stall once held a lit_search open for
+// ten minutes before the escalation to the retry model could run; the signal covers the SDK's
+// own retries too, so this caps the whole call. Every caller already treats a throw as
+// "fall back" (escalate, skip refine, proceed without clarifying).
+const DEFAULT_STRUCTURED_TIMEOUT_MS = 90_000;
+
 export async function generateStructured<T>(opts: {
   model: LanguageModelV1;
   modelId: string;
   messages: CoreMessage[];
   schema: z.ZodType<T>;
   stage: string;
+  timeoutMs?: number;
 }): Promise<{ object: T; usage: UsageSummary }> {
+  const started = Date.now();
   const result = await generateObject({
     model: opts.model,
     messages: opts.messages,
     schema: opts.schema,
     mode: structuredMode(opts.modelId),
+    abortSignal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_STRUCTURED_TIMEOUT_MS),
+  }).catch((err: unknown) => {
+    const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.error(`[llm] ${opts.stage} FAILED | ${opts.modelId} | ${Date.now() - started}ms | ${message.slice(0, 500)}`);
+    throw err;
   });
 
   const raw = result.usage as {
