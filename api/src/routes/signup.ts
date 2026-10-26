@@ -4,7 +4,7 @@ import { getAppDataDb } from "../db/singleton.js";
 import { getKeyRegistry, generateKey } from "../auth/keys.js";
 import { revokeToken, revokeTokenId, revokeTokenMatches } from "../auth/revokeToken.js";
 import { getMailer } from "../mail/mailer.js";
-import { keyMail, DELIVERY_NOTE, SUPPORT_EMAIL } from "../mail/keyMail.js";
+import { keyMail, DELIVERY_NOTE, SUPPORT_EMAIL, SITE_URL } from "../mail/keyMail.js";
 import type { Scope } from "../db/appdata.js";
 
 // Public self-serve MCP key minting (public_access/01_signup_site.md). The ONLY route that
@@ -94,7 +94,9 @@ signupRoute.post("/key", async (c) => {
   // cooldown counts attempts, not successes.
   await db.recordMailSend(email, kind);
 
-  const revokeUrl = `${new URL(c.req.url).origin}/signup/revoke?token=${revokeToken(keyHash)}`;
+  // Behind nginx the request origin is the plain-http host with the /api/ prefix stripped,
+  // which lands on the static site's 404, so the link is built from the public URL.
+  const revokeUrl = `${SITE_URL}/api/signup/revoke?token=${revokeToken(keyHash)}`;
   try {
     await mailer.send(keyMail({ to: email, name, key, revokeUrl, kind }));
   } catch (e) {
@@ -145,32 +147,40 @@ async function keyHashForToken(token: string): Promise<string | null> {
 
 // GET renders a confirmation form rather than revoking: mail clients and link scanners
 // prefetch URLs, and a scanner must not be able to kill someone's key by looking at it.
+const revokePage = (body: string): string =>
+  `<!doctype html><meta charset="utf-8"><title>Revoke key</title>
+   <body style="font:16px/1.5 system-ui;max-width:34rem;margin:4rem auto;padding:0 1rem">${body}</body>`;
+
+const INVALID_LINK = `<h1>Link not valid</h1><p>This key may already have been revoked or replaced.</p>`;
+
 signupRoute.get("/revoke", async (c) => {
   const token = c.req.query("token") ?? "";
   const ok = (await keyHashForToken(token)) != null;
+  // A relative action, so the form posts back through whatever prefix served this page.
   const body = ok
     ? `<h1>Revoke this key?</h1>
        <p>This deletes the key and the name, address and institution stored with it.</p>
-       <form method="post" action="/signup/revoke">
+       <form method="post" action="revoke">
          <input type="hidden" name="token" value="${token.replace(/[^0-9a-f.]/g, "")}">
          <button type="submit">Revoke my key</button>
        </form>`
-    : `<h1>Link not valid</h1><p>This key may already have been revoked or replaced.</p>`;
-  return c.html(
-    `<!doctype html><meta charset="utf-8"><title>Revoke key</title>
-     <body style="font:16px/1.5 system-ui;max-width:34rem;margin:4rem auto;padding:0 1rem">${body}</body>`,
-    ok ? 200 : 404,
-  );
+    : INVALID_LINK;
+  return c.html(revokePage(body), ok ? 200 : 404);
 });
 
 signupRoute.post("/revoke", async (c) => {
-  const form = c.req.header("content-type")?.includes("json")
+  const isJson = c.req.header("content-type")?.includes("json") ?? false;
+  const form = isJson
     ? ((await c.req.json().catch(() => ({}))) as Record<string, unknown>)
-    : Object.fromEntries(await c.req.formData());
+    : Object.fromEntries(await c.req.formData().catch(() => new FormData()));
   const token = String(form.token ?? "");
 
   const keyHash = await keyHashForToken(token);
-  if (!keyHash) return c.json({ error: "Link not valid. This key may already have been revoked." }, 404);
+  if (!keyHash) {
+    return isJson
+      ? c.json({ error: "Link not valid. This key may already have been revoked." }, 404)
+      : c.html(revokePage(INVALID_LINK), 404);
+  }
 
   const db = await getAppDataDb();
   await db.revokeKey(keyHash.slice(0, 12));
@@ -180,5 +190,11 @@ signupRoute.post("/revoke", async (c) => {
     [keyHash],
   );
   await getKeyRegistry().ensureFresh(true);
-  return c.json({ revoked: true });
+  return isJson
+    ? c.json({ revoked: true })
+    : c.html(
+        revokePage(
+          `<h1>Key revoked</h1><p>The key no longer works, and the name, address and institution stored with it are deleted.</p>`,
+        ),
+      );
 });

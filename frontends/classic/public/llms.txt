@@ -1,0 +1,55 @@
+# Eddy's Papers
+
+> Semantic search over about 488,000 economics papers from RePEc (journal articles from 1995, working papers from 2010) and about 89,000 registered RePEc authors. AI assistants can use it through an MCP server: search papers, run a whole literature search, find economists by topic, and check a bibliography against the corpus. Access is free for researchers with a key sent by email.
+
+Eddy's Papers is a private side project by Eduard Brüll (ZEW Mannheim). Papers carry abstracts, BibTeX, JEL codes, DOIs where known, RePEc citation links, and, for about half the corpus, OpenAlex metrics (retraction flag, open-access link, field-weighted citation impact). The corpus holds abstracts and metadata only, not full text.
+
+## Get a key
+
+A person asks for a key with their name and email address. The key is mailed to that address and is never shown on the page or returned by the API, so an assistant cannot sign up on someone's behalf without that person reading their mail.
+
+- Web form: https://econpapers.eduard-bruell.de/mcp
+- API: `POST https://econpapers.eduard-bruell.de/api/signup/key` with JSON `{"name": "...", "email": "...", "institution": "..."}` (institution is optional). A success answers 201 with `"status": "sent"`.
+- One active key per address. Asking again replaces the old key, which stops working. Each address can ask once every 10 minutes and three times a day.
+- Delivery can take up to 24 hours. If nothing arrives, write to eduard.bruell@zew.de.
+- Every key mail has a link that revokes the key and deletes the name, address and institution stored with it.
+
+## Connect
+
+- MCP endpoint (streamable HTTP): `https://agenticsearch.eduard-bruell.de/mcp`
+- Auth header: `Authorization: Bearer YOUR_KEY` (or `x-api-key: YOUR_KEY`)
+- Claude Code: `claude mcp add --transport http eddysearch https://agenticsearch.eduard-bruell.de/mcp --header "Authorization: Bearer YOUR_KEY"`
+- Claude app (web or desktop): add a custom connector with the endpoint above, choose no sign-in, and set the request header `x-api-key` to the key.
+- Claude desktop app, if the connector form has no request headers: install the extension file https://econpapers.eduard-bruell.de/eddysearch.mcpb and paste the key when asked.
+- Clients that only speak stdio: `npx -y mcp-remote https://agenticsearch.eduard-bruell.de/mcp --header "Authorization: Bearer YOUR_KEY"`
+- To check the connection, call `corpus_context`. It answers with the corpus size and the valid filter values.
+
+## Tools
+
+- `corpus_context`: valid journal categories and series, corpus sizes, and how to write a query. Call it before guessing filter values.
+- `find_papers`: vector search. Write the query as 3 to 6 sentences of abstract-style prose about mechanism, method and setting, not keyword labels.
+- `keyword_search`: literal search over titles by default, or abstracts and authors, for exhaustive term sweeps and known titles.
+- `find_people`: economists ranked by how much of their work overlaps a research topic.
+- `verify_references`: checks a bibliography against the corpus and flags unmatched entries and wrong years, journals or authors. `author_lastnames` is semicolon-separated last names only, e.g. `"Acemoglu; Robinson"`.
+- `lit_search`: one call runs a whole literature search on the server and returns the papers, BibTeX, a CSV, a section outline and the search script. You write the review from the rows. Large runs come back as a handle.
+- `fetch_search`: reads the BibTeX, CSV, full records or script of an earlier `lit_search` run made with the same key.
+
+Hourly limits per key: `lit_search` 20, `find_papers` 120, `find_people` 120.
+
+## Skills
+
+Two Claude skills that drive the tools above. Unzip into `~/.claude/skills/` and call them by name with a slash.
+
+- [lit-search](https://econpapers.eduard-bruell.de/skills/lit-search.zip): a research question in, a review, a .bib file and a results table out.
+- [lit-check](https://econpapers.eduard-bruell.de/skills/lit-check.zip): checks every entry of a bibliography and reports what could not be verified.
+
+## Websites
+
+- [Semantic search](https://econpapers.eduard-bruell.de): the search site for people, no key needed.
+- [EconPeople](https://econpeople.eduard-bruell.de): find economists by research area.
+- [MCP access and setup](https://econpapers.eduard-bruell.de/mcp)
+- [FAQ](https://econpapers.eduard-bruell.de/faq)
+
+## Optional
+
+- [API reference (JSON)](https://econpapers.eduard-bruell.de/api/docs): field conventions for every tool and the REST endpoints. The REST endpoints need a key with the `rest` scope, which self-serve keys do not carry.

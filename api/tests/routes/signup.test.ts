@@ -105,6 +105,12 @@ describe("POST /signup/key", () => {
     expect(text).toMatch(/\/signup\/revoke\?token=[0-9a-f]{12}\.[0-9a-f]{32}/);
   });
 
+  it("builds the revoke link from the public URL with the /api/ prefix, not the request origin", async () => {
+    await signup({ name: "Ada", email: "ada@zew.de" });
+    expect(sent[0].text).toMatch(/https:\/\/econpapers\.eduard-bruell\.de\/api\/signup\/revoke\?token=/);
+    expect(sent[0].text).not.toMatch(/http:\/\/localhost/);
+  });
+
   it("hardcodes the public scope set — never rest, admin or lit_search_synth", async () => {
     const res = await signup({ name: "Ada", email: "ada@zew.de", scopes: ["admin", "rest"] });
     expect(((await res.json()) as { scopes: string[] }).scopes).toEqual(["mcp", "lit_search"]);
@@ -251,8 +257,49 @@ describe("/signup/revoke", () => {
     await signup({ name: "Ada", email: "ada@zew.de" });
     const res = await app.request(`/signup/revoke?token=${tokenFromMail()}`);
     expect(res.status).toBe(200);
-    expect(await res.text()).toMatch(/<form method="post"/);
+    const html = await res.text();
+    expect(html).toMatch(/<form method="post"/);
+    // Relative, so it posts back through nginx's /api/ prefix instead of to the static site.
+    expect(html).toMatch(/action="revoke"/);
     expect((await keyRows())[0].revoked_at).toBeNull(); // still live
+  });
+
+  it("a browser form POST revokes and answers with a page, not JSON", async () => {
+    await signup({ name: "Ada", email: "ada@zew.de" });
+    const res = await app.request("/signup/revoke", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token: tokenFromMail() }).toString(),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    expect(await res.text()).toMatch(/Key revoked/);
+    expect((await keyRows())[0].revoked_at).not.toBeNull();
+  });
+
+  it("a browser form POST with a dead token gets the invalid-link page", async () => {
+    const res = await app.request("/signup/revoke", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token: `${"a".repeat(12)}.${"b".repeat(32)}` }).toString(),
+    });
+    expect(res.status).toBe(404);
+    expect(await res.text()).toMatch(/Link not valid/);
+  });
+
+  it("a POST with an unparseable body gets the invalid-link page, not a 500", async () => {
+    const res = await app.request("/signup/revoke", {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: "token=whatever",
+    });
+    expect(res.status).toBe(404);
+    expect(await res.text()).toMatch(/Link not valid/);
+  });
+
+  it("the confirm form's relative action resolves to the proxied route", () => {
+    expect(new URL("revoke", "https://econpapers.eduard-bruell.de/api/signup/revoke?token=x").pathname)
+      .toBe("/api/signup/revoke");
   });
 
   it("POST revokes the key and erases the stored identity (GDPR delete path)", async () => {

@@ -19,7 +19,7 @@ export const DELIVERY_NOTE =
   `${SUPPORT_EMAIL} and I will send you a key myself.`;
 
 const MCP_URL = process.env.MCP_PUBLIC_URL ?? "https://agenticsearch.eduard-bruell.de/mcp";
-const SITE_URL = process.env.SITE_PUBLIC_URL ?? "https://econpapers.eduard-bruell.de";
+export const SITE_URL = process.env.SITE_PUBLIC_URL ?? "https://econpapers.eduard-bruell.de";
 
 const SIGNATURE = "Eduard Brüll";
 
