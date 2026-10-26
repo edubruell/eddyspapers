@@ -236,11 +236,30 @@ get_agentic_day_tibble_from_api <- function(day = lubridate::today(),
     dplyr::mutate(day = day)
 }
 
+# MCP usage + self-serve signups (admin route, logged since the 2026-10-26 deploy).
+# Returns signup totals plus a daily and a per-tool tibble.
+get_mcp_stats_from_api <- function(days = 30,
+                                   base = Sys.getenv("AGENTIC_API_BASE", "https://agenticsearch.eduard-bruell.de")){
+  stats <- request(base) |>
+    req_url_path_append("api", "stats", "mcp") |>
+    req_url_query(days = days) |>
+    req_headers("x-agentic-key" = Sys.getenv("AGENTIC_PASSWORD")) |>
+    req_perform() |>
+    resp_body_json()
+  list(
+    signups = as_tibble(stats$signups),
+    daily = map_dfr(stats$daily, as_tibble) |>
+      (\(d) if (nrow(d) > 0) mutate(d, day = as.Date(day)) else d)(),
+    tools = map_dfr(stats$tools, ~ as_tibble(map(.x, ~ .x %||% NA)))
+  )
+}
 
-search_run <- map_dfr(c(7,30,60,90,100,120,140,160,200,240),~{get_stats_from_api(.x) |> 
+
+search_run <- map_dfr(c(7,30,60,90,100,120,140,160,200,240,260,280,300),~{get_stats_from_api(.x) |> 
   as_tibble() |>
   select(-filter_usage) |>
-  unnest(cols = c(days, total_searches, avg_results, avg_response_ms))})
+  unnest(cols = c(days, total_searches, avg_results, avg_response_ms))}) |>
+  distinct()
 
 search_run |>
   mutate(searches_per_day = total_searches/days)
@@ -248,7 +267,12 @@ search_run |>
 get_stats_from_api(7)
 get_stats_from_api(1)
 
-day <- "2026-05-20"
+mcp <- get_mcp_stats_from_api(30)
+mcp$signups
+mcp$daily |> print(n = Inf)
+mcp$tools
+
+day <- "2026-08-24"
 day <- today()
 
 day_query <- day |>

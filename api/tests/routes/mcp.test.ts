@@ -44,6 +44,12 @@ describe("POST /mcp", () => {
     expect(body).toMatch(/serverInfo|protocolVersion/);
   });
 
+  it("answers GET with 405 instead of opening a stream that never closes", async () => {
+    const res = await app.request("/mcp", { method: "GET", headers: { Accept: "text/event-stream" } });
+    expect(res.status).toBe(405);
+    expect(res.headers.get("Allow")).toBe("POST, DELETE");
+  });
+
   it("rejects a request with no Accept for the event stream", async () => {
     const res = await app.request("/mcp", {
       method: "POST",

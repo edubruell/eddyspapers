@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getSearchDb, getCorpusDb, getAppDataDb } from "../db/singleton.js";
 import { requireKey } from "../middleware/requireKey.js";
 import { getSearchStats } from "../db/classic.js";
+import { getMcpStats } from "../db/mcpLog.js";
 
 export const statsRoute = new Hono();
 
@@ -25,6 +26,17 @@ statsRoute.get("/agentic/dailylogs", requireKey("admin"), async (c) => {
   }
   const db = await getSearchDb();
   return c.json(await db.getDailyLogs(day));
+});
+
+// ── MCP usage + self-serve signups. Admin: it counts per key, and the tool mix of a
+// handful of named users is not for the public frontend key.
+statsRoute.get("/mcp", requireKey("admin"), async (c) => {
+  const days = Number(c.req.query("days") ?? "30");
+  if (!Number.isInteger(days) || days <= 0 || days > 3650) {
+    return c.json({ error: "days must be an integer from 1 to 3650" }, 400);
+  }
+  const appdata = await getAppDataDb();
+  return c.json(await getMcpStats(appdata, days));
 });
 
 // ── Classic search-log stats (ported get_search_stats). Kept at 'rest' rather than 'admin':

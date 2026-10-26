@@ -249,6 +249,19 @@ export async function openAppDataDb(): Promise<AppDataDb> {
     )
   `);
 
+  // One row per MCP JSON-RPC request (src/db/mcpLog.ts). nginx sees only `POST /mcp`, not
+  // which tool ran, so without this the MCP side has no usage numbers at all.
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS mcp_call_log (
+      ts TIMESTAMP DEFAULT now(),
+      key_id VARCHAR,
+      method VARCHAR NOT NULL,
+      tool VARCHAR,
+      outcome VARCHAR NOT NULL,
+      ms INTEGER
+    )
+  `);
+
   // Fold any schema change just applied above (notably the jel ADD COLUMN) into the main
   // file NOW, so the WAL never carries an ALTER into a cold-start replay. DuckDB 1.5.3's
   // WAL replay crashes on `ReplayAlter` for ADD COLUMN (BindDefaultValues → "GetDefaultDatabase
