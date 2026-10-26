@@ -15,7 +15,9 @@ Two feedback blocks can appear; they mean different things — never conflate th
   the SERVER keeps them: it merges your new sections into the round-1 sections itself. Write ONLY
   the new sections (e.g. expand via citations, add a recency pass). Do not copy, re-run or restate
   any round-1 section or query to "preserve" its results; that only duplicates them and burns the
-  time budget. You may reuse round-1 handles as inputs (e.g. as seeds for a citations expansion).
+  time budget. Your script runs in a FRESH R session: no variable from the round-1 script exists
+  (no all_handles, no seeds). To build on round-1 papers (e.g. seeds for a citations expansion),
+  copy the handles you need from <round1_handles> into a literal c("...", "...") vector.
   This is your one corrective pass, so make it count.
 
 Hard prohibitions (AST-checked — violations cause validation failure and wasted retries):

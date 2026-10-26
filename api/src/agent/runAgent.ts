@@ -1,6 +1,6 @@
 import type { StreamEvent, StreamEventPayload, Stage, AgentInput, Paper, Person, Section } from "./types.js";
 import { clarify } from "./stages/clarify.js";
-import { writeScript } from "./stages/writeScript.js";
+import { writeScript, type Revision } from "./stages/writeScript.js";
 import { executeScript } from "./stages/execute.js";
 import { assess, summarizeResult } from "./stages/assess.js";
 import { synthesize } from "./stages/synthesize.js";
@@ -39,6 +39,14 @@ function mergeBibtex(a: string, b: string): string {
   }
   return entries.join("\n");
 }
+
+// Paper handles in round-1 rank order, capped so the prompt stays small.
+const ROUND1_HANDLE_CAP = 80;
+const round1Handles = (sections: Section[]): string[] =>
+  [...new Set(sections.filter((s) => s.kind !== "persons").flatMap((s) => s.rows.map((r) => r.handle)))].slice(
+    0,
+    ROUND1_HANDLE_CAP,
+  );
 
 // An augment writer sometimes re-runs round 1 wholesale "to preserve" it, which the merge below
 // already does: every round-1 section then appears twice. A round-2 section is a repeat when a
@@ -104,9 +112,12 @@ export async function runAgent(
   // the prior results).
   const runRound = async (
     dbDate: string,
-    revision: NonNullable<Parameters<typeof writeScript>[0]["revision"]> | undefined,
+    revision: Revision | undefined,
     idOffset: number,
-    keep: (s: Section) => boolean = () => true,
+    // keep: drop repeated sections from an augment round. fallback: round 1 survives a failure of
+    // this round, so an error the script raises is logged rather than streamed: every consumer
+    // (and the web stepper) would read it as the run failing, while the run goes on to `done`.
+    { keep = () => true, fallback = false }: { keep?: (s: Section) => boolean; fallback?: boolean } = {},
   ): Promise<RoundResult> => {
     let tStage = stageEnter("write");
     const writeResult = await writeScript({
@@ -147,7 +158,12 @@ export async function runAgent(
     const executeResult = await executeScript(
       writeResult.script,
       dbPath,
-      (e) => (e.type === "section" && !keep(e.section) ? undefined : emit(e)),
+      (e) =>
+        e.type === "section" && !keep(e.section)
+          ? undefined
+          : e.type === "error" && fallback
+            ? console.error(`[agent] ${searchId} refine round error, round 1 kept: ${e.message.slice(0, 300)}`)
+            : emit(e),
       idOffset,
     );
     if (!executeResult.ok) {
@@ -229,6 +245,11 @@ export async function runAgent(
       if (advice) {
         emit({ type: "revise", reason: advice.reason, mode: advice.mode });
 
+        // augment keeps round-1 intact, so a failed refine pass degrades to the round-1
+        // review with a caveat rather than throwing the good result away. replace had already
+        // discarded round 1 (on the client too), so there is nothing safe to fall back to.
+        const augment = advice.mode === "augment";
+        const canFallBack = augment && (Object.keys(papers).length > 0 || Object.keys(persons).length > 0);
         const round2 = await runRound(
           dbDate,
           {
@@ -236,19 +257,17 @@ export async function runAgent(
             resultSummary: summarizeResult(papers, sections, persons),
             directive: advice.directive,
             mode: advice.mode,
+            round1Handles: round1Handles(sections),
           },
           sections.length, // keep round-2 section ids unique
-          advice.mode === "augment" ? (s) => !isRepeatSection(s, round1.sections) : undefined,
+          {
+            keep: augment ? (s) => !isRepeatSection(s, round1.sections) : undefined,
+            fallback: canFallBack,
+          },
         );
 
         if (!round2.ok) {
-          // augment keeps round-1 intact, so a failed refine pass degrades to the round-1
-          // review with a caveat rather than throwing the good result away. replace had already
-          // discarded round 1 (on the client too), so there is nothing safe to fall back to.
-          if (
-            advice.mode === "replace" ||
-            (Object.keys(papers).length === 0 && Object.keys(persons).length === 0)
-          ) {
+          if (!canFallBack) {
             fail(round2.message, round2.recoverable);
             return { paused: false };
           }

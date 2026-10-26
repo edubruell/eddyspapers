@@ -108,3 +108,42 @@ describe("writeScript <clarification> block injection", () => {
     expect(secondUser).toContain("<rejection>");
   });
 });
+
+describe("writeScript <round1_handles> block", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    generateStructured.mockResolvedValue({
+      object: { strategy: "expand via citations", script: "x <- 1" },
+      usage: { promptTokens: 1, completionTokens: 1, cachedTokens: 0 },
+    });
+    checkScript.mockResolvedValue({ ok: true });
+  });
+
+  const revision = (round1Handles: string[]) => ({
+    previousScript: "all_handles <- c()",
+    resultSummary: "Sections: ...",
+    directive: "Expand via citations.",
+    mode: "augment" as const,
+    round1Handles,
+  });
+
+  it("lists round-1 handles as quoted literals inside <previous_run>", async () => {
+    const { writeScript } = await import("../../src/agent/stages/writeScript.js");
+    await writeScript({ brief, dbDate: "2026-10-26", revision: revision(["RePEc:aea:aecrev:v:1", "RePEc:zbw:zewdip:2"]) });
+    const msg = lastUserMessage();
+    expect(msg).toContain('<round1_handles>\n"RePEc:aea:aecrev:v:1", "RePEc:zbw:zewdip:2"\n</round1_handles>');
+    expect(msg.indexOf("<round1_handles>")).toBeLessThan(msg.indexOf("</previous_run>"));
+  });
+
+  it("omits the block when round 1 found no papers", async () => {
+    const { writeScript } = await import("../../src/agent/stages/writeScript.js");
+    await writeScript({ brief, dbDate: "2026-10-26", revision: revision([]) });
+    expect(lastUserMessage()).not.toContain("<round1_handles>");
+  });
+
+  it("escapes a quote or backslash in a handle so the literal stays valid", async () => {
+    const { writeScript } = await import("../../src/agent/stages/writeScript.js");
+    await writeScript({ brief, dbDate: "2026-10-26", revision: revision(['RePEc:x:y:a"b\\c']) });
+    expect(lastUserMessage()).toContain('<round1_handles>\n"RePEc:x:y:a\\"b\\\\c"\n</round1_handles>');
+  });
+});

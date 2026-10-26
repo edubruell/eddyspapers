@@ -439,3 +439,70 @@ describe("runAgent refine — augment round that repeats round 1", () => {
     expect(events.filter((e) => e.type === "section")).toHaveLength(2);
   });
 });
+
+describe("runAgent refine — augment round that fails mid-script", () => {
+  it("keeps round 1 when the round-2 script raises an R error, and passes round-1 handles to the writer", async () => {
+    const r1 = mkSection("section-1", "Seeds", ["a", "b"]);
+    executeScript
+      .mockImplementationOnce(async (_s: string, _d: string, onEvent: (e: unknown) => void) => {
+        onEvent({ type: "section", section: r1 });
+        return { ok: true, papers: { a: mkPaper("a"), b: mkPaper("b") }, sections: [r1], bibtex: "" };
+      })
+      .mockImplementationOnce(async (_s: string, _d: string, onEvent: (e: unknown) => void) => {
+        onEvent({ type: "error", where: "execute", message: "object 'all_handles' not found", recoverable: false });
+        return { ok: false, message: "R process exited with code 1" };
+      });
+    assess.mockResolvedValue({ reason: "Adding follow-on work.", directive: "Expand via citations.", mode: "augment" });
+    const { runAgent } = await import("../../src/agent/runAgent.js");
+    const events: StreamEvent[] = [];
+    await runAgent("r-r-error", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    expect(events.some((e) => e.type === "progress" && /showing the first set/.test(e.label))).toBe(true);
+    expect(events.at(-1)?.type).toBe("done");
+    const second = writeScript.mock.calls[1]![0] as { revision: { round1Handles: string[] } };
+    expect(second.revision.round1Handles).toEqual(["a", "b"]);
+  });
+
+  it("a replace round's R error stays fatal", async () => {
+    const r1 = mkSection("section-1", "Seeds", ["a"]);
+    executeScript
+      .mockImplementationOnce(async (_s: string, _d: string, onEvent: (e: unknown) => void) => {
+        onEvent({ type: "section", section: r1 });
+        return { ok: true, papers: { a: mkPaper("a") }, sections: [r1], bibtex: "" };
+      })
+      .mockImplementationOnce(async (_s: string, _d: string, onEvent: (e: unknown) => void) => {
+        onEvent({ type: "error", where: "execute", message: "boom", recoverable: false });
+        return { ok: false, message: "R process exited with code 1" };
+      });
+    assess.mockResolvedValue({ reason: "Redoing it.", directive: "Re-derive.", mode: "replace" });
+    const { runAgent } = await import("../../src/agent/runAgent.js");
+    const events: StreamEvent[] = [];
+    await runAgent("r-replace-error", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    expect(events.some((e) => e.type === "error" && !e.recoverable)).toBe(true);
+  });
+});
+
+describe("runAgent refine — round-1 handles for the writer", () => {
+  it("dedups paper handles, skips persons sections and caps the list at 80", async () => {
+    const many = Array.from({ length: 100 }, (_, i) => `h${i}`);
+    const r1 = mkSection("section-1", "Seeds", ["a", ...many]);
+    const r1b = mkSection("section-2", "Again", ["a", "z"]);
+    const people = { ...mkSection("section-3", "People", ["p1"]), kind: "persons" as const };
+    executeScript.mockImplementationOnce(async () => ({
+      ok: true,
+      papers: { a: mkPaper("a") },
+      sections: [r1, r1b, people],
+      bibtex: "",
+    }));
+    executeScript.mockImplementationOnce(async () => ({ ok: true, papers: {}, sections: [], bibtex: "" }));
+    assess.mockResolvedValue({ reason: "More.", directive: "Expand.", mode: "augment" });
+    const { runAgent } = await import("../../src/agent/runAgent.js");
+    await runAgent("r-handles", { brief, refine: true }, "/fake/db.duckdb", () => undefined);
+    const handles = (writeScript.mock.calls[1]![0] as { revision: { round1Handles: string[] } }).revision.round1Handles;
+    expect(handles).toHaveLength(80);
+    expect(handles[0]).toBe("a");
+    expect(handles).not.toContain("p1");
+    expect(new Set(handles).size).toBe(80);
+  });
+});

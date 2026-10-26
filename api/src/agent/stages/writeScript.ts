@@ -23,7 +23,17 @@ export type WriteScriptOpts = {
   // Multistage refine pass (07_multistage.md §6): the script that ran last round, a compact
   // summary of its results, and the assessor's revision directive. Distinct from the
   // validation-retry path — the prior script was VALID and ran; the *strategy* underperformed.
-  revision?: { previousScript: string; resultSummary: string; directive: string; mode: "augment" | "replace" };
+  revision?: Revision;
+};
+
+// round1Handles lets an augment pass seed from round 1's papers: the round-2 script runs in a
+// fresh R session, so round 1's variables are gone and the handles must be written in literally.
+export type Revision = {
+  previousScript: string;
+  resultSummary: string;
+  directive: string;
+  mode: "augment" | "replace";
+  round1Handles: string[];
 };
 
 export type WriteScriptResult =
@@ -67,7 +77,7 @@ function buildUserMessage(
   mustInclude: string[] | undefined,
   dbDate: string,
   clarification: { question: string; answer: string } | undefined,
-  revision: { previousScript: string; resultSummary: string; directive: string; mode: "augment" | "replace" } | undefined,
+  revision: Revision | undefined,
   previousAttempt?: string,
   rejection?: { reason: string; offendingNode: string; hint: string }
 ): string {
@@ -90,7 +100,11 @@ function buildUserMessage(
   if (revision) {
     msg +=
       `\n\n<previous_run>\n<script>\n${revision.previousScript}\n</script>\n` +
-      `<result_summary>\n${revision.resultSummary}\n</result_summary>\n</previous_run>\n\n` +
+      `<result_summary>\n${revision.resultSummary}\n</result_summary>\n` +
+      (revision.round1Handles.length > 0
+        ? `<round1_handles>\n${revision.round1Handles.map((h) => JSON.stringify(h)).join(", ")}\n</round1_handles>\n`
+        : "") +
+      `</previous_run>\n\n` +
       `<revision mode="${revision.mode}">\n${revision.directive}\n</revision>`;
   }
 
