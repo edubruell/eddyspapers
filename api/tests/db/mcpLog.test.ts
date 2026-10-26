@@ -37,6 +37,16 @@ describe("mcpCallRows", () => {
     ]);
   });
 
+  it("counts a tool result flagged _meta.refused as refused, not a tool error", () => {
+    const rows = mcpCallRows(
+      "k",
+      JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "lit_search" } }),
+      JSON.stringify({ jsonrpc: "2.0", id: 1, result: { isError: true, content: [], _meta: { refused: "rate_limit" } } }),
+      1,
+    );
+    expect(rows.map((r) => r.outcome)).toEqual(["refused"]);
+  });
+
   it("skips notifications and survives bodies that are not JSON", () => {
     expect(mcpCallRows("k", JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }), "", 1)).toEqual([]);
     expect(mcpCallRows("k", "not json", "also not", 1)).toEqual([]);
@@ -67,15 +77,16 @@ describe("getMcpStats", () => {
       { keyId: "aaaa", method: "tools/call", tool: "find_papers", outcome: "ok", ms: 100 },
       { keyId: "bbbb", method: "tools/call", tool: "find_papers", outcome: "tool_error", ms: 300 },
       { keyId: "bbbb", method: "tools/call", tool: "lit_search", outcome: "ok", ms: 40000 },
+      { keyId: "bbbb", method: "tools/call", tool: "lit_search", outcome: "refused", ms: 5 },
     ]);
 
     const stats = await getMcpStats(db, 7);
     expect(stats.signups).toEqual({ total_live: 1, in_window: 1 });
     expect(stats.daily).toHaveLength(1);
-    expect(stats.daily[0]).toMatchObject({ signups: 1, requests: 4, tool_calls: 3, active_keys: 2, lit_search_calls: 1 });
+    expect(stats.daily[0]).toMatchObject({ signups: 1, requests: 5, tool_calls: 4, active_keys: 2, lit_search_calls: 2 });
     expect(stats.tools).toEqual([
-      { tool: "find_papers", calls: 2, errors: 1, keys: 2, avg_ms: 200 },
-      { tool: "lit_search", calls: 1, errors: 0, keys: 1, avg_ms: 40000 },
+      { tool: "find_papers", calls: 2, errors: 1, refused: 0, keys: 2, avg_ms: 200, median_ms: 200 },
+      { tool: "lit_search", calls: 2, errors: 0, refused: 1, keys: 1, avg_ms: 40000, median_ms: 40000 },
     ]);
   });
 
@@ -200,7 +211,7 @@ describe("getMcpStats — window and shape", () => {
     stats.daily.forEach((d) => expect(d.day).toMatch(/^\d{4}-\d{2}-\d{2}$/));
     expect(stats.daily[0]!.day < stats.daily[1]!.day).toBe(true);
     expect(stats.daily.map((d) => d.requests)).toEqual([1, 1]);
-    expect(stats.tools).toEqual([{ tool: "lit_search", calls: 1, errors: 1, keys: 1, avg_ms: 10 }]);
+    expect(stats.tools).toEqual([{ tool: "lit_search", calls: 1, errors: 1, refused: 0, keys: 1, avg_ms: 10, median_ms: 10 }]);
     expect((await getMcpStats(db, 365)).tools.map((t) => t.tool)).toEqual(["find_papers", "lit_search"]);
   });
 

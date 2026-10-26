@@ -15,7 +15,11 @@ export async function withRateLimit(
   const limiter = getRateLimiter();
   const gate = limiter.tryAcquire(key.id, cls, key.rateLimitOverrides);
   if (!gate.ok) {
-    return { content: [{ type: "text", text: gate.reason }], isError: true };
+    return {
+      content: [{ type: "text", text: `${gate.reason} Retry in ${gate.retryAfterSec} seconds.` }],
+      isError: true,
+      _meta: { refused: "rate_limit" },
+    };
   }
   try {
     return await fn();

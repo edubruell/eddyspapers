@@ -124,6 +124,12 @@ degraded one: `lit_search` returns results only, and asking the server to write 
 instead (`synthesize: true`) needs a scope that ordinary keys are not granted. Do not
 request it, and do not treat its absence as a failure.
 
+**Long runs come back as `status: "running"`.** A search takes 1-3 minutes, longer with
+`refine: true`. If it is not done after about 40 seconds, the result has `status: "running"`
+and a `search_id`. Wait `retry_after_sec`, then repeat the identical `lit_search` call: it joins
+the running search and returns its results, with no second run and no quota spent. Do not
+reword the brief in between; a different brief is refused while yours is still running.
+
 **Large runs come back as a handle.** A big result set does not fit in one tool result, so
 the response may carry a digest of every paper plus a `search_id` instead of the full
 artifacts. When that happens, pull what you need with `fetch_search`:

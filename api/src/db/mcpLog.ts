@@ -4,9 +4,17 @@ import type { AppDataDb } from "./appdata.js";
 // method, the tool name and the outcome are stored: never arguments, which carry the
 // caller's research questions.
 
-type JsonRpc = { id?: unknown; method?: unknown; params?: { name?: unknown }; result?: { isError?: unknown }; error?: unknown };
+type JsonRpc = {
+  id?: unknown;
+  method?: unknown;
+  params?: { name?: unknown };
+  result?: { isError?: unknown; _meta?: { refused?: unknown } };
+  error?: unknown;
+};
 
-export type McpOutcome = "ok" | "tool_error" | "rpc_error" | "no_reply";
+// "refused": a scope or rate-limit refusal (the tool sets _meta.refused), counted apart from
+// tool errors so a client retrying into the concurrency cap does not read as a broken tool.
+export type McpOutcome = "ok" | "refused" | "tool_error" | "rpc_error" | "no_reply";
 
 export interface McpCallRow {
   keyId: string;
@@ -35,7 +43,9 @@ const outcomeOf = (reply: JsonRpc | undefined): McpOutcome =>
     : reply.error != null
       ? "rpc_error"
       : reply.result?.isError === true
-        ? "tool_error"
+        ? reply.result._meta?.refused != null
+          ? "refused"
+          : "tool_error"
         : "ok";
 
 // Pairs each request (a message with an id; notifications are skipped) with its reply by
@@ -80,7 +90,15 @@ export interface McpStats {
     active_keys: number;
     lit_search_calls: number;
   }[];
-  tools: { tool: string; calls: number; errors: number; keys: number; avg_ms: number | null }[];
+  tools: {
+    tool: string;
+    calls: number;
+    errors: number;
+    refused: number;
+    keys: number;
+    avg_ms: number | null;
+    median_ms: number | null;
+  }[];
 }
 
 const num = (v: unknown): number => Number(v ?? 0);
@@ -121,9 +139,11 @@ export async function getMcpStats(db: AppDataDb, days: number): Promise<McpStats
   );
   const tools = await db.query(
     `SELECT tool, COUNT(*) AS calls,
-            COUNT(*) FILTER (WHERE outcome <> 'ok') AS errors,
+            COUNT(*) FILTER (WHERE outcome NOT IN ('ok', 'refused')) AS errors,
+            COUNT(*) FILTER (WHERE outcome = 'refused') AS refused,
             COUNT(DISTINCT key_id) AS keys,
-            AVG(ms) AS avg_ms
+            AVG(ms) FILTER (WHERE outcome <> 'refused') AS avg_ms,
+            MEDIAN(ms) FILTER (WHERE outcome <> 'refused') AS median_ms
      FROM mcp_call_log
      WHERE ts >= ${since} AND tool IS NOT NULL
      GROUP BY tool ORDER BY calls DESC, tool`,
@@ -144,8 +164,10 @@ export async function getMcpStats(db: AppDataDb, days: number): Promise<McpStats
       tool: String(r.tool),
       calls: num(r.calls),
       errors: num(r.errors),
+      refused: num(r.refused),
       keys: num(r.keys),
       avg_ms: r.avg_ms == null ? null : Math.round(Number(r.avg_ms)),
+      median_ms: r.median_ms == null ? null : Math.round(Number(r.median_ms)),
     })),
   };
 }

@@ -12,6 +12,8 @@ import { getSearchDb } from "../db/singleton.js";
 import { getRateLimiter } from "../auth/rateLimit.js";
 import type { KeyIdentity } from "../auth/keys.js";
 import type { AgentInput, Stage, StreamEvent } from "../agent/types.js";
+import { liveRun, liveRunOf, startRun, waitFor, waitMs, type LiveRun, type RunOutcome } from "./litRuns.js";
+import { bus } from "../stream/bus.js";
 
 // lit_search — the agentic search pipeline over MCP (01_design.md §7.2-§7.5, PLAN.md §C1,
 // Phase 3). One brief in; the server writes a tailored R search script, runs it against the
@@ -199,6 +201,84 @@ function fail(message: string): CallToolResult {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
+// A refusal (missing scope, rate limit) is the caller's to fix, not a server fault. The
+// _meta flag lets the MCP call log count it apart from tool errors (db/mcpLog.ts).
+export function refuse(message: string, reason: "scope" | "rate_limit"): CallToolResult {
+  return { content: [{ type: "text", text: message }], isError: true, _meta: { refused: reason } };
+}
+
+function runningResult(searchId: string, startedAt: number): CallToolResult {
+  const retryAfterSec = 60;
+  const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+  return {
+    content: [
+      {
+        type: "text",
+        text:
+          `The search is still running (started ${elapsedSec}s ago; most runs take 1-3 minutes, a refine ` +
+          `pass longer). In about ${retryAfterSec} seconds, call lit_search again with exactly the same ` +
+          `arguments: that joins this search (search_id '${searchId}') rather than starting a new one, ` +
+          `costs no quota, and returns the results once it is done. Do not change the brief meanwhile; ` +
+          `a different brief is refused until this one finishes.`,
+      },
+    ],
+    structuredContent: { status: "running", search_id: searchId, elapsed_sec: elapsedSec, retry_after_sec: retryAfterSec },
+  };
+}
+
+const failedMessage = (events: StreamEvent[]): string => {
+  const errored = events.find((e) => e.type === "error" && !e.recoverable);
+  return errored && "message" in errored ? errored.message : "Search ended without a result.";
+};
+
+// Runs the pipeline and records the result in the store. Mirrors the web /chat path: only a
+// run that emitted a terminal `done` without a fatal error is finalized (and cached) as done.
+async function executeRun(
+  searchId: string,
+  input: AgentInput,
+  snapshotPath: string,
+  onEvent: (e: StreamEvent) => void,
+): Promise<RunOutcome> {
+  const db = await getSearchDb();
+  const events: StreamEvent[] = [];
+  // A throw would otherwise leave the row 'running', which fetch_search reads as a restart.
+  const result = await runAgent(searchId, input, snapshotPath, (e) => {
+    events.push(e);
+    onEvent(e);
+  }).catch(async (err: unknown) => {
+    await db.appendEvents(searchId, events).catch(() => undefined);
+    await db.finalizeSearch(searchId, "error", "").catch(() => undefined);
+    throw err;
+  });
+  await db.appendEvents(searchId, events);
+
+  // skip_clarify=false and the clarifier asked → surface the questions as a non-error
+  // structured result (§7.3). The run is left awaiting_clarification in the store, but
+  // MCP has no resume path — the caller re-invokes lit_search with a sharper brief.
+  if (result.paused) {
+    const clar = events.find((e) => e.type === "clarify");
+    const question = clar && "question" in clar ? clar.question : "";
+    const options = clar && "options" in clar ? clar.options : [];
+    await db.setAwaitingClarification(searchId, question);
+    return { kind: "clarify", question, options };
+  }
+
+  const done = !events.some((e) => e.type === "error" && !e.recoverable) && events.some((e) => e.type === "done");
+  await db.finalizeSearch(searchId, done ? "done" : "error", collectSynthesis(events));
+  return done ? { kind: "done", events } : { kind: "failed", message: failedMessage(events) };
+}
+
+function outcomeResult(searchId: string, brief: string, outcome: RunOutcome, deliver: DeliverMode): CallToolResult {
+  switch (outcome.kind) {
+    case "done":
+      return litResult(buildBundle(searchId, brief, outcome.events), deliver);
+    case "clarify":
+      return needsClarificationResult(searchId, outcome.question, outcome.options);
+    case "failed":
+      return fail(`Search failed: ${outcome.message}`);
+  }
+}
+
 export function registerLitSearch(server: McpServer, key: KeyIdentity | null = null): void {
   registerFetchSearch(server, key);
   server.registerTool(
@@ -210,7 +290,11 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
         "tailored R search script (semantic + keyword + journal/author scans), runs it against the corpus, " +
         "and returns the retrieved papers, a deduped BibTeX bundle, a flat CSV, the section structure, and " +
         "the script itself — so you don't chain find_papers/keyword_search yourself and the retrieval never " +
-        "enters your context. Takes ~30s.\n\n" +
+        "enters your context. Takes 1-3 minutes; refine=true can take several more.\n\n" +
+        "LONG RUNS. The call waits about 40 seconds. A run that is not done by then comes back with " +
+        "status='running' and its search_id. Call lit_search again with exactly the same arguments after " +
+        "retry_after_sec: it joins the running search (no second run, no quota) and returns the results " +
+        "once done. A different brief is refused while one of your searches is running.\n\n" +
         "MODES. By default (synthesize=false) this returns RESULTS ONLY: you get the rows and write the " +
         "review yourself. Set synthesize=true to have the server write the mini-review as well — that is " +
         "the expensive stage and it requires an API key granted the 'lit_search_synth' scope; without it " +
@@ -290,16 +374,17 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
         // is keyed on brief+snapshot, not on key). A null key means the gate is disabled
         // (dev / local stdio) — no scope check, no limiting.
         if (key && !key.scopes.includes("lit_search")) {
-          return fail("This API key lacks the 'lit_search' scope.");
+          return refuse("This API key lacks the 'lit_search' scope.", "scope");
         }
         // Server-side synthesis is the one stage billed to this server, so it carries its own
         // grant. Refuse rather than downgrade: a caller that silently got no review would
         // report the tool as broken instead of writing the review itself.
         if (input.synthesize && key && !key.scopes.includes("lit_search_synth")) {
-          return fail(
+          return refuse(
             "Server-side synthesis is off by default and this API key lacks the 'lit_search_synth' " +
               "scope. Re-invoke with synthesize=false to get the papers, BibTeX, CSV and script, and " +
               "write the review yourself.",
+            "scope",
           );
         }
 
@@ -315,51 +400,72 @@ export function registerLitSearch(server: McpServer, key: KeyIdentity | null = n
           return litResult(buildBundle(searchId, a.brief, existing.events), deliver);
         }
 
+        // The same brief already running for this server (a client retrying after its own
+        // timeout): join that run instead of starting or refusing a second one. The caller
+        // supplied the exact inputs the run was keyed on, so it becomes an owner too.
+        const join = async (live: LiveRun): Promise<CallToolResult> => {
+          const outcome = await waitFor(live, waitMs());
+          return outcome ? outcomeResult(searchId, a.brief, outcome, deliver) : runningResult(searchId, live.startedAt);
+        };
+        const joined = liveRun(searchId);
+        if (joined) {
+          await recordRunOwner(searchId, key);
+          return join(joined);
+        }
+
+        // The web /chat face runs the same ids on its own bus; resetting its row here would
+        // wipe a live run (or a pending clarifier reply), so leave it to finish and cache.
+        if (bus.isLive(searchId)) {
+          return fail(
+            "This exact search is already running in the web app. Call lit_search again with the same " +
+              "arguments in about a minute to get its results.",
+          );
+        }
+
         // A real run costs model tokens: apply the per-key rate limit + single-concurrent
-        // cap (PLAN.md §D1). Cache hits skip this — a repeat is free.
+        // cap (PLAN.md §D1). Cache hits and joins skip this — neither starts a run.
         const limiter = getRateLimiter();
         const gate = key ? limiter.tryAcquire(key.id, "lit_search", key.rateLimitOverrides) : ({ ok: true } as const);
-        if (!gate.ok) return fail(gate.reason);
-
-        try {
-          await db.upsertSearch(searchId, { ...input, dbSnapshotDate });
-          await recordRunOwner(searchId, key);
-
-          const events: StreamEvent[] = [];
-          const forward = progressForwarder(extra, input.synthesize ? 5 : 4);
-          const result = await runAgent(searchId, input, snapshot.path, (e) => {
-            events.push(e);
-            forward(e);
-          });
-          await db.appendEvents(searchId, events);
-
-          // skip_clarify=false and the clarifier asked → surface the questions as a non-error
-          // structured result (§7.3). The run is left awaiting_clarification in the store, but
-          // MCP has no resume path — the caller re-invokes lit_search with a sharper brief.
-          if (result.paused) {
-            const clar = events.find((e) => e.type === "clarify");
-            const question = clar && "question" in clar ? clar.question : "";
-            const options = clar && "options" in clar ? clar.options : [];
-            await db.setAwaitingClarification(searchId, question);
-            return needsClarificationResult(searchId, question, options);
-          }
-
-          // Only a run that emitted a terminal `done` is finalized (and cached) as done —
-          // mirrors the web /chat path (chat.ts) so a truncated run that returned without a
-          // done/error is never persisted as a complete, cache-servable result.
-          const errored = events.find((e) => e.type === "error" && !e.recoverable);
-          const hasDone = events.some((e) => e.type === "done");
-          const synthesis = collectSynthesis(events);
-          const status = !errored && hasDone ? "done" : "error";
-          await db.finalizeSearch(searchId, status, synthesis);
-          if (status === "error") {
-            const message = errored && "message" in errored ? errored.message : "Search ended without a result.";
-            return fail(`Search failed: ${message}`);
-          }
-          return litResult(buildBundle(searchId, a.brief, events), deliver);
-        } finally {
-          if (key) limiter.release(key.id, "lit_search");
+        if (!gate.ok) {
+          const busyWith = key ? liveRunOf(key.id) : undefined;
+          return refuse(
+            busyWith
+              ? `${gate.reason} Your search '${busyWith}' is still running. Collect it first by calling ` +
+                  `lit_search again with that search's exact arguments, then start this one.`
+              : `${gate.reason} Retry in ${gate.retryAfterSec} seconds.`,
+            "rate_limit",
+          );
         }
+
+        const release = (): void => {
+          if (key) limiter.release(key.id, "lit_search");
+        };
+        try {
+          await db.restartSearch(searchId, { ...input, dbSnapshotDate });
+          await recordRunOwner(searchId, key);
+        } catch (err) {
+          release();
+          throw err;
+        }
+
+        // A concurrent identical call (another key, or the ungated null key) may have started
+        // the run during the awaits above; join it rather than launch a second runner.
+        const raced = liveRun(searchId);
+        if (raced) {
+          release();
+          return join(raced);
+        }
+
+        // Progress goes to this call only while it waits; once it hands back the search_id
+        // the transport is closed and the run carries on unobserved.
+        const forward = progressForwarder(extra, input.synthesize ? 5 : 4);
+        const attached = { now: true };
+        const run = startRun(searchId, key?.id ?? null, () =>
+          executeRun(searchId, input, snapshot.path, (e) => attached.now && forward(e)).finally(release),
+        );
+        const outcome = await waitFor(run, waitMs());
+        attached.now = false;
+        return outcome ? outcomeResult(searchId, a.brief, outcome, deliver) : runningResult(searchId, run.startedAt);
       } catch (err) {
         return fail(err instanceof Error ? err.message : String(err));
       }
@@ -387,7 +493,9 @@ export function registerFetchSearch(server: McpServer, key: KeyIdentity | null =
         "made earlier — your own runs stay readable, no re-search and no tokens spent. Fetch only what you " +
         "need: the BibTeX to write a .bib, the CSV or papers to inspect abstracts, the script to see " +
         "how the search was built. 'papers' and 'csv' carry abstracts and are paginated — walk them " +
-        "with next_offset. Start with 'overview' if you don't know what the run contains.",
+        "with next_offset. Start with 'overview' if you don't know what the run contains. For a run " +
+        "lit_search returned as status='running', this call waits up to about 40 seconds for it; if it " +
+        "is still not done you get status='running' again, so call once more after retry_after_sec.",
       inputSchema: {
         search_id: z.string().min(4).describe("The search_id returned by lit_search"),
         part: z.enum(SEARCH_PARTS).describe(`Which artifact to read. ${partList}`),
@@ -399,13 +507,37 @@ export function registerFetchSearch(server: McpServer, key: KeyIdentity | null =
     async (a): Promise<CallToolResult> => {
       try {
         if (key && !key.scopes.includes("lit_search")) {
-          return fail("This API key lacks the 'lit_search' scope.");
+          return refuse("This API key lacks the 'lit_search' scope.", "scope");
         }
         // Ownership (S6): a stored run is readable only by the key that made it. The
         // not-found and not-yours answers are deliberately the SAME message — distinguishing
         // them would turn this tool into an oracle for which run ids exist.
-        const run = (await ownsRun(a.search_id, key)) ? await loadRun(a.search_id) : null;
-        if (!run) return fail(`No stored search with id '${a.search_id}' readable by this key. Run lit_search first.`);
+        const notFound = fail(`No stored search with id '${a.search_id}' readable by this key. Run lit_search first.`);
+        if (!(await ownsRun(a.search_id, key))) return notFound;
+
+        // A run lit_search handed back as still running: wait for it here, so the caller
+        // polls at most every waitMs() instead of spinning.
+        const live = liveRun(a.search_id);
+        if (live && (await waitFor(live, waitMs())) === null) return runningResult(a.search_id, live.startedAt);
+
+        const run = await loadRun(a.search_id);
+        if (!run) return notFound;
+        switch (run.search.status) {
+          case "running":
+            return fail(
+              "This search was interrupted before it finished, most likely by a server restart. " +
+                "Call lit_search again with the same brief to rerun it.",
+            );
+          case "error":
+            return fail(`Search failed: ${failedMessage(run.search.events)}`);
+          case "awaiting_clarification":
+            return fail(
+              `This search stopped to ask a clarifying question: ${run.search.clarifyQuestion ?? ""} ` +
+                "Call lit_search again with a sharper brief.",
+            );
+          case "done":
+            break;
+        }
 
         const { text, data } = searchPart(run.bundle, a.part as SearchPart, {
           offset: a.offset,

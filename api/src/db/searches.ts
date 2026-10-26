@@ -54,6 +54,10 @@ export interface SearchDb {
   // (running/awaiting_clarification) or done — so only ONE runAgent ever launches per id,
   // closing the concurrent-duplicate-POST race that let two runners publish to one bus.
   claimSearch(id: string, input: AgentInput & { dbSnapshotDate: string }): Promise<boolean>;
+  // MCP start of a run: insert it, or reset any row that is not done. The MCP face tracks
+  // its live runs in memory (mcp/litRuns.ts), so a non-done row it is not running is an
+  // errored, abandoned or restart-orphaned attempt whose events must not leak into the new run.
+  restartSearch(id: string, input: AgentInput & { dbSnapshotDate: string }): Promise<void>;
   appendEvents(id: string, newEvents: StreamEvent[]): Promise<void>;
   finalizeSearch(id: string, status: "done" | "error", synthesis: string): Promise<void>;
   // Suspend a run awaiting the user's clarifier reply (06_clarifier.md §3, Phase A).
@@ -193,6 +197,25 @@ export async function openSearchDb(): Promise<SearchDb> {
         ],
       );
       return claimed.length > 0;
+    },
+
+    async restartSearch(id, input) {
+      await conn.run(
+        `INSERT INTO searches (id, brief, categories, min_year, db_snapshot_date, events, refine)
+         VALUES (?, ?, ?, ?, ?, '[]', ?)
+         ON CONFLICT (id) DO UPDATE
+           SET status = 'running', events = '[]', synthesis = NULL,
+               clarify_question = NULL, clarify_answer = NULL
+           WHERE searches.status <> 'done'`,
+        [
+          id,
+          input.brief,
+          input.categories ? JSON.stringify(input.categories) : null,
+          input.minYear ?? null,
+          input.dbSnapshotDate,
+          input.refine ?? false,
+        ] as never,
+      );
     },
 
     async appendEvents(id, newEvents) {

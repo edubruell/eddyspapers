@@ -43,6 +43,13 @@ export class EventBus {
     return () => { e.listeners.delete(cb); };
   }
 
+  // A run has published (or paused on a clarifier) under this id and has not finished. A bare
+  // subscribe also creates an entry, so an entry with no events is only a waiting viewer.
+  isLive(searchId: string): boolean {
+    const e = this.entries.get(searchId);
+    return e != null && e.events.length > 0 && !e.done;
+  }
+
   isDone(searchId: string): boolean {
     return this.entries.get(searchId)?.done ?? false;
   }
