@@ -40,6 +40,18 @@ function mergeBibtex(a: string, b: string): string {
   return entries.join("\n");
 }
 
+// An augment writer sometimes re-runs round 1 wholesale "to preserve" it, which the merge below
+// already does: every round-1 section then appears twice. A round-2 section is a repeat when a
+// round-1 section has the same title and mode and it finds no handle round 1 lacked.
+export function isRepeatSection(section: Section, round1: Section[]): boolean {
+  const norm = (t: string): string => t.trim().toLowerCase().replace(/\s+/g, " ");
+  const seen = new Set(round1.flatMap((s) => s.rows.map((r) => r.handle)));
+  return (
+    round1.some((s) => norm(s.title) === norm(section.title) && s.mode === section.mode) &&
+    section.rows.every((r) => seen.has(r.handle))
+  );
+}
+
 export async function runAgent(
   searchId: string,
   input: AgentInput,
@@ -94,6 +106,7 @@ export async function runAgent(
     dbDate: string,
     revision: NonNullable<Parameters<typeof writeScript>[0]["revision"]> | undefined,
     idOffset: number,
+    keep: (s: Section) => boolean = () => true,
   ): Promise<RoundResult> => {
     let tStage = stageEnter("write");
     const writeResult = await writeScript({
@@ -131,7 +144,12 @@ export async function runAgent(
 
     // Execute.
     tStage = stageEnter("execute");
-    const executeResult = await executeScript(writeResult.script, dbPath, (e) => emit(e), idOffset);
+    const executeResult = await executeScript(
+      writeResult.script,
+      dbPath,
+      (e) => (e.type === "section" && !keep(e.section) ? undefined : emit(e)),
+      idOffset,
+    );
     if (!executeResult.ok) {
       stageExit("execute", tStage);
       return { ok: false, recoverable: false, message: `Execution failed: ${executeResult.message}` };
@@ -149,7 +167,7 @@ export async function runAgent(
       script: writeResult.script,
       papers: executeResult.papers,
       persons: executeResult.persons ?? {},
-      sections: executeResult.sections,
+      sections: executeResult.sections.filter(keep),
       bibtex: executeResult.bibtex,
       partial: executeResult.partial,
     };
@@ -220,6 +238,7 @@ export async function runAgent(
             mode: advice.mode,
           },
           sections.length, // keep round-2 section ids unique
+          advice.mode === "augment" ? (s) => !isRepeatSection(s, round1.sections) : undefined,
         );
 
         if (!round2.ok) {

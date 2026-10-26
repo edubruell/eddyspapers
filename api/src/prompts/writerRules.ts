@@ -12,8 +12,11 @@ Two feedback blocks can appear; they mean different things — never conflate th
   judged the *strategy* underperformed. Change the APPROACH as the directive instructs — do not
   just resubmit the same plan. mode="replace" → the prior approach was wrong; re-derive it
   correctly (you may drop what it produced). mode="augment" → the prior results were fine and
-  should stand; this pass should ADD new results (e.g. expand via citations, add a recency pass)
-  on top of them. This is your one corrective pass, so make it count.
+  the SERVER keeps them: it merges your new sections into the round-1 sections itself. Write ONLY
+  the new sections (e.g. expand via citations, add a recency pass). Do not copy, re-run or restate
+  any round-1 section or query to "preserve" its results; that only duplicates them and burns the
+  time budget. You may reuse round-1 handles as inputs (e.g. as seeds for a citations expansion).
+  This is your one corrective pass, so make it count.
 
 Hard prohibitions (AST-checked — violations cause validation failure and wasted retries):
 - No library() or require() calls. All verbs are pre-attached. Loading packages bypasses the allowlist.

@@ -378,3 +378,64 @@ describe("runAgent refine — revise (augment)", () => {
     }
   });
 });
+
+describe("runAgent refine — augment round that repeats round 1", () => {
+  it("isRepeatSection: same title and mode with no new handle is a repeat; a new handle or title is not", async () => {
+    const { isRepeatSection } = await import("../../src/agent/runAgent.js");
+    const r1 = [mkSection("section-1", "Semantic: bargaining extensions", ["a", "b"])];
+    expect(isRepeatSection(mkSection("section-7", "  semantic:  Bargaining extensions ", ["b", "a"]), r1)).toBe(true);
+    expect(isRepeatSection(mkSection("section-7", "Semantic: bargaining extensions", []), r1)).toBe(true);
+    expect(isRepeatSection(mkSection("section-7", "Semantic: bargaining extensions", ["a", "z"]), r1)).toBe(false);
+    expect(isRepeatSection(mkSection("section-7", "Follow-on work", ["a", "b"]), r1)).toBe(false);
+    expect(isRepeatSection({ ...mkSection("section-7", "Semantic: bargaining extensions", ["a"]), mode: "keyword" as const }, r1)).toBe(false);
+  });
+
+  it("drops round-2 sections that re-run round 1, from the live events and from the merged result", async () => {
+    const r1 = mkSection("section-1", "Seeds", ["a", "b"]);
+    executeScript
+      .mockImplementationOnce(async (_s: string, _d: string, onEvent: (e: unknown) => void) => {
+        onEvent({ type: "section", section: r1 });
+        return { ok: true, papers: { a: mkPaper("a"), b: mkPaper("b") }, sections: [r1], bibtex: "" };
+      })
+      .mockImplementationOnce(async (_s: string, _d: string, onEvent: (e: unknown) => void) => {
+        const repeat = mkSection("section-2", "Seeds", ["a", "b"]);
+        const added = mkSection("section-3", "Follow-on work", ["c"]);
+        onEvent({ type: "section", section: repeat });
+        onEvent({ type: "section", section: added });
+        return { ok: true, papers: { a: mkPaper("a"), b: mkPaper("b"), c: mkPaper("c") }, sections: [repeat, added], bibtex: "" };
+      });
+    assess.mockResolvedValue({ reason: "Adding follow-on work.", directive: "Expand via citations.", mode: "augment" });
+    const { runAgent } = await import("../../src/agent/runAgent.js");
+    const { synthesize } = await import("../../src/agent/stages/synthesize.js");
+    const events: StreamEvent[] = [];
+    await runAgent("r-repeat", { brief, refine: true, synthesize: true }, "/fake/db.duckdb", (e) => events.push(e));
+
+    const titles = events.flatMap((e) => (e.type === "section" ? [e.section.title] : []));
+    expect(titles).toEqual(["Seeds", "Follow-on work"]);
+    const { buildBundle } = await import("../../src/agent/bundle.js");
+    const bundle = buildBundle("r-repeat", brief, events);
+    expect(bundle.sections.map((s) => s.id)).toEqual(["section-1", "section-3"]);
+    expect(bundle.papers_csv).not.toContain("section-2");
+    const synthSections = vi.mocked(synthesize).mock.calls[0]![2] as { title: string }[];
+    expect(synthSections.map((s) => s.title)).toEqual(["Seeds", "Follow-on work"]);
+  });
+
+  it("keeps a repeated title in a replace round (round 1 is discarded there)", async () => {
+    const r1 = mkSection("section-1", "Seeds", ["a"]);
+    executeScript
+      .mockImplementationOnce(async (_s: string, _d: string, onEvent: (e: unknown) => void) => {
+        onEvent({ type: "section", section: r1 });
+        return { ok: true, papers: { a: mkPaper("a") }, sections: [r1], bibtex: "" };
+      })
+      .mockImplementationOnce(async (_s: string, _d: string, onEvent: (e: unknown) => void) => {
+        const again = mkSection("section-2", "Seeds", ["a"]);
+        onEvent({ type: "section", section: again });
+        return { ok: true, papers: { a: mkPaper("a") }, sections: [again], bibtex: "" };
+      });
+    assess.mockResolvedValue({ reason: "Redoing it.", directive: "Re-derive.", mode: "replace" });
+    const { runAgent } = await import("../../src/agent/runAgent.js");
+    const events: StreamEvent[] = [];
+    await runAgent("r-replace-repeat", { brief, refine: true }, "/fake/db.duckdb", (e) => events.push(e));
+    expect(events.filter((e) => e.type === "section")).toHaveLength(2);
+  });
+});
