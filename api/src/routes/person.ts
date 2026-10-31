@@ -200,7 +200,8 @@ personRoute.get("/stats/searches", requireKey("rest"), async (c) => {
   return c.json(await getPersonSearchStats(appdata, days));
 });
 
-personRoute.get("/dailylogs", requireKey("rest"), async (c) => {
+// admin: visitor IPs, and nginx injects a rest key on public /api/ requests (see dailylogs.ts).
+personRoute.get("/dailylogs", requireKey("admin"), async (c) => {
   const day = c.req.query("day");
   if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return c.json({ error: "day=YYYY-MM-DD required" }, 400);
   const appdata = await getAppDataDb();
